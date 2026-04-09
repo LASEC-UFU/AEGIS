@@ -64,8 +64,8 @@ class _LatexNode extends SpanNode {
     final latex = Math.tex(
       content,
       mathStyle: MathStyle.text,
-      textStyle: style.copyWith(color: AppColors.gray50),
-      textScaleFactor: 2,
+      textStyle: style.copyWith(color: config.h1.style.color),
+      textScaleFactor: 1.6,
       onErrorFallback: (error) {
         return Text(textContent, style: style.copyWith(color: Colors.red));
       },
@@ -99,6 +99,7 @@ class _AboutScreenState extends State<AboutScreen> {
   String? _error;
   bool _loading = true;
   bool _isEnglish = true;
+  bool _isDarkMode = false;
 
   @override
   void initState() {
@@ -133,7 +134,10 @@ class _AboutScreenState extends State<AboutScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: _isDarkMode ? null : const Color(0xFFFFFFFF),
       appBar: AppBar(
+        backgroundColor: _isDarkMode ? null : const Color(0xFFFFFFFF),
+        foregroundColor: _isDarkMode ? null : const Color(0xFF1F2328),
         title: const Text('About AEGIS'),
         actions: [
           IconButton(
@@ -159,6 +163,15 @@ class _AboutScreenState extends State<AboutScreen> {
                 _markdown = null;
               });
               _fetchReadme();
+            },
+          ),
+          IconButton(
+            icon: Icon(_isDarkMode ? Icons.light_mode : Icons.dark_mode),
+            tooltip: _isDarkMode ? 'Light mode' : 'Dark mode',
+            onPressed: () {
+              setState(() {
+                _isDarkMode = !_isDarkMode;
+              });
             },
           ),
         ],
@@ -216,75 +229,98 @@ class _AboutScreenState extends State<AboutScreen> {
       );
     }
 
-    final config = MarkdownConfig.darkConfig.copy(
-      configs: [
-        H1Config(
-          style: TextStyle(
-            color: AppColors.gray50,
-            fontSize: 28,
-            fontWeight: FontWeight.w800,
-            height: 1.3,
-          ),
-        ),
-        H2Config(
-          style: TextStyle(
-            color: AppColors.accent,
-            fontSize: 22,
-            fontWeight: FontWeight.w700,
-            height: 1.4,
-          ),
-        ),
-        H3Config(
-          style: TextStyle(
-            color: AppColors.textPrimary,
-            fontSize: 18,
-            fontWeight: FontWeight.w600,
-            height: 1.4,
-          ),
-        ),
-        PConfig(
-          textStyle: TextStyle(
-            color: AppColors.textSecondary,
-            fontSize: 14,
-            height: 1.7,
-          ),
-        ),
-        LinkConfig(
-          style: const TextStyle(
-            color: AppColors.accent,
-            decoration: TextDecoration.underline,
-          ),
-        ),
-        PreConfig.darkConfig.copy(
-          decoration: BoxDecoration(
-            color: AppColors.gray900,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: AppColors.gray800),
-          ),
-          padding: const EdgeInsets.all(16),
-        ),
-        CodeConfig(
-          style: TextStyle(
-            fontFamily: 'monospace',
-            fontSize: 13,
-            color: AppColors.accent,
-            backgroundColor: AppColors.gray850,
-          ),
-        ),
-        BlockquoteConfig(
-          padding: const EdgeInsets.only(left: 16, top: 8, bottom: 8),
-        ),
-        TableConfig(
-          headerStyle: TextStyle(
-            color: AppColors.gray50,
-            fontWeight: FontWeight.w600,
-            fontSize: 14,
-          ),
-          bodyStyle: TextStyle(color: AppColors.textSecondary, fontSize: 14),
-          border: TableBorder.all(color: AppColors.gray800, width: 1),
-        ),
-      ],
-    );
+    // GitHub-like adaptive colors
+    final headingColor = _isDarkMode
+        ? AppColors.gray50
+        : const Color(0xFF1F2328);
+    final bodyColor = _isDarkMode
+        ? AppColors.textSecondary
+        : const Color(0xFF656D76);
+    final accentColor = _isDarkMode
+        ? AppColors.accent
+        : const Color(0xFF0969DA);
+    final codeBg = _isDarkMode ? AppColors.gray900 : const Color(0xFFF6F8FA);
+    final borderColor = _isDarkMode
+        ? AppColors.gray800
+        : const Color(0xFFD1D9E0);
+    final inlineCodeBg = _isDarkMode
+        ? AppColors.gray850
+        : const Color(0xFFEFF1F3);
+    final inlineCodeColor = _isDarkMode
+        ? AppColors.accent
+        : const Color(0xFF1F2328);
+
+    final config =
+        (_isDarkMode ? MarkdownConfig.darkConfig : MarkdownConfig.defaultConfig)
+            .copy(
+              configs: [
+                H1Config(
+                  style: TextStyle(
+                    color: headingColor,
+                    fontSize: 28,
+                    fontWeight: FontWeight.w800,
+                    height: 1.3,
+                  ),
+                ),
+                H2Config(
+                  style: TextStyle(
+                    color: accentColor,
+                    fontSize: 22,
+                    fontWeight: FontWeight.w700,
+                    height: 1.4,
+                  ),
+                ),
+                H3Config(
+                  style: TextStyle(
+                    color: headingColor,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    height: 1.4,
+                  ),
+                ),
+                PConfig(
+                  textStyle: TextStyle(
+                    color: bodyColor,
+                    fontSize: 14,
+                    height: 1.7,
+                  ),
+                ),
+                LinkConfig(
+                  style: TextStyle(
+                    color: accentColor,
+                    decoration: TextDecoration.underline,
+                  ),
+                ),
+                (_isDarkMode ? PreConfig.darkConfig : PreConfig()).copy(
+                  decoration: BoxDecoration(
+                    color: codeBg,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: borderColor),
+                  ),
+                  padding: const EdgeInsets.all(16),
+                ),
+                CodeConfig(
+                  style: TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 13,
+                    color: inlineCodeColor,
+                    backgroundColor: inlineCodeBg,
+                  ),
+                ),
+                BlockquoteConfig(
+                  padding: const EdgeInsets.only(left: 16, top: 8, bottom: 8),
+                ),
+                TableConfig(
+                  headerStyle: TextStyle(
+                    color: headingColor,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                  bodyStyle: TextStyle(color: bodyColor, fontSize: 14),
+                  border: TableBorder.all(color: borderColor, width: 1),
+                ),
+              ],
+            );
 
     return MarkdownWidget(
       data: _markdown!,
