@@ -1,14 +1,92 @@
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:flutter_math_fork/flutter_math.dart';
 import 'package:http/http.dart' as http;
-import 'package:url_launcher/url_launcher.dart';
+import 'package:markdown/markdown.dart' as m;
+import 'package:markdown_widget/markdown_widget.dart';
 
 import '../theme/app_theme.dart';
 
-/// About screen that loads and renders README.md at runtime via HTTP.
-///
-/// The file is fetched from the web server root — updating README.md
-/// on the server is enough; no rebuild needed.
+// ---------------------------------------------------------------------------
+// LaTeX support (based on markdown_widget example)
+// ---------------------------------------------------------------------------
+
+const _latexTag = 'latex';
+
+final SpanNodeGeneratorWithTag _latexGenerator = SpanNodeGeneratorWithTag(
+  tag: _latexTag,
+  generator: (e, config, visitor) =>
+      _LatexNode(e.attributes, e.textContent, config),
+);
+
+class _LatexSyntax extends m.InlineSyntax {
+  _LatexSyntax() : super(r'(\$\$[\s\S]+?\$\$)|(\$.+?\$)');
+
+  @override
+  bool onMatch(m.InlineParser parser, Match match) {
+    final matchValue = match.input.substring(match.start, match.end);
+    String content = '';
+    bool isInline = true;
+    const blockSyntax = '\$\$';
+    const inlineSyntax = '\$';
+    if (matchValue.startsWith(blockSyntax) &&
+        matchValue.endsWith(blockSyntax) &&
+        matchValue != blockSyntax) {
+      content = matchValue.substring(2, matchValue.length - 2);
+      isInline = false;
+    } else if (matchValue.startsWith(inlineSyntax) &&
+        matchValue.endsWith(inlineSyntax) &&
+        matchValue != inlineSyntax) {
+      content = matchValue.substring(1, matchValue.length - 1);
+    }
+    final el = m.Element.text(_latexTag, matchValue);
+    el.attributes['content'] = content;
+    el.attributes['isInline'] = '$isInline';
+    parser.addNode(el);
+    return true;
+  }
+}
+
+class _LatexNode extends SpanNode {
+  final Map<String, String> attributes;
+  final String textContent;
+  final MarkdownConfig config;
+
+  _LatexNode(this.attributes, this.textContent, this.config);
+
+  @override
+  InlineSpan build() {
+    final content = attributes['content'] ?? '';
+    final isInline = attributes['isInline'] == 'true';
+    final style = parentStyle ?? config.p.textStyle;
+    if (content.isEmpty) return TextSpan(style: style, text: textContent);
+    final latex = Math.tex(
+      content,
+      mathStyle: MathStyle.text,
+      textStyle: style.copyWith(color: AppColors.gray50),
+      textScaleFactor: 2,
+      onErrorFallback: (error) {
+        return Text(textContent, style: style.copyWith(color: Colors.red));
+      },
+    );
+    return WidgetSpan(
+      alignment: PlaceholderAlignment.middle,
+      child: !isInline
+          ? Container(
+              width: double.infinity,
+              margin: const EdgeInsets.symmetric(vertical: 16),
+              child: Center(child: latex),
+            )
+          : latex,
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// About Screen
+// ---------------------------------------------------------------------------
+
 class AboutScreen extends StatefulWidget {
   const AboutScreen({super.key});
 
@@ -20,6 +98,7 @@ class _AboutScreenState extends State<AboutScreen> {
   String? _markdown;
   String? _error;
   bool _loading = true;
+  bool _isEnglish = true;
 
   @override
   void initState() {
@@ -29,11 +108,12 @@ class _AboutScreenState extends State<AboutScreen> {
 
   Future<void> _fetchReadme() async {
     try {
-      final uri = Uri.base.resolve('README.md');
+      final file = _isEnglish ? 'README.md' : 'README_BR.md';
+      final uri = Uri.base.resolve(file);
       final response = await http.get(uri);
       if (response.statusCode == 200) {
         setState(() {
-          _markdown = response.body;
+          _markdown = utf8.decode(response.bodyBytes);
           _loading = false;
         });
       } else {
@@ -58,9 +138,22 @@ class _AboutScreenState extends State<AboutScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            tooltip: 'Reload README.md',
+            tooltip: 'Reload',
             onPressed: () {
               setState(() {
+                _loading = true;
+                _error = null;
+                _markdown = null;
+              });
+              _fetchReadme();
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.translate),
+            tooltip: _isEnglish ? 'Mudar para Português' : 'Switch to English',
+            onPressed: () {
+              setState(() {
+                _isEnglish = !_isEnglish;
                 _loading = true;
                 _error = null;
                 _markdown = null;
@@ -123,98 +216,84 @@ class _AboutScreenState extends State<AboutScreen> {
       );
     }
 
-    return Markdown(
+    final config = MarkdownConfig.darkConfig.copy(
+      configs: [
+        H1Config(
+          style: TextStyle(
+            color: AppColors.gray50,
+            fontSize: 28,
+            fontWeight: FontWeight.w800,
+            height: 1.3,
+          ),
+        ),
+        H2Config(
+          style: TextStyle(
+            color: AppColors.accent,
+            fontSize: 22,
+            fontWeight: FontWeight.w700,
+            height: 1.4,
+          ),
+        ),
+        H3Config(
+          style: TextStyle(
+            color: AppColors.textPrimary,
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+            height: 1.4,
+          ),
+        ),
+        PConfig(
+          textStyle: TextStyle(
+            color: AppColors.textSecondary,
+            fontSize: 14,
+            height: 1.7,
+          ),
+        ),
+        LinkConfig(
+          style: const TextStyle(
+            color: AppColors.accent,
+            decoration: TextDecoration.underline,
+          ),
+        ),
+        PreConfig.darkConfig.copy(
+          decoration: BoxDecoration(
+            color: AppColors.gray900,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: AppColors.gray800),
+          ),
+          padding: const EdgeInsets.all(16),
+        ),
+        CodeConfig(
+          style: TextStyle(
+            fontFamily: 'monospace',
+            fontSize: 13,
+            color: AppColors.accent,
+            backgroundColor: AppColors.gray850,
+          ),
+        ),
+        BlockquoteConfig(
+          padding: const EdgeInsets.only(left: 16, top: 8, bottom: 8),
+        ),
+        TableConfig(
+          headerStyle: TextStyle(
+            color: AppColors.gray50,
+            fontWeight: FontWeight.w600,
+            fontSize: 14,
+          ),
+          bodyStyle: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+          border: TableBorder.all(color: AppColors.gray800, width: 1),
+        ),
+      ],
+    );
+
+    return MarkdownWidget(
       data: _markdown!,
       selectable: true,
-      softLineBreak: true,
-      onTapLink: (text, href, title) {
-        if (href != null) {
-          launchUrl(Uri.parse(href));
-        }
-      },
-      styleSheet: _buildStyleSheet(context),
-    );
-  }
-
-  MarkdownStyleSheet _buildStyleSheet(BuildContext context) {
-    final base = Theme.of(context).textTheme;
-    return MarkdownStyleSheet(
-      // Headers
-      h1: base.headlineLarge?.copyWith(
-        color: AppColors.gray50,
-        fontWeight: FontWeight.w800,
-        height: 1.3,
-      ),
-      h2: base.headlineMedium?.copyWith(
-        color: AppColors.accent,
-        fontWeight: FontWeight.w700,
-        height: 1.4,
-      ),
-      h3: base.titleLarge?.copyWith(
-        color: AppColors.textPrimary,
-        fontWeight: FontWeight.w600,
-        height: 1.4,
-      ),
-      h4: base.titleMedium?.copyWith(
-        color: AppColors.textPrimary,
-        fontWeight: FontWeight.w600,
-      ),
-      // Body
-      p: base.bodyMedium?.copyWith(color: AppColors.textSecondary, height: 1.7),
-      a: const TextStyle(
-        color: AppColors.accent,
-        decoration: TextDecoration.underline,
-        decorationColor: AppColors.accentSubtle,
-      ),
-      // Lists
-      listBullet: base.bodyMedium?.copyWith(color: AppColors.textSecondary),
-      // Code
-      code: TextStyle(
-        fontFamily: 'monospace',
-        fontSize: 13,
-        color: AppColors.accent,
-        backgroundColor: AppColors.gray850,
-      ),
-      codeblockDecoration: BoxDecoration(
-        color: AppColors.gray900,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: AppColors.gray800),
-      ),
-      codeblockPadding: const EdgeInsets.all(16),
-      // Blockquote
-      blockquote: base.bodyMedium?.copyWith(
-        color: AppColors.textTertiary,
-        fontStyle: FontStyle.italic,
-        height: 1.6,
-      ),
-      blockquoteDecoration: BoxDecoration(
-        border: Border(left: BorderSide(color: AppColors.accent, width: 3)),
-      ),
-      blockquotePadding: const EdgeInsets.only(left: 16, top: 8, bottom: 8),
-      // Table
-      tableHead: base.bodyMedium?.copyWith(
-        color: AppColors.gray50,
-        fontWeight: FontWeight.w600,
-      ),
-      tableBody: base.bodyMedium?.copyWith(color: AppColors.textSecondary),
-      tableBorder: TableBorder.all(color: AppColors.gray800, width: 1),
-      tableHeadAlign: TextAlign.left,
-      tableCellsPadding: const EdgeInsets.symmetric(
-        horizontal: 12,
-        vertical: 8,
-      ),
-      // Horizontal rule
-      horizontalRuleDecoration: BoxDecoration(
-        border: Border(top: BorderSide(color: AppColors.gray800, width: 1)),
-      ),
-      // Strong / Em
-      strong: const TextStyle(
-        fontWeight: FontWeight.w700,
-        color: AppColors.textPrimary,
-      ),
-      em: const TextStyle(
-        fontStyle: FontStyle.italic,
-        color: AppColors.textSecondary,
+      padding: const EdgeInsets.all(24),
+      config: config,
+      markdownGenerator: MarkdownGenerator(
+        inlineSyntaxList: [_LatexSyntax()],
+        generators: [_latexGenerator],
       ),
     );
   }
