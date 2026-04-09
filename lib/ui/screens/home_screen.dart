@@ -8,6 +8,7 @@ import 'evolution_screen.dart';
 import 'results_screen.dart';
 import 'agent_dashboard_screen.dart';
 import 'about_screen.dart';
+import 'how_to_screen.dart';
 
 /// Main shell with responsive navigation (rail on desktop, bottom nav on mobile).
 class HomeScreen extends ConsumerStatefulWidget {
@@ -25,6 +26,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     _NavItem(icon: LucideIcons.activity, label: 'Evolution'),
     _NavItem(icon: LucideIcons.brainCircuit, label: 'Agent'),
     _NavItem(icon: LucideIcons.fileBarChart, label: 'Results'),
+    _NavItem(icon: LucideIcons.bookOpen, label: 'How to Use'),
     _NavItem(icon: LucideIcons.info, label: 'About'),
   ];
 
@@ -33,6 +35,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     EvolutionScreen(),
     AgentDashboardScreen(),
     ResultsScreen(),
+    HowToScreen(),
     AboutScreen(),
   ];
 
