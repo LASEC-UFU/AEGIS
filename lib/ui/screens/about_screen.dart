@@ -235,7 +235,10 @@ class _AboutScreenState extends State<AboutScreen> {
         : const Color(0xFF1F2328);
     final bodyColor = _isDarkMode
         ? AppColors.textSecondary
-        : const Color(0xFF656D76);
+        : const Color(0xFF24292F);
+    final codeTextColor = _isDarkMode
+        ? AppColors.textSecondary
+        : const Color(0xFF1F2328);
     final accentColor = _isDarkMode
         ? AppColors.accent
         : const Color(0xFF0969DA);
@@ -296,6 +299,11 @@ class _AboutScreenState extends State<AboutScreen> {
                     color: codeBg,
                     borderRadius: BorderRadius.circular(8),
                     border: Border.all(color: borderColor),
+                  ),
+                  textStyle: TextStyle(
+                    fontFamily: 'monospace',
+                    fontSize: 13,
+                    color: codeTextColor,
                   ),
                   padding: const EdgeInsets.all(16),
                 ),
