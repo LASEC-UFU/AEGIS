@@ -305,6 +305,7 @@ class _AboutScreenState extends State<AboutScreen> {
                     fontSize: 13,
                     color: codeTextColor,
                   ),
+                  styleNotMatched: TextStyle(color: codeTextColor),
                   padding: const EdgeInsets.all(16),
                 ),
                 CodeConfig(
