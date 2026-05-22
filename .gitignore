@@ -33,6 +33,9 @@ migrate_working_dir/
 /build/
 /coverage/
 
+# API key — never commit this file
+anthropic_api_key.txt
+
 # Large benchmark datasets (not tracked in git)
 assets/benchmark/
 

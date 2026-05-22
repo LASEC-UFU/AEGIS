@@ -5,34 +5,49 @@ on:
     branches: [main]
   workflow_dispatch:
 
+# Required for deploy-pages action
 permissions:
   contents: read
   pages: write
   id-token: write
 
+# One concurrent deployment; don't cancel in-progress runs
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
+  # ── Build ───────────────────────────────────────────────────────────────────
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: subosito/flutter-action@v2
+      - name: Setup Flutter (stable)
+        uses: subosito/flutter-action@v2
         with:
           channel: stable
+          cache: true          # cache ~/.pub-cache between runs
 
-      - run: flutter pub get
+      - name: Install dependencies
+        run: flutter pub get
 
-      - run: flutter build web --release --base-href "/AEGIS/"
+      - name: Build web
+        # base-href uses the repo name so no hardcoding is needed
+        # canvaskit renderer gives the best fidelity for charts/math
+        run: |
+          flutter build web \
+            --release \
+            --base-href "/${{ github.event.repository.name }}/" \
+            --web-renderer canvaskit
 
-      - name: Upload artifact
+      - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: build/web
 
+  # ── Deploy ──────────────────────────────────────────────────────────────────
   deploy:
     needs: build
     runs-on: ubuntu-latest
