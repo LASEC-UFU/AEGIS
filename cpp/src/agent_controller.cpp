@@ -11,6 +11,7 @@
   #pragma comment(lib, "ws2_32.lib")
   #include <winsock2.h>
   #include <ws2tcpip.h>
+  using ssize_t = SSIZE_T;
   static bool wsa_init() {
       WSADATA d; return WSAStartup(MAKEWORD(2,2), &d) == 0;
   }

@@ -4,6 +4,9 @@
 #include <numeric>
 #include <cmath>
 #include <cassert>
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
 #include <stdexcept>
 #include <sstream>
 #include <chrono>
@@ -434,6 +437,7 @@ GenerationReport DifferentialEvolutionOptimizer::build_report(int generation) co
     return r;
 }
 
+#ifndef __EMSCRIPTEN__
 void DifferentialEvolutionOptimizer::run_async(
     ProgressCallback on_progress, ShouldStopFn should_stop
 ) {
@@ -483,6 +487,7 @@ void DifferentialEvolutionOptimizer::run_async(
         }
     });
 }
+#endif // !__EMSCRIPTEN__
 
 int DifferentialEvolutionOptimizer::run_steps(
     int n, ProgressCallback on_progress, ShouldStopFn should_stop

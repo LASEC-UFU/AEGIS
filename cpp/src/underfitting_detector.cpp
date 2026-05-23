@@ -22,7 +22,7 @@ UnderfittingResult UnderfittingDetector::detect(
         if (rmse_unfit)
             ss << " RMSE/std=" << r.rmse_ratio;
         if (r2_unfit)
-            ss << " R²=" << r2_train;
+            ss << " R2=" << r2_train;
         ss << ". Consider increasing maxRegressors, maxDelay, or maxExponent.";
         r.suggestion = ss.str();
     }

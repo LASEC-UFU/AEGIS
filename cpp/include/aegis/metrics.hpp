@@ -23,19 +23,19 @@ struct ModelMetrics {
 
 class Metrics {
 public:
-    /** SSE = Σ (y - y_hat)² */
+    /** SSE = sum (y - y_hat)^2 */
     static double sse(const double* y, const double* y_hat, int n) noexcept;
 
-    /** RMSE = √(SSE/n) */
+    /** RMSE = sqrt(SSE/n) */
     static double rmse(const double* y, const double* y_hat, int n) noexcept;
 
-    /** R² = 1 - SSE/SST */
+    /** R2 = 1 - SSE/SST */
     static double r2(const double* y, const double* y_hat, int n) noexcept;
 
-    /** AIC = n·ln(SSE/n) + 2k */
+    /** AIC = n*ln(SSE/n) + 2k */
     static double aic(double sse_val, int n, int k) noexcept;
 
-    /** BIC = n·ln(SSE/n) + k·ln(n) */
+    /** BIC = n*ln(SSE/n) + k*ln(n) */
     static double bic(double sse_val, int n, int k) noexcept;
 
     /** FPE (Final Prediction Error) = SSE/n * (n+k)/(n-k) */
@@ -43,7 +43,7 @@ public:
 
     /**
      * MDL (Minimum Description Length):
-     *   MDL = (n/2)·ln(SSE/n) + (k/2)·ln(n)
+     *   MDL = (n/2)*ln(SSE/n) + (k/2)*ln(n)
      */
     static double mdl(double sse_val, int n, int k) noexcept;
 
@@ -64,7 +64,7 @@ public:
 
     /**
      * Composite fitness used by DE:
-     *   fitness = RMSE_val + α·BIC + β·denom_penalty + γ·complexity + δ·exp_penalty + η·stability_penalty
+     *   fitness = RMSE_val + alpha*BIC + beta*denom_penalty + gamma*complexity + delta*exp_penalty + eta*stability_penalty
      */
     static double composite_fitness(
         double rmse_val,

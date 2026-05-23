@@ -2,12 +2,12 @@
 #include "regressor_library.hpp"
 #include "individual_evaluator.hpp"
 #include "population_diversity_monitor.hpp"
-#include "thread_pool.hpp"
 #include <string>
 #include <vector>
 #include <functional>
 #include <atomic>
 #include <mutex>
+#include <thread>
 #include <random>
 
 namespace aegis {

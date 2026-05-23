@@ -12,6 +12,9 @@
   #define INVALID_SOCK (-1)
   #define SOCK_ERR     (-1)
 #elif defined(_WIN32)
+  #ifndef NOMINMAX
+  #define NOMINMAX
+  #endif
   #include <winsock2.h>
   #include <ws2tcpip.h>
   using SocketFd = SOCKET;
