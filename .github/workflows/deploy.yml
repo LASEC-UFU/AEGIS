@@ -113,22 +113,24 @@ jobs:
             -DestinationPath "AEGIS-windows.zip"
 
       - name: Publish Windows release
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: latest
-          name: "AEGIS — Latest Windows Build"
-          body: |
-            Automatically built from `main` branch.
-
-            **How to use:**
-            1. Extract the ZIP
-            2. Edit `anthropic_api_key.txt` and paste your Anthropic API key
-            3. Run `aegis.exe`
-
-            The C++ core (`aegis_core.dll`) and the LLM agent are bundled.
-            Internet access is required for the Claude API calls.
-          prerelease: true
-          make_latest: true
-          files: AEGIS-windows.zip
+        shell: bash
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cat > release-notes.md << 'NOTES'
+          Automatically built from `main` branch.
+
+          **How to use:**
+          1. Extract the ZIP
+          2. Edit `anthropic_api_key.txt` and paste your Anthropic API key
+          3. Run `aegis.exe`
+
+          The C++ core (`aegis_core.dll`) and the LLM agent are bundled.
+          Internet access is required for the Claude API calls.
+          NOTES
+          gh release delete latest --yes --cleanup-tag 2>/dev/null || true
+          gh release create latest \
+            --prerelease \
+            --title "AEGIS — Latest Windows Build" \
+            --notes-file release-notes.md \
+            AEGIS-windows.zip
