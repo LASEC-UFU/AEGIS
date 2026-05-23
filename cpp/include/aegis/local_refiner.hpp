@@ -1,6 +1,7 @@
 #pragma once
 #include "regressor_library.hpp"
 #include <functional>
+#include <string>
 #include <vector>
 
 namespace aegis {
@@ -8,13 +9,19 @@ namespace aegis {
 enum class RefineMethod { TrustRegionReflective, LevenbergMarquardt };
 
 struct RefineConfig {
-    RefineMethod method         = RefineMethod::TrustRegionReflective;
-    int          max_iter       = 200;
-    double       ftol           = 1e-8;   // function tolerance
-    double       xtol           = 1e-8;   // parameter tolerance
-    double       gtol           = 1e-8;   // gradient tolerance
-    double       initial_delta  = 1.0;    // TRF trust region initial radius
-    double       lambda_init    = 1e-3;   // LM initial damping
+    RefineMethod method;
+    int          max_iter;
+    double       ftol;          // function tolerance
+    double       xtol;          // parameter tolerance
+    double       gtol;          // gradient tolerance
+    double       initial_delta; // TRF trust region initial radius
+    double       lambda_init;   // LM initial damping
+
+    // Explicit constructor avoids Clang CWG-1861 when used as default arg.
+    RefineConfig()
+        : method(RefineMethod::TrustRegionReflective), max_iter(200),
+          ftol(1e-8), xtol(1e-8), gtol(1e-8),
+          initial_delta(1.0), lambda_init(1e-3) {}
 };
 
 struct RefineResult {

@@ -3,6 +3,7 @@
 #include "individual_evaluator.hpp"
 #include "population_diversity_monitor.hpp"
 #include "thread_pool.hpp"
+#include <string>
 #include <vector>
 #include <functional>
 #include <atomic>

@@ -26,11 +26,17 @@ struct PruneResult {
 class AutomaticPruner {
 public:
     struct Config {
-        double err_threshold   = 0.01;  // regressors below this ERR are candidates
-        double coeff_threshold = 1e-4;  // |coeff| below this → candidate
-        double vif_max         = 10.0;  // VIF above this → collinear candidate
-        double fitness_tol     = 0.05;  // allow up to 5% fitness worsening
-        int    max_removals    = 5;     // max regressors to remove in one pass
+        double err_threshold;    // regressors below this ERR are candidates
+        double coeff_threshold;  // |coeff| below this → candidate
+        double vif_max;          // VIF above this → collinear candidate
+        double fitness_tol;      // allow up to 5% fitness worsening
+        int    max_removals;     // max regressors to remove in one pass
+
+        // Explicit default constructor avoids Clang CWG-1861 with nested
+        // structs that have default member initializers used as default args.
+        Config()
+            : err_threshold(0.01), coeff_threshold(1e-4), vif_max(10.0),
+              fitness_tol(0.05), max_removals(5) {}
     };
 
     explicit AutomaticPruner(const Config& cfg = Config()) : cfg_(cfg) {}
