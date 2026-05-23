@@ -283,6 +283,32 @@ bool IdentificationPipeline::start() {
     return true;
 }
 
+int IdentificationPipeline::step(int n) {
+    if (state_.load() != PipelineState::Running) return 0;
+    if (!de_) return 0;
+
+    int ran = de_->run_steps(n,
+        [this](const GenerationReport& rpt) {
+            generation_.store(rpt.generation);
+            best_fitness_.store(rpt.best_fitness);
+            std::lock_guard<std::mutex> lk(results_mutex_);
+            latest_report_ = rpt;
+        },
+        [this]() -> bool {
+            auto s = state_.load();
+            return s == PipelineState::Stopped || s == PipelineState::Paused;
+        }
+    );
+
+    if (de_->is_done() && state_.load() == PipelineState::Running) {
+        std::lock_guard<std::mutex> lk(results_mutex_);
+        best_chromosome_ = de_->best_chromosome();
+        state_.store(PipelineState::Completed);
+    }
+
+    return ran;
+}
+
 void IdentificationPipeline::pause() {
     if (state_.load() == PipelineState::Running)
         state_.store(PipelineState::Paused);

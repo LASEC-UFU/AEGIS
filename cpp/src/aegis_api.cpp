@@ -66,6 +66,11 @@ AEGIS_API int aegis_stop(void* pipeline) {
     return 0;
 }
 
+AEGIS_API int aegis_step(void* pipeline, int num_generations) {
+    if (!pipeline) return -1;
+    return static_cast<IdentificationPipeline*>(pipeline)->step(num_generations);
+}
+
 AEGIS_API char* aegis_get_status(void* pipeline) {
     if (!pipeline) return dup_string("{\"error\":\"null pipeline\"}");
     return dup_string(static_cast<IdentificationPipeline*>(pipeline)->status_json());

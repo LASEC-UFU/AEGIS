@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <stdexcept>
 
+#ifndef __EMSCRIPTEN__
+
 #ifdef _WIN32
   #pragma comment(lib, "ws2_32.lib")
   #include <winsock2.h>
@@ -442,9 +444,31 @@ int AgentController::client_count() const {
     return static_cast<int>(clients_.size());
 }
 
+} // namespace aegis
+
+#else // __EMSCRIPTEN__ — stub implementations (no sockets/threads in WASM)
+
+namespace aegis {
+
+AgentController::AgentController(int port) : port_(port) {}
+AgentController::~AgentController() {}
+bool AgentController::start()                              { return false; }
+void AgentController::stop()                               {}
+int  AgentController::broadcast(const std::string&)        { return 0; }
+int  AgentController::broadcast_report(const std::string&) { return 0; }
+void AgentController::on_suggestion(SuggestionHandler)     {}
+int  AgentController::client_count() const                 { return 0; }
+bool AgentController::parse_suggestion(const std::string&, AgentSuggestion&) { return false; }
+
+} // namespace aegis
+
+#endif // !__EMSCRIPTEN__
+
 // ─────────────────────────────────────────────────────────────────────────
-// build_broadcast_json
+// build_broadcast_json — compiled for all targets
 // ─────────────────────────────────────────────────────────────────────────
+
+namespace aegis {
 
 std::string build_broadcast_json(
     int    generation,

@@ -30,6 +30,19 @@ jobs:
           channel: stable
           cache: true          # cache ~/.pub-cache between runs
 
+      - name: Install Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+        with:
+          version: latest
+
+      - name: Build WASM
+        run: |
+          emcmake cmake -S cpp -B cpp/build_wasm \
+            -DCMAKE_BUILD_TYPE=Release
+          emmake make -C cpp/build_wasm aegis_wasm -j$(nproc)
+          cp cpp/build_wasm/aegis_wasm.js   web/aegis_wasm.js
+          cp cpp/build_wasm/aegis_wasm.wasm web/aegis_wasm.wasm
+
       - name: Install dependencies
         run: flutter pub get
 

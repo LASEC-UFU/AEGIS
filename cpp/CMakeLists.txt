@@ -61,3 +61,54 @@ endif()
 # ── Install ──────────────────────────────────────────────────────
 install(TARGETS aegis_core DESTINATION bin)
 install(FILES include/aegis/aegis_api.h DESTINATION include)
+
+# ── WASM target (Emscripten only) ────────────────────────────────
+if(DEFINED EMSCRIPTEN)
+  add_executable(aegis_wasm ${AEGIS_SOURCES})
+
+  target_include_directories(aegis_wasm
+    PUBLIC  ${CMAKE_CURRENT_SOURCE_DIR}/include
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/aegis
+  )
+
+  # Functions exported to JavaScript
+  set(AEGIS_EXPORTED_FUNCTIONS
+    "_aegis_create_pipeline"
+    "_aegis_destroy_pipeline"
+    "_aegis_load_data"
+    "_aegis_configure"
+    "_aegis_start"
+    "_aegis_pause"
+    "_aegis_resume"
+    "_aegis_stop"
+    "_aegis_step"
+    "_aegis_get_status"
+    "_aegis_get_snapshot"
+    "_aegis_get_best_model"
+    "_aegis_free_string"
+    "_aegis_apply_tuning"
+    "_aegis_get_tuning_log"
+    "_aegis_version"
+    "_malloc"
+    "_free"
+  )
+  string(JOIN "," AEGIS_EXPORTS_STR ${AEGIS_EXPORTED_FUNCTIONS})
+
+  target_compile_options(aegis_wasm PRIVATE -O2)
+
+  target_link_options(aegis_wasm PRIVATE
+    -sMODULARIZE=1
+    -sEXPORT_NAME=createAegisModule
+    -sALLOW_MEMORY_GROWTH=1
+    -sINITIAL_MEMORY=67108864       # 64 MB
+    -sEXPORTED_FUNCTIONS=[${AEGIS_EXPORTS_STR}]
+    -sEXPORTED_RUNTIME_METHODS=[\"UTF8ToString\",\"stringToUTF8\",\"lengthBytesUTF8\",\"HEAPF64\",\"HEAP8\"]
+    -sENVIRONMENT=web
+    --no-entry
+  )
+
+  set_target_properties(aegis_wasm PROPERTIES
+    OUTPUT_NAME "aegis_wasm"
+    SUFFIX ".js"
+  )
+endif()
