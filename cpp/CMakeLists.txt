@@ -58,9 +58,13 @@ if(OpenMP_CXX_FOUND)
   target_compile_definitions(aegis_core PRIVATE AEGIS_OPENMP)
 endif()
 
-# ── Install ──────────────────────────────────────────────────────
-install(TARGETS aegis_core DESTINATION bin)
-install(FILES include/aegis/aegis_api.h DESTINATION include)
+# ── Install (standalone build only) ──────────────────────────────
+# Skip when included as add_subdirectory from windows/CMakeLists.txt
+# to avoid polluting Flutter's install tree with bin/ and include/ dirs.
+if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+  install(TARGETS aegis_core DESTINATION bin)
+  install(FILES include/aegis/aegis_api.h DESTINATION include)
+endif()
 
 # ── WASM target (Emscripten only) ────────────────────────────────
 if(DEFINED EMSCRIPTEN)
