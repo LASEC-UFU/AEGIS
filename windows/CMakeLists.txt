@@ -45,10 +45,6 @@ function(APPLY_STANDARD_SETTINGS TARGET)
   target_compile_definitions(${TARGET} PRIVATE "$<$<CONFIG:Debug>:_DEBUG>")
 endfunction()
 
-# ── AEGIS C++ core library ───────────────────────────────────────────────
-set(AEGIS_CPP_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../cpp")
-add_subdirectory(${AEGIS_CPP_DIR} "${CMAKE_CURRENT_BINARY_DIR}/aegis_core")
-
 # Flutter library and tool build rules.
 set(FLUTTER_MANAGED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/flutter")
 add_subdirectory(${FLUTTER_MANAGED_DIR})
@@ -78,9 +74,6 @@ set(INSTALL_BUNDLE_LIB_DIR "${CMAKE_INSTALL_PREFIX}")
 
 install(TARGETS ${BINARY_NAME} RUNTIME DESTINATION "${CMAKE_INSTALL_PREFIX}"
   COMPONENT Runtime)
-
-# Install the aegis_core DLL alongside the executable
-install(TARGETS aegis_core RUNTIME DESTINATION "." COMPONENT Runtime)
 
 install(FILES "${FLUTTER_ICU_DATA_FILE}" DESTINATION "${INSTALL_BUNDLE_DATA_DIR}"
   COMPONENT Runtime)
