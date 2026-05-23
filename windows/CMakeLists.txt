@@ -49,14 +49,6 @@ endfunction()
 set(AEGIS_CPP_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../cpp")
 add_subdirectory(${AEGIS_CPP_DIR} "${CMAKE_CURRENT_BINARY_DIR}/aegis_core")
 
-# Copy aegis_core.dll next to the runner executable after build
-add_custom_command(TARGET aegis_core POST_BUILD
-  COMMAND ${CMAKE_COMMAND} -E copy_if_different
-    "$<TARGET_FILE:aegis_core>"
-    "$<TARGET_FILE_DIR:aegis_core>/../runner/$<CONFIG>/"
-  COMMENT "Copying aegis_core.dll to runner output"
-)
-
 # Flutter library and tool build rules.
 set(FLUTTER_MANAGED_DIR "${CMAKE_CURRENT_SOURCE_DIR}/flutter")
 add_subdirectory(${FLUTTER_MANAGED_DIR})
