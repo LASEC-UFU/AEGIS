@@ -51,10 +51,11 @@ class AegisLibrary {
 external void _addEventListener(JSString type, JSFunction listener);
 
 void _listenOnce(Completer<bool> completer) {
-  late JSFunction handler;
-  handler = (JSAny? _) {
-    AegisLibrary._instance ??= AegisLibrary._();
-    if (!completer.isCompleted) completer.complete(true);
+  final handler = (JSAny? _) {
+    // Only create an instance if WASM actually loaded successfully
+    final ok = AegisLibrary.isAvailable;
+    if (ok) AegisLibrary._instance ??= AegisLibrary._();
+    if (!completer.isCompleted) completer.complete(ok);
   }.toJS;
   _addEventListener('AegisWasmReady'.toJS, handler);
 }

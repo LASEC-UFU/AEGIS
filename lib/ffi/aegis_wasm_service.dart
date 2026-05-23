@@ -164,10 +164,7 @@ class AegisFfiService {
     if (raw.isEmpty) return null;
     try {
       final json = jsonDecode(raw) as Map<String, dynamic>;
-      final snap = _snapshotFromJson(json);
-      onGenerationComplete?.call(snap);
-      history.addSnapshot(snap);
-      return snap;
+      return _snapshotFromJson(json);
     } catch (_) {
       return null;
     }
@@ -178,14 +175,7 @@ class AegisFfiService {
     final raw = _jsGetStatus(_pipeline).toDart;
     if (raw.isEmpty) return null;
     try {
-      final map = jsonDecode(raw) as Map<String, dynamic>;
-      // Sync our state field from C++ state string
-      final stateStr = map['state'] as String? ?? '';
-      if (stateStr == 'completed' && state == EngineState.running) {
-        state = EngineState.completed;
-        onStateChanged?.call(state);
-      }
-      return map;
+      return jsonDecode(raw) as Map<String, dynamic>;
     } catch (_) {
       return null;
     }

@@ -1,24 +1,25 @@
-name: Deploy to GitHub Pages
+name: Build & Deploy
 
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
-# Required for deploy-pages action
+# write = create releases; pages+id-token = deploy Pages
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
-# One concurrent deployment; don't cancel in-progress runs
 concurrency:
-  group: pages
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
+# ─────────────────────────────────────────────────────────────────────────────
 jobs:
-  # ── Build ───────────────────────────────────────────────────────────────────
-  build:
+
+  # ── 1. Web build: WASM + Flutter web ──────────────────────────────────────
+  build-web:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -28,27 +29,26 @@ jobs:
         uses: subosito/flutter-action@v2
         with:
           channel: stable
-          cache: true          # cache ~/.pub-cache between runs
+          cache: true
 
       - name: Install Emscripten
         uses: mymindstorm/setup-emsdk@v14
         with:
           version: latest
 
-      - name: Build WASM
+      - name: Build C++ → WASM
         run: |
           emcmake cmake -S cpp -B cpp/build_wasm \
             -DCMAKE_BUILD_TYPE=Release
           emmake make -C cpp/build_wasm aegis_wasm -j$(nproc)
+          # Copy into web/ so Flutter build picks them up
           cp cpp/build_wasm/aegis_wasm.js   web/aegis_wasm.js
           cp cpp/build_wasm/aegis_wasm.wasm web/aegis_wasm.wasm
 
-      - name: Install dependencies
+      - name: Install Flutter dependencies
         run: flutter pub get
 
-      - name: Build web
-        # base-href uses the repo name so no hardcoding is needed
-        # canvaskit renderer gives the best fidelity for charts/math
+      - name: Build Flutter web
         run: |
           flutter build web \
             --release \
@@ -60,9 +60,9 @@ jobs:
         with:
           path: build/web
 
-  # ── Deploy ──────────────────────────────────────────────────────────────────
-  deploy:
-    needs: build
+  # ── 2. Deploy to GitHub Pages ─────────────────────────────────────────────
+  deploy-pages:
+    needs: build-web
     runs-on: ubuntu-latest
     environment:
       name: github-pages
@@ -71,3 +71,64 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  # ── 3. Windows build: DLL + Flutter Windows app ───────────────────────────
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure C++ (DLL)
+        run: cmake -S cpp -B cpp/build_win -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build aegis_core.dll
+        run: cmake --build cpp/build_win --config Release
+
+      - name: Setup Flutter (stable)
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Build Flutter Windows app
+        run: flutter build windows --release
+
+      - name: Bundle DLL next to executable
+        shell: pwsh
+        run: |
+          $release = "build\windows\x64\runner\Release"
+          Copy-Item "cpp\build_win\Release\aegis_core.dll" "$release\"
+          # Add a placeholder API-key file so the user knows where to put it
+          Set-Content "$release\anthropic_api_key.txt" "sk-ant-COLOQUE_SUA_CHAVE_AQUI"
+
+      - name: Zip Windows release
+        shell: pwsh
+        run: |
+          Compress-Archive `
+            -Path "build\windows\x64\runner\Release\*" `
+            -DestinationPath "AEGIS-windows.zip"
+
+      - name: Publish Windows release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "AEGIS — Latest Windows Build"
+          body: |
+            Automatically built from `main` branch.
+
+            **How to use:**
+            1. Extract the ZIP
+            2. Edit `anthropic_api_key.txt` and paste your Anthropic API key
+            3. Run `aegis.exe`
+
+            The C++ core (`aegis_core.dll`) and the LLM agent are bundled.
+            Internet access is required for the Claude API calls.
+          prerelease: true
+          make_latest: true
+          files: AEGIS-windows.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
