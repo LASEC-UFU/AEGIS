@@ -13,7 +13,7 @@ dependencies:
   fl_chart: ^0.70.2
   file_picker: ^8.1.6
   google_fonts: ^6.2.1
-  lucide_icons: ^0.257.0
+
   collection: ^1.19.1
   markdown_widget: ^2.3.2+6
   flutter_math_fork: ^0.7.2

@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
-import 'package:lucide_icons/lucide_icons.dart';
+
 import 'dart:convert';
 
 import '../theme/app_theme.dart';
@@ -37,7 +37,7 @@ class _DataScreenState extends ConsumerState<DataScreen> {
               padding: const EdgeInsets.only(right: 16),
               child: Chip(
                 avatar: const Icon(
-                  LucideIcons.checkCircle,
+                  Icons.check_circle,
                   size: 16,
                   color: AppColors.success,
                 ),
@@ -75,7 +75,7 @@ class _DataScreenState extends ConsumerState<DataScreen> {
 
   Widget _buildUploadSection() {
     return _SectionCard(
-      icon: LucideIcons.upload,
+      icon: Icons.upload,
       title: 'Load Data File',
       child: Column(
         children: [
@@ -97,8 +97,8 @@ class _DataScreenState extends ConsumerState<DataScreen> {
                 children: [
                   Icon(
                     _fileName != null
-                        ? LucideIcons.fileCheck
-                        : LucideIcons.filePlus,
+                        ? Icons.task
+                        : Icons.note_add,
                     size: 40,
                     color: _fileName != null
                         ? AppColors.success
@@ -135,7 +135,7 @@ class _DataScreenState extends ConsumerState<DataScreen> {
 
   Widget _buildOptionsSection() {
     return _SectionCard(
-      icon: LucideIcons.settings2,
+      icon: Icons.settings,
       title: 'Import Options',
       child: Row(
         children: [
@@ -183,7 +183,7 @@ class _DataScreenState extends ConsumerState<DataScreen> {
     if (_preview == null) return const SizedBox.shrink();
 
     return _SectionCard(
-      icon: LucideIcons.variable,
+      icon: Icons.functions,
       title: 'Variable Assignment',
       subtitle: 'Select inputs and one output',
       child: Wrap(
@@ -203,17 +203,17 @@ class _DataScreenState extends ConsumerState<DataScreen> {
             bgColor = AppColors.accentSubtle;
             borderColor = AppColors.accent;
             textColor = AppColors.accent;
-            icon = LucideIcons.arrowRightFromLine;
+            icon = Icons.output;
           } else if (isInput) {
             bgColor = AppColors.surfaceElevated;
             borderColor = AppColors.info;
             textColor = AppColors.info;
-            icon = LucideIcons.arrowLeftToLine;
+            icon = Icons.input;
           } else {
             bgColor = AppColors.surfaceVariant;
             borderColor = AppColors.gray700;
             textColor = AppColors.textTertiary;
-            icon = LucideIcons.circle;
+            icon = Icons.circle;
           }
 
           return InkWell(
@@ -265,7 +265,7 @@ class _DataScreenState extends ConsumerState<DataScreen> {
 
     final rows = _preview!.numRows.clamp(0, 10);
     return _SectionCard(
-      icon: LucideIcons.table,
+      icon: Icons.table_chart,
       title: 'Data Preview',
       subtitle: 'Showing first $rows of ${_preview!.numRows} rows',
       child: SingleChildScrollView(
@@ -306,7 +306,7 @@ class _DataScreenState extends ConsumerState<DataScreen> {
     final canConfirm = _selectedInputs.isNotEmpty && _selectedOutput != null;
     return ElevatedButton.icon(
       onPressed: canConfirm ? _confirmData : null,
-      icon: const Icon(LucideIcons.check, size: 18),
+      icon: const Icon(Icons.check, size: 18),
       label: const Text('Confirm & Proceed'),
       style: ElevatedButton.styleFrom(
         padding: const EdgeInsets.symmetric(vertical: 18),
@@ -369,7 +369,7 @@ class _DataScreenState extends ConsumerState<DataScreen> {
         content: Row(
           children: [
             const Icon(
-              LucideIcons.checkCircle,
+              Icons.check_circle,
               color: AppColors.success,
               size: 18,
             ),

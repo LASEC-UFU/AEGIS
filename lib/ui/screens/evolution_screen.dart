@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:lucide_icons/lucide_icons.dart';
+
 
 import '../theme/app_theme.dart';
 import '../state/app_state.dart';
@@ -108,19 +108,19 @@ class _ControlBar extends StatelessWidget {
           if (!isRunning && !isPaused)
             ElevatedButton.icon(
               onPressed: hasData ? onStart : null,
-              icon: const Icon(LucideIcons.play, size: 16),
+              icon: const Icon(Icons.play_arrow, size: 16),
               label: const Text('Start'),
             ),
           if (isRunning)
             OutlinedButton.icon(
               onPressed: onPause,
-              icon: const Icon(LucideIcons.pause, size: 16),
+              icon: const Icon(Icons.pause, size: 16),
               label: const Text('Pause'),
             ),
           if (isPaused) ...[
             ElevatedButton.icon(
               onPressed: onResume,
-              icon: const Icon(LucideIcons.play, size: 16),
+              icon: const Icon(Icons.play_arrow, size: 16),
               label: const Text('Resume'),
             ),
             const SizedBox(width: 8),
@@ -129,7 +129,7 @@ class _ControlBar extends StatelessWidget {
             const SizedBox(width: 8),
             OutlinedButton.icon(
               onPressed: onStop,
-              icon: const Icon(LucideIcons.square, size: 16),
+              icon: const Icon(Icons.stop, size: 16),
               label: const Text('Stop'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: AppColors.error,
@@ -162,7 +162,7 @@ class _EmptyState extends StatelessWidget {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(LucideIcons.activity, size: 64, color: AppColors.gray700),
+          Icon(Icons.show_chart, size: 64, color: AppColors.gray700),
           const SizedBox(height: 16),
           Text(
             'No evolution data yet',
@@ -213,19 +213,19 @@ class _EvolutionDashboard extends StatelessWidget {
                   StatCard(
                     label: 'GENERATION',
                     value: '${snap.generation}',
-                    icon: LucideIcons.hash,
+                    icon: Icons.tag,
                     valueColor: AppColors.accent,
                   ),
                   StatCard(
                     label: 'BEST FITNESS (BIC)',
                     value: snap.bestFitness.toStringAsFixed(4),
-                    icon: LucideIcons.trophy,
+                    icon: Icons.emoji_events,
                     valueColor: AppColors.success,
                   ),
                   StatCard(
                     label: 'R²',
                     value: snap.bestModelR2.toStringAsFixed(6),
-                    icon: LucideIcons.target,
+                    icon: Icons.my_location,
                     valueColor: snap.bestModelR2 > 0.95
                         ? AppColors.success
                         : snap.bestModelR2 > 0.8
@@ -235,7 +235,7 @@ class _EvolutionDashboard extends StatelessWidget {
                   StatCard(
                     label: 'ELAPSED',
                     value: _formatDuration(elapsed),
-                    icon: LucideIcons.timer,
+                    icon: Icons.timer,
                     subtitle: '${snap.stagnationCounter} stall',
                   ),
                 ],
@@ -255,7 +255,7 @@ class _EvolutionDashboard extends StatelessWidget {
                 children: [
                   _MetricsCard(
                     title: 'Population',
-                    icon: LucideIcons.users,
+                    icon: Icons.group,
                     metrics: {
                       'Mean Fitness': snap.meanFitness.toStringAsFixed(4),
                       'Std Dev': snap.stdDevFitness.toStringAsFixed(4),
@@ -266,7 +266,7 @@ class _EvolutionDashboard extends StatelessWidget {
                   ),
                   _MetricsCard(
                     title: 'Best Model',
-                    icon: LucideIcons.sparkles,
+                    icon: Icons.auto_awesome,
                     metrics: {
                       'Complexity': '${snap.bestModelComplexity} regressors',
                       'Max Degree': '${snap.bestModelMaxDegree}',
@@ -276,7 +276,7 @@ class _EvolutionDashboard extends StatelessWidget {
                   ),
                   _MetricsCard(
                     title: 'Convergence',
-                    icon: LucideIcons.trendingDown,
+                    icon: Icons.trending_down,
                     metrics: {
                       'Improvement': snap.improvementRelative
                           .toStringAsExponential(2),
@@ -323,7 +323,7 @@ class _FitnessChart extends StatelessWidget {
           children: [
             Row(
               children: const [
-                Icon(LucideIcons.lineChart, size: 16, color: AppColors.accent),
+                Icon(Icons.show_chart, size: 16, color: AppColors.accent),
                 SizedBox(width: 8),
                 Text(
                   'Fitness Evolution',

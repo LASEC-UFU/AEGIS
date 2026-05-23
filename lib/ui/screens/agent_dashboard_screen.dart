@@ -1,7 +1,7 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
-import 'package:lucide_icons/lucide_icons.dart';
+
 
 import '../theme/app_theme.dart';
 import '../state/app_state.dart';
@@ -31,7 +31,7 @@ class _AgentDashboardScreenState extends ConsumerState<AgentDashboardScreen> {
           if (snap != null)
             Chip(
               avatar: const Icon(
-                LucideIcons.brain,
+                Icons.psychology,
                 size: 14,
                 color: AppColors.accent,
               ),
@@ -64,7 +64,7 @@ class _AgentDashboardScreenState extends ConsumerState<AgentDashboardScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(LucideIcons.brainCircuit, size: 64, color: AppColors.gray700),
+          Icon(Icons.psychology, size: 64, color: AppColors.gray700),
           const SizedBox(height: 16),
           const Text(
             'Agent dashboard will activate during evolution',
@@ -132,7 +132,7 @@ class _AgentDashboardScreenState extends ConsumerState<AgentDashboardScreen> {
           children: [
             const Row(
               children: [
-                Icon(LucideIcons.gauge, size: 16, color: AppColors.accent),
+                Icon(Icons.speed, size: 16, color: AppColors.accent),
                 SizedBox(width: 8),
                 Text(
                   'Indicators',
@@ -229,7 +229,7 @@ class _AgentDashboardScreenState extends ConsumerState<AgentDashboardScreen> {
           child: Column(
             children: [
               Icon(
-                LucideIcons.slidersHorizontal,
+                Icons.tune,
                 size: 32,
                 color: AppColors.gray600,
               ),
@@ -254,7 +254,7 @@ class _AgentDashboardScreenState extends ConsumerState<AgentDashboardScreen> {
             Row(
               children: [
                 const Icon(
-                  LucideIcons.slidersHorizontal,
+                  Icons.tune,
                   size: 16,
                   color: AppColors.accent,
                 ),
@@ -273,7 +273,7 @@ class _AgentDashboardScreenState extends ConsumerState<AgentDashboardScreen> {
                     }
                     setState(() {});
                   },
-                  icon: const Icon(LucideIcons.rotateCcw, size: 14),
+                  icon: const Icon(Icons.rotate_left, size: 14),
                   label: const Text('Reset', style: TextStyle(fontSize: 12)),
                 ),
               ],
@@ -310,7 +310,7 @@ class _AgentDashboardScreenState extends ConsumerState<AgentDashboardScreen> {
           children: [
             const Row(
               children: [
-                Icon(LucideIcons.globe2, size: 16, color: AppColors.accent),
+                Icon(Icons.language, size: 16, color: AppColors.accent),
                 SizedBox(width: 8),
                 Text(
                   'Island Monitor',
@@ -419,7 +419,7 @@ class _AgentDashboardScreenState extends ConsumerState<AgentDashboardScreen> {
           children: [
             const Row(
               children: [
-                Icon(LucideIcons.barChart3, size: 16, color: AppColors.accent),
+                Icon(Icons.bar_chart, size: 16, color: AppColors.accent),
                 SizedBox(width: 8),
                 Text(
                   'ERR Contributions',

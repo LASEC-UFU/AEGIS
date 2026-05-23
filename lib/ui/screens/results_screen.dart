@@ -1,6 +1,6 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:lucide_icons/lucide_icons.dart';
+
 import 'dart:math' as math;
 
 import '../theme/app_theme.dart';
@@ -27,7 +27,7 @@ class ResultsScreen extends ConsumerWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
-                LucideIcons.fileBarChart,
+                Icons.bar_chart,
                 size: 64,
                 color: AppColors.gray700,
               ),
@@ -56,7 +56,7 @@ class ResultsScreen extends ConsumerWidget {
               padding: EdgeInsets.only(right: 16),
               child: Chip(
                 avatar: Icon(
-                  LucideIcons.checkCircle,
+                  Icons.check_circle,
                   size: 14,
                   color: AppColors.success,
                 ),
@@ -94,13 +94,13 @@ class ResultsScreen extends ConsumerWidget {
                         StatCard(
                           label: 'FITNESS (BIC)',
                           value: best.fitness.toStringAsFixed(4),
-                          icon: LucideIcons.trophy,
+                          icon: Icons.emoji_events,
                           valueColor: AppColors.success,
                         ),
                         StatCard(
                           label: 'R²',
                           value: snap.bestModelR2.toStringAsFixed(6),
-                          icon: LucideIcons.target,
+                          icon: Icons.my_location,
                           valueColor: snap.bestModelR2 > 0.95
                               ? AppColors.success
                               : AppColors.warning,
@@ -108,12 +108,12 @@ class ResultsScreen extends ConsumerWidget {
                         StatCard(
                           label: 'RMSE',
                           value: snap.bestModelRMSE.toStringAsFixed(6),
-                          icon: LucideIcons.ruler,
+                          icon: Icons.straighten,
                         ),
                         StatCard(
                           label: 'REGRESSORS',
                           value: '${best.numRegressors}',
-                          icon: LucideIcons.layers,
+                          icon: Icons.layers,
                           subtitle:
                               'Max degree ${best.maxDegree}, delay ${best.maxDelay}',
                         ),
@@ -165,7 +165,7 @@ class _ModelEquationCard extends StatelessWidget {
             const Row(
               children: [
                 Icon(
-                  LucideIcons.functionSquare,
+                  Icons.functions,
                   size: 18,
                   color: AppColors.accent,
                 ),
@@ -266,7 +266,7 @@ class _ERRTable extends StatelessWidget {
           children: [
             const Row(
               children: [
-                Icon(LucideIcons.barChart, size: 16, color: AppColors.accent),
+                Icon(Icons.bar_chart, size: 16, color: AppColors.accent),
                 SizedBox(width: 8),
                 Text(
                   'ERR & Coefficients',
@@ -348,7 +348,7 @@ class _AutocorrelationCard extends StatelessWidget {
           children: [
             const Row(
               children: [
-                Icon(LucideIcons.waves, size: 16, color: AppColors.accent),
+                Icon(Icons.waves, size: 16, color: AppColors.accent),
                 SizedBox(width: 8),
                 Text(
                   'Residual Autocorrelation',
@@ -448,7 +448,7 @@ class _RunSummary extends StatelessWidget {
             const Row(
               children: [
                 Icon(
-                  LucideIcons.clipboardList,
+                  Icons.list_alt,
                   size: 16,
                   color: AppColors.accent,
                 ),

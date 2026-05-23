@@ -1,6 +1,6 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:lucide_icons/lucide_icons.dart';
+
 
 import '../theme/app_theme.dart';
 import 'data_screen.dart';
@@ -22,12 +22,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   int _selectedIndex = 0;
 
   static const _destinations = [
-    _NavItem(icon: LucideIcons.database, label: 'Data'),
-    _NavItem(icon: LucideIcons.activity, label: 'Evolution'),
-    _NavItem(icon: LucideIcons.brainCircuit, label: 'Agent'),
-    _NavItem(icon: LucideIcons.fileBarChart, label: 'Results'),
-    _NavItem(icon: LucideIcons.bookOpen, label: 'How to Use'),
-    _NavItem(icon: LucideIcons.info, label: 'About'),
+    _NavItem(icon: Icons.storage, label: 'Data'),
+    _NavItem(icon: Icons.show_chart, label: 'Evolution'),
+    _NavItem(icon: Icons.psychology, label: 'Agent'),
+    _NavItem(icon: Icons.bar_chart, label: 'Results'),
+    _NavItem(icon: Icons.menu_book, label: 'How to Use'),
+    _NavItem(icon: Icons.info, label: 'About'),
   ];
 
   static const _screens = [
@@ -89,7 +89,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: const Icon(
-                  LucideIcons.dna,
+                  Icons.biotech,
                   color: AppColors.accent,
                   size: 20,
                 ),
