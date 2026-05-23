@@ -98,6 +98,7 @@ class _HowToScreenState extends State<HowToScreen> {
   String? _markdown;
   String? _error;
   bool _loading = true;
+  bool _isEnglish = true;
   bool _isDarkMode = false;
 
   @override
@@ -108,7 +109,8 @@ class _HowToScreenState extends State<HowToScreen> {
 
   Future<void> _fetchMarkdown() async {
     try {
-      final uri = Uri.base.resolve('how_to_use.md');
+      final file = _isEnglish ? 'how_to_use.md' : 'how_to_use_br.md';
+      final uri = Uri.base.resolve(file);
       final response = await http.get(uri);
       if (response.statusCode == 200) {
         setState(() {
@@ -117,7 +119,7 @@ class _HowToScreenState extends State<HowToScreen> {
         });
       } else {
         setState(() {
-          _error = 'Failed to load how_to_use.md (HTTP ${response.statusCode})';
+          _error = 'Failed to load $file (HTTP ${response.statusCode})';
           _loading = false;
         });
       }
@@ -143,6 +145,19 @@ class _HowToScreenState extends State<HowToScreen> {
             tooltip: 'Reload',
             onPressed: () {
               setState(() {
+                _loading = true;
+                _error = null;
+                _markdown = null;
+              });
+              _fetchMarkdown();
+            },
+          ),
+          IconButton(
+            icon: const Icon(Icons.translate),
+            tooltip: _isEnglish ? 'Mudar para Português' : 'Switch to English',
+            onPressed: () {
+              setState(() {
+                _isEnglish = !_isEnglish;
                 _loading = true;
                 _error = null;
                 _markdown = null;
