@@ -3,7 +3,8 @@
     "allow": [
       "Skill(claude-api)",
       "Skill(claude-api:*)",
-      "Bash(git -C \"c:\\\\SourceCode\\\\AEGIS\" log --oneline -5)"
+      "Bash(git -C \"c:\\\\SourceCode\\\\AEGIS\" log --oneline -5)",
+      "Bash(xargs grep -l \"std::string\")"
     ]
   }
 }
