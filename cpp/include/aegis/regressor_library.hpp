@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <functional>
 #include "safe_power.hpp"
+#include "metrics.hpp"
 
 namespace aegis {
 
@@ -69,6 +70,7 @@ struct Chromosome {
     double                 fitness    = std::numeric_limits<double>::infinity();
     double                 sse        = std::numeric_limits<double>::infinity();
     bool                   evaluated  = false;
+    ModelMetrics           metrics;      // RMSE/R²/BIC/AIC, populated on evaluate()
 
     int  num_regressors() const noexcept { return static_cast<int>(regressors.size()); }
     bool is_rational()    const noexcept;

@@ -1,5 +1,6 @@
 #include "aegis/identification_pipeline.hpp"
 #include "aegis/metrics.hpp"
+#include "aegis/rational_model.hpp"
 #include "aegis/overfitting_detector.hpp"
 #include "aegis/underfitting_detector.hpp"
 #include "aegis/excitation_analyzer.hpp"
@@ -217,6 +218,11 @@ bool IdentificationPipeline::start() {
     if (state_.load() == PipelineState::Running) return false;
     if (raw_data_.empty()) return false;
 
+    // Join any previous run's threads before discarding de_/agent_
+    if (de_) de_->stop();
+    if (worker_thread_.joinable()) worker_thread_.join();
+    if (agent_) agent_.reset();
+
     state_.store(PipelineState::Running);
 
     // Normalise and split
@@ -255,7 +261,9 @@ bool IdentificationPipeline::start() {
                 std::string json = build_broadcast_json(
                     rpt.generation, rpt.best_fitness,
                     rpt.rmse_train, rpt.rmse_val, rpt.rmse_test,
-                    rpt.bic, rpt.aic, rpt.population_diversity,
+                    rpt.bic, rpt.aic, rpt.r2_train, rpt.r2_val,
+                    rpt.population_diversity, rpt.population_variance,
+                    rpt.unique_structures, rpt.success_rate,
                     rpt.stagnation, rpt.mu_f, rpt.mu_cr, rpt.num_terms,
                     rpt.is_stable, rpt.overfitting, rpt.underfitting, rpt.pe_ok,
                     rpt.residual_autocorr, rpt.best_coefficients,
@@ -275,8 +283,11 @@ bool IdentificationPipeline::start() {
         if (state_.load() == PipelineState::Running)
             state_.store(PipelineState::Completed);
         // Store final best
-        std::lock_guard<std::mutex> lk(results_mutex_);
-        best_chromosome_ = de_->best_chromosome();
+        {
+            std::lock_guard<std::mutex> lk(results_mutex_);
+            best_chromosome_ = de_->best_chromosome();
+        }
+        compute_test_metrics();
     });
 #endif // !__EMSCRIPTEN__
 
@@ -301,8 +312,11 @@ int IdentificationPipeline::step(int n) {
     );
 
     if (de_->is_done() && state_.load() == PipelineState::Running) {
-        std::lock_guard<std::mutex> lk(results_mutex_);
-        best_chromosome_ = de_->best_chromosome();
+        {
+            std::lock_guard<std::mutex> lk(results_mutex_);
+            best_chromosome_ = de_->best_chromosome();
+        }
+        compute_test_metrics();
         state_.store(PipelineState::Completed);
     }
 
@@ -347,6 +361,26 @@ std::string IdentificationPipeline::status_json() const {
     return j.str();
 }
 
+void IdentificationPipeline::compute_test_metrics() {
+    std::lock_guard<std::mutex> lk(results_mutex_);
+    if (!best_chromosome_.evaluated || test_rows_ <= 0) return;
+
+    RationalModel model(best_chromosome_);
+    const int md = best_chromosome_.max_delay();
+    const int n_test = test_rows_ - md;
+    if (n_test <= 0) return;
+
+    std::vector<double> yhat_test = model.predict_one_step(
+        test_data_.data(), test_rows_, raw_cols_, cfg_.output_col
+    );
+    std::vector<double> y_test(n_test);
+    for (int i = 0; i < n_test; ++i)
+        y_test[i] = test_data_[(size_t)(i + md) * raw_cols_ + cfg_.output_col];
+
+    best_chromosome_.metrics.rmse_test = Metrics::rmse(y_test.data(), yhat_test.data(), n_test);
+    best_chromosome_.metrics.r2_test   = Metrics::r2(y_test.data(), yhat_test.data(), n_test);
+}
+
 std::string IdentificationPipeline::best_model_json() const {
     std::lock_guard<std::mutex> lk(results_mutex_);
     const auto& c = best_chromosome_;
@@ -360,8 +394,33 @@ std::string IdentificationPipeline::best_model_json() const {
       << "\"maxExponent\":"     << json_dbl(c.max_exponent()) << ","
       << "\"fitness\":"         << json_dbl(c.fitness) << ","
       << "\"sse\":"             << json_dbl(c.sse) << ","
+      << "\"rmseTrain\":"       << json_dbl(c.metrics.rmse_train) << ","
+      << "\"rmseVal\":"         << json_dbl(c.metrics.rmse_val) << ","
+      << "\"rmseTest\":"        << json_dbl(c.metrics.rmse_test) << ","
+      << "\"r2Train\":"         << json_dbl(c.metrics.r2_train) << ","
+      << "\"r2Val\":"           << json_dbl(c.metrics.r2_val) << ","
+      << "\"r2Test\":"          << json_dbl(c.metrics.r2_test) << ","
+      << "\"bic\":"             << json_dbl(c.metrics.bic) << ","
+      << "\"aic\":"             << json_dbl(c.metrics.aic) << ","
       << "\"coefficients\":"    << json_arr(c.coefficients) << ","
-      << "\"err\":"             << json_arr(c.err)
+      << "\"err\":"             << json_arr(c.err) << ","
+      << "\"regressors\":[";
+    for (size_t i = 0; i < c.regressors.size(); ++i) {
+        if (i) j << ",";
+        const auto& reg = c.regressors[i];
+        j << "{\"terms\":[";
+        for (size_t t = 0; t < reg.terms.size(); ++t) {
+            if (t) j << ",";
+            const auto& term = reg.terms[t];
+            j << "{\"variable\":"      << term.variable
+              << ",\"delay\":"         << term.delay
+              << ",\"exponent\":"      << json_dbl(term.exponent)
+              << ",\"isDenominator\":" << json_bool(term.is_denominator)
+              << "}";
+        }
+        j << "]}";
+    }
+    j << "]"
       << "}";
     return j.str();
 }
@@ -371,7 +430,10 @@ std::string IdentificationPipeline::snapshot_json() const {
     const auto& r = latest_report_;
     return build_broadcast_json(
         r.generation, r.best_fitness, r.rmse_train, r.rmse_val, r.rmse_test,
-        r.bic, r.aic, r.population_diversity, r.stagnation, r.mu_f, r.mu_cr,
+        r.bic, r.aic, r.r2_train, r.r2_val,
+        r.population_diversity, r.population_variance,
+        r.unique_structures, r.success_rate,
+        r.stagnation, r.mu_f, r.mu_cr,
         r.num_terms, r.is_stable, r.overfitting, r.underfitting, r.pe_ok,
         r.residual_autocorr, r.best_coefficients, r.best_exponents, r.alerts
     );

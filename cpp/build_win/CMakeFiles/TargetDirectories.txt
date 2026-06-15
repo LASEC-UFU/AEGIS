@@ -1,0 +1,7 @@
+C:/SourceCode/AEGIS/cpp/build_win/CMakeFiles/aegis_core.dir
+C:/SourceCode/AEGIS/cpp/build_win/CMakeFiles/edit_cache.dir
+C:/SourceCode/AEGIS/cpp/build_win/CMakeFiles/rebuild_cache.dir
+C:/SourceCode/AEGIS/cpp/build_win/CMakeFiles/list_install_components.dir
+C:/SourceCode/AEGIS/cpp/build_win/CMakeFiles/install.dir
+C:/SourceCode/AEGIS/cpp/build_win/CMakeFiles/install/local.dir
+C:/SourceCode/AEGIS/cpp/build_win/CMakeFiles/install/strip.dir

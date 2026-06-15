@@ -1,0 +1,303 @@
+[DBG] gen 0: before run_generation
+[DBG] island 0 indiv 0: regs=7 before evaluate
+[DBG] island 0 indiv 0: after evaluate
+[DBG] island 0 indiv 1: regs=5 before evaluate
+[DBG] island 0 indiv 1: after evaluate
+[DBG] island 0 indiv 2: regs=6 before evaluate
+[DBG] island 0 indiv 2: after evaluate
+[DBG] island 0 indiv 3: regs=7 before evaluate
+[DBG] island 0 indiv 3: after evaluate
+[DBG] island 0 indiv 4: regs=7 before evaluate
+[DBG] island 0 indiv 4: after evaluate
+[DBG] island 0 indiv 5: regs=8 before evaluate
+[DBG] island 0 indiv 5: after evaluate
+[DBG] island 0 indiv 6: regs=8 before evaluate
+[DBG] island 0 indiv 6: after evaluate
+[DBG] island 0 indiv 7: regs=1 before evaluate
+[DBG] island 0 indiv 7: after evaluate
+[DBG] island 0 indiv 8: regs=8 before evaluate
+[DBG] island 0 indiv 8: after evaluate
+[DBG] island 0 indiv 9: regs=4 before evaluate
+[DBG] island 0 indiv 9: after evaluate
+[DBG] island 0 indiv 10: regs=5 before evaluate
+[DBG] island 0 indiv 10: after evaluate
+[DBG] island 0 indiv 11: regs=5 before evaluate
+[DBG] island 0 indiv 11: after evaluate
+[DBG] island 0 indiv 12: regs=6 before evaluate
+[DBG] island 0 indiv 12: after evaluate
+[DBG] island 0 indiv 13: regs=8 before evaluate
+[DBG] island 0 indiv 13: after evaluate
+[DBG] island 0 indiv 14: regs=8 before evaluate
+[DBG] island 0 indiv 14: after evaluate
+[DBG] island 0 indiv 15: regs=7 before evaluate
+[DBG] island 0 indiv 15: after evaluate
+[DBG] island 0 indiv 16: regs=6 before evaluate
+[DBG] island 0 indiv 16: after evaluate
+[DBG] island 0 indiv 17: regs=8 before evaluate
+[DBG] island 0 indiv 17: after evaluate
+[DBG] island 0 indiv 18: regs=4 before evaluate
+[DBG] island 0 indiv 18: after evaluate
+[DBG] island 0 indiv 19: regs=6 before evaluate
+[DBG] island 0 indiv 19: after evaluate
+[DBG] island 0 indiv 20: regs=6 before evaluate
+[DBG] island 0 indiv 20: after evaluate
+[DBG] island 0 indiv 21: regs=8 before evaluate
+[DBG] island 0 indiv 21: after evaluate
+[DBG] island 0 indiv 22: regs=4 before evaluate
+[DBG] island 0 indiv 22: after evaluate
+[DBG] island 0 indiv 23: regs=5 before evaluate
+[DBG] island 0 indiv 23: after evaluate
+[DBG] island 0 indiv 24: regs=8 before evaluate
+[DBG] island 0 indiv 24: after evaluate
+[DBG] island 0 indiv 25: regs=6 before evaluate
+[DBG] island 0 indiv 25: after evaluate
+[DBG] island 0 indiv 26: regs=5 before evaluate
+[DBG] island 0 indiv 26: after evaluate
+[DBG] island 0 indiv 27: regs=6 before evaluate
+[DBG] island 0 indiv 27: after evaluate
+[DBG] island 0 indiv 28: regs=4 before evaluate
+[DBG] island 0 indiv 28: after evaluate
+[DBG] island 0 indiv 29: regs=5 before evaluate
+[DBG] island 0 indiv 29: after evaluate
+[DBG] island 0 indiv 30: regs=3 before evaluate
+[DBG] island 0 indiv 30: after evaluate
+[DBG] island 0 indiv 31: regs=7 before evaluate
+[DBG] island 0 indiv 31: after evaluate
+[DBG] island 0 indiv 32: regs=5 before evaluate
+[DBG] island 0 indiv 32: after evaluate
+[DBG] island 0 indiv 33: regs=3 before evaluate
+[DBG] island 0 indiv 33: after evaluate
+[DBG] island 0 indiv 34: regs=8 before evaluate
+[DBG] island 0 indiv 34: after evaluate
+[DBG] island 0 indiv 35: regs=6 before evaluate
+[DBG] island 0 indiv 35: after evaluate
+[DBG] island 0 indiv 36: regs=5 before evaluate
+[DBG] island 0 indiv 36: after evaluate
+[DBG] island 0 indiv 37: regs=4 before evaluate
+[DBG] island 0 indiv 37: after evaluate
+[DBG] island 0 indiv 38: regs=8 before evaluate
+[DBG] island 0 indiv 38: after evaluate
+[DBG] island 0 indiv 39: regs=8 before evaluate
+[DBG] island 0 indiv 39: after evaluate
+[DBG] island 0 indiv 40: regs=2 before evaluate
+[DBG] island 0 indiv 40: after evaluate
+[DBG] island 0 indiv 41: regs=7 before evaluate
+[DBG] island 0 indiv 41: after evaluate
+[DBG] island 0 indiv 42: regs=4 before evaluate
+[DBG] island 0 indiv 42: after evaluate
+[DBG] island 0 indiv 43: regs=8 before evaluate
+[DBG] island 0 indiv 43: after evaluate
+[DBG] island 0 indiv 44: regs=6 before evaluate
+[DBG] island 0 indiv 44: after evaluate
+[DBG] island 0 indiv 45: regs=4 before evaluate
+[DBG] island 0 indiv 45: after evaluate
+[DBG] island 0 indiv 46: regs=6 before evaluate
+[DBG] island 0 indiv 46: after evaluate
+[DBG] island 0 indiv 47: regs=8 before evaluate
+[DBG] island 0 indiv 47: after evaluate
+[DBG] island 0 indiv 48: regs=8 before evaluate
+[DBG] island 0 indiv 48: after evaluate
+[DBG] island 0 indiv 49: regs=8 before evaluate
+[DBG] island 0 indiv 49: after evaluate
+[DBG] island 1 indiv 0: regs=3 before evaluate
+[DBG] island 1 indiv 0: after evaluate
+[DBG] island 1 indiv 1: regs=6 before evaluate
+[DBG] island 1 indiv 1: after evaluate
+[DBG] island 1 indiv 2: regs=8 before evaluate
+[DBG] island 1 indiv 2: after evaluate
+[DBG] island 1 indiv 3: regs=7 before evaluate
+[DBG] island 1 indiv 3: after evaluate
+[DBG] island 1 indiv 4: regs=4 before evaluate
+[DBG] island 1 indiv 4: after evaluate
+[DBG] island 1 indiv 5: regs=7 before evaluate
+[DBG] island 1 indiv 5: after evaluate
+[DBG] island 1 indiv 6: regs=4 before evaluate
+[DBG] island 1 indiv 6: after evaluate
+[DBG] island 1 indiv 7: regs=8 before evaluate
+[DBG] island 1 indiv 7: after evaluate
+[DBG] island 1 indiv 8: regs=3 before evaluate
+[DBG] island 1 indiv 8: after evaluate
+[DBG] island 1 indiv 9: regs=4 before evaluate
+[DBG] island 1 indiv 9: after evaluate
+[DBG] island 1 indiv 10: regs=8 before evaluate
+[DBG] island 1 indiv 10: after evaluate
+[DBG] island 1 indiv 11: regs=7 before evaluate
+[DBG] island 1 indiv 11: after evaluate
+[DBG] island 1 indiv 12: regs=5 before evaluate
+[DBG] island 1 indiv 12: after evaluate
+[DBG] island 1 indiv 13: regs=6 before evaluate
+[DBG] island 1 indiv 13: after evaluate
+[DBG] island 1 indiv 14: regs=4 before evaluate
+[DBG] island 1 indiv 14: after evaluate
+[DBG] island 1 indiv 15: regs=5 before evaluate
+[DBG] island 1 indiv 15: after evaluate
+[DBG] island 1 indiv 16: regs=2 before evaluate
+[DBG] island 1 indiv 16: after evaluate
+[DBG] island 1 indiv 17: regs=8 before evaluate
+[DBG] island 1 indiv 17: after evaluate
+[DBG] island 1 indiv 18: regs=5 before evaluate
+[DBG] island 1 indiv 18: after evaluate
+[DBG] island 1 indiv 19: regs=8 before evaluate
+[DBG] island 1 indiv 19: after evaluate
+[DBG] island 1 indiv 20: regs=4 before evaluate
+[DBG] island 1 indiv 20: after evaluate
+[DBG] island 1 indiv 21: regs=6 before evaluate
+[DBG] island 1 indiv 21: after evaluate
+[DBG] island 1 indiv 22: regs=6 before evaluate
+[DBG] island 1 indiv 22: after evaluate
+[DBG] island 1 indiv 23: regs=7 before evaluate
+[DBG] island 1 indiv 23: after evaluate
+[DBG] island 1 indiv 24: regs=7 before evaluate
+[DBG] island 1 indiv 24: after evaluate
+[DBG] island 1 indiv 25: regs=6 before evaluate
+[DBG] island 1 indiv 25: after evaluate
+[DBG] island 1 indiv 26: regs=5 before evaluate
+[DBG] island 1 indiv 26: after evaluate
+[DBG] island 1 indiv 27: regs=8 before evaluate
+[DBG] island 1 indiv 27: after evaluate
+[DBG] island 1 indiv 28: regs=6 before evaluate
+[DBG] island 1 indiv 28: after evaluate
+[DBG] island 1 indiv 29: regs=5 before evaluate
+[DBG] island 1 indiv 29: after evaluate
+[DBG] island 1 indiv 30: regs=2 before evaluate
+[DBG] island 1 indiv 30: after evaluate
+[DBG] island 1 indiv 31: regs=6 before evaluate
+[DBG] island 1 indiv 31: after evaluate
+[DBG] island 1 indiv 32: regs=4 before evaluate
+[DBG] island 1 indiv 32: after evaluate
+[DBG] island 1 indiv 33: regs=7 before evaluate
+[DBG] island 1 indiv 33: after evaluate
+[DBG] island 1 indiv 34: regs=2 before evaluate
+[DBG] island 1 indiv 34: after evaluate
+[DBG] island 1 indiv 35: regs=7 before evaluate
+[DBG] island 1 indiv 35: after evaluate
+[DBG] island 1 indiv 36: regs=5 before evaluate
+[DBG] island 1 indiv 36: after evaluate
+[DBG] island 1 indiv 37: regs=6 before evaluate
+[DBG] island 1 indiv 37: after evaluate
+[DBG] island 1 indiv 38: regs=5 before evaluate
+[DBG] island 1 indiv 38: after evaluate
+[DBG] island 1 indiv 39: regs=2 before evaluate
+[DBG] island 1 indiv 39: after evaluate
+[DBG] island 1 indiv 40: regs=8 before evaluate
+[DBG] island 1 indiv 40: after evaluate
+[DBG] island 1 indiv 41: regs=7 before evaluate
+[DBG] island 1 indiv 41: after evaluate
+[DBG] island 1 indiv 42: regs=5 before evaluate
+[DBG] island 1 indiv 42: after evaluate
+[DBG] island 1 indiv 43: regs=5 before evaluate
+[DBG] island 1 indiv 43: after evaluate
+[DBG] island 1 indiv 44: regs=6 before evaluate
+[DBG] island 1 indiv 44: after evaluate
+[DBG] island 1 indiv 45: regs=8 before evaluate
+[DBG] island 1 indiv 45: after evaluate
+[DBG] island 1 indiv 46: regs=5 before evaluate
+[DBG] island 1 indiv 46: after evaluate
+[DBG] island 1 indiv 47: regs=8 before evaluate
+[DBG] island 1 indiv 47: after evaluate
+[DBG] island 1 indiv 48: regs=7 before evaluate
+[DBG] island 1 indiv 48: after evaluate
+[DBG] island 1 indiv 49: regs=4 before evaluate
+[DBG] island 1 indiv 49: after evaluate
+[DBG] island 2 indiv 0: regs=2 before evaluate
+[DBG] island 2 indiv 0: after evaluate
+[DBG] island 2 indiv 1: regs=7 before evaluate
+[DBG] island 2 indiv 1: after evaluate
+[DBG] island 2 indiv 2: regs=6 before evaluate
+[DBG] island 2 indiv 2: after evaluate
+[DBG] island 2 indiv 3: regs=8 before evaluate
+[DBG] island 2 indiv 3: after evaluate
+[DBG] island 2 indiv 4: regs=4 before evaluate
+[DBG] island 2 indiv 4: after evaluate
+[DBG] island 2 indiv 5: regs=3 before evaluate
+[DBG] island 2 indiv 5: after evaluate
+[DBG] island 2 indiv 6: regs=5 before evaluate
+[DBG] island 2 indiv 6: after evaluate
+[DBG] island 2 indiv 7: regs=3 before evaluate
+[DBG] island 2 indiv 7: after evaluate
+[DBG] island 2 indiv 8: regs=4 before evaluate
+[DBG] island 2 indiv 8: after evaluate
+[DBG] island 2 indiv 9: regs=6 before evaluate
+[DBG] island 2 indiv 9: after evaluate
+[DBG] island 2 indiv 10: regs=4 before evaluate
+[DBG] island 2 indiv 10: after evaluate
+[DBG] island 2 indiv 11: regs=8 before evaluate
+[DBG] island 2 indiv 11: after evaluate
+[DBG] island 2 indiv 12: regs=7 before evaluate
+[DBG] island 2 indiv 12: after evaluate
+[DBG] island 2 indiv 13: regs=6 before evaluate
+[DBG] island 2 indiv 13: after evaluate
+[DBG] island 2 indiv 14: regs=3 before evaluate
+[DBG] island 2 indiv 14: after evaluate
+[DBG] island 2 indiv 15: regs=3 before evaluate
+[DBG] island 2 indiv 15: after evaluate
+[DBG] island 2 indiv 16: regs=7 before evaluate
+[DBG] island 2 indiv 16: after evaluate
+[DBG] island 2 indiv 17: regs=5 before evaluate
+[DBG] island 2 indiv 17: after evaluate
+[DBG] island 2 indiv 18: regs=3 before evaluate
+[DBG] island 2 indiv 18: after evaluate
+[DBG] island 2 indiv 19: regs=4 before evaluate
+[DBG] island 2 indiv 19: after evaluate
+[DBG] island 2 indiv 20: regs=6 before evaluate
+[DBG] island 2 indiv 20: after evaluate
+[DBG] island 2 indiv 21: regs=1 before evaluate
+[DBG] island 2 indiv 21: after evaluate
+[DBG] island 2 indiv 22: regs=7 before evaluate
+[DBG] island 2 indiv 22: after evaluate
+[DBG] island 2 indiv 23: regs=5 before evaluate
+[DBG] island 2 indiv 23: after evaluate
+[DBG] island 2 indiv 24: regs=6 before evaluate
+[DBG] island 2 indiv 24: after evaluate
+[DBG] island 2 indiv 25: regs=6 before evaluate
+[DBG] island 2 indiv 25: after evaluate
+[DBG] island 2 indiv 26: regs=5 before evaluate
+[DBG] island 2 indiv 26: after evaluate
+[DBG] island 2 indiv 27: regs=3 before evaluate
+[DBG] island 2 indiv 27: after evaluate
+[DBG] island 2 indiv 28: regs=5 before evaluate
+[DBG] island 2 indiv 28: after evaluate
+[DBG] island 2 indiv 29: regs=5 before evaluate
+[DBG] island 2 indiv 29: after evaluate
+[DBG] island 2 indiv 30: regs=4 before evaluate
+[DBG] island 2 indiv 30: after evaluate
+[DBG] island 2 indiv 31: regs=3 before evaluate
+[DBG] island 2 indiv 31: after evaluate
+[DBG] island 2 indiv 32: regs=6 before evaluate
+[DBG] island 2 indiv 32: after evaluate
+[DBG] island 2 indiv 33: regs=6 before evaluate
+[DBG] island 2 indiv 33: after evaluate
+[DBG] island 2 indiv 34: regs=4 before evaluate
+[DBG] island 2 indiv 34: after evaluate
+[DBG] island 2 indiv 35: regs=6 before evaluate
+[DBG] island 2 indiv 35: after evaluate
+[DBG] island 2 indiv 36: regs=3 before evaluate
+[DBG] island 2 indiv 36: after evaluate
+[DBG] island 2 indiv 37: regs=8 before evaluate
+[DBG] island 2 indiv 37: after evaluate
+[DBG] island 2 indiv 38: regs=6 before evaluate
+[DBG] island 2 indiv 38: after evaluate
+[DBG] island 2 indiv 39: regs=8 before evaluate
+[DBG] island 2 indiv 39: after evaluate
+[DBG] island 2 indiv 40: regs=3 before evaluate
+[DBG] island 2 indiv 40: after evaluate
+[DBG] island 2 indiv 41: regs=8 before evaluate
+[DBG] island 2 indiv 41: after evaluate
+[DBG] island 2 indiv 42: regs=7 before evaluate
+[DBG] island 2 indiv 42: after evaluate
+[DBG] island 2 indiv 43: regs=8 before evaluate
+[DBG] island 2 indiv 43: after evaluate
+[DBG] island 2 indiv 44: regs=2 before evaluate
+[DBG] island 2 indiv 44: after evaluate
+[DBG] island 2 indiv 45: regs=6 before evaluate
+[DBG] island 2 indiv 45: after evaluate
+[DBG] island 2 indiv 46: regs=3 before evaluate
+[DBG] island 2 indiv 46: after evaluate
+[DBG] island 2 indiv 47: regs=3 before evaluate
+[DBG] island 2 indiv 47: after evaluate
+[DBG] island 2 indiv 48: regs=7 before evaluate
+[DBG] island 2 indiv 48: after evaluate
+[DBG] island 2 indiv 49: regs=6 before evaluate
+[DBG] island 2 indiv 49: after evaluate
+[DBG] gen 0: after run_generation
+[DBG] gen 0: after migration

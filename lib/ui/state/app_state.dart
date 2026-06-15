@@ -82,7 +82,13 @@ class EngineNotifier extends StateNotifier<EngineUiState> {
 
   bool get _usingCpp => _ffiService != null;
 
+  bool get usingCpp => _usingCpp;
+
   DEEngine? get engine => _engine;
+
+  /// Best model (final result) from the C++ engine, as raw JSON.
+  /// Returns null if unavailable or not using the C++ backend.
+  Map<String, dynamic>? getBestModelJson() => _ffiService?.getBestModel();
 
   GenerationHistory? get history =>
       _usingCpp ? _ffiService!.history : _engine?.history;

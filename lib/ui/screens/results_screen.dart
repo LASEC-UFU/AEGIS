@@ -7,6 +7,9 @@ import '../theme/app_theme.dart';
 import '../state/app_state.dart';
 import '../widgets/stat_card.dart';
 import '../../engine/de/de_engine.dart';
+import '../../core/types/chromosome.dart';
+import '../../core/types/regressor.dart';
+import '../../core/types/term.dart';
 
 /// Results screen — shows final model, equation, and validation.
 class ResultsScreen extends ConsumerWidget {
@@ -16,8 +19,18 @@ class ResultsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final eState = ref.watch(engineProvider);
     final snap = eState.latestSnapshot;
-    final engine = ref.watch(engineProvider.notifier).engine;
-    final best = engine?.bestChromosome;
+    final notifier = ref.watch(engineProvider.notifier);
+
+    Chromosome? best;
+    Map<String, dynamic>? bestModelJson;
+    if (notifier.usingCpp) {
+      bestModelJson = notifier.getBestModelJson();
+      if (bestModelJson != null && bestModelJson['status'] != 'not_available') {
+        best = _chromosomeFromJson(bestModelJson);
+      }
+    } else {
+      best = notifier.engine?.bestChromosome;
+    }
 
     if (snap == null || best == null || !best.isEvaluated) {
       return Scaffold(
@@ -46,6 +59,19 @@ class ResultsScreen extends ConsumerWidget {
         ),
       );
     }
+
+    final model = best;
+
+    // R²/RMSE for train/val come from the live snapshot for the Dart engine,
+    // or from the final best-model JSON for the C++ engine.
+    final r2Train = notifier.usingCpp
+        ? (bestModelJson?['r2Train'] as num?)?.toDouble() ?? double.nan
+        : snap.bestModelR2;
+    final rmseTrain = notifier.usingCpp
+        ? (bestModelJson?['rmseTrain'] as num?)?.toDouble() ?? double.nan
+        : snap.bestModelRMSE;
+    final r2Test = (bestModelJson?['r2Test'] as num?)?.toDouble();
+    final rmseTest = (bestModelJson?['rmseTest'] as num?)?.toDouble();
 
     return Scaffold(
       appBar: AppBar(
@@ -77,7 +103,7 @@ class ResultsScreen extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // Model equation
-                _ModelEquationCard(best: best),
+                _ModelEquationCard(best: model),
                 const SizedBox(height: 20),
                 // Quality metrics
                 LayoutBuilder(
@@ -93,39 +119,44 @@ class ResultsScreen extends ConsumerWidget {
                       children: [
                         StatCard(
                           label: 'FITNESS (BIC)',
-                          value: best.fitness.toStringAsFixed(4),
+                          value: model.fitness.toStringAsFixed(4),
                           icon: Icons.emoji_events,
                           valueColor: AppColors.success,
                         ),
                         StatCard(
-                          label: 'R²',
-                          value: snap.bestModelR2.toStringAsFixed(6),
+                          label: 'R² (TRAIN)',
+                          value: r2Train.toStringAsFixed(6),
                           icon: Icons.my_location,
-                          valueColor: snap.bestModelR2 > 0.95
+                          valueColor: r2Train > 0.95
                               ? AppColors.success
                               : AppColors.warning,
                         ),
                         StatCard(
-                          label: 'RMSE',
-                          value: snap.bestModelRMSE.toStringAsFixed(6),
+                          label: 'RMSE (TRAIN)',
+                          value: rmseTrain.toStringAsFixed(6),
                           icon: Icons.straighten,
                         ),
                         StatCard(
                           label: 'REGRESSORS',
-                          value: '${best.numRegressors}',
+                          value: '${model.numRegressors}',
                           icon: Icons.layers,
                           subtitle:
-                              'Max degree ${best.maxDegree}, delay ${best.maxDelay}',
+                              'Max degree ${model.maxDegree}, delay ${model.maxDelay}',
                         ),
                       ],
                     );
                   },
                 ),
                 const SizedBox(height: 20),
+                // Test-set validation (held-out 15%, never seen during evolution)
+                if (r2Test != null && rmseTest != null)
+                  _TestValidationCard(r2Test: r2Test, rmseTest: rmseTest),
+                if (r2Test != null && rmseTest != null)
+                  const SizedBox(height: 20),
                 // ERR contributions
                 _ERRTable(
-                  err: best.err ?? [],
-                  coefficients: best.coefficients ?? [],
+                  err: model.err ?? [],
+                  coefficients: model.coefficients ?? [],
                 ),
                 const SizedBox(height: 20),
                 // Residual analysis
@@ -147,10 +178,103 @@ class ResultsScreen extends ConsumerWidget {
   }
 }
 
+// ─── JSON → Chromosome (C++ engine best-model result) ─────────
+
+Chromosome _chromosomeFromJson(Map<String, dynamic> j) {
+  final regressorsJson = j['regressors'] as List? ?? [];
+  final regressors = regressorsJson.map((r) {
+    final termsJson = (r as Map<String, dynamic>)['terms'] as List? ?? [];
+    final components = termsJson.map((t) {
+      final tm = t as Map<String, dynamic>;
+      return CompoundTerm(
+        term: Term(
+          variable: (tm['variable'] as num).toInt(),
+          delay: (tm['delay'] as num).toInt(),
+          isDenominator: tm['isDenominator'] as bool? ?? false,
+        ),
+        exponent: (tm['exponent'] as num?)?.toDouble() ?? 1.0,
+      );
+    }).toList();
+    return Regressor(components);
+  }).toList();
+
+  final coeffs = (j['coefficients'] as List?)
+      ?.map((e) => (e as num).toDouble())
+      .toList();
+  final err = (j['err'] as List?)?.map((e) => (e as num).toDouble()).toList();
+
+  return Chromosome(
+    regressors: regressors,
+    coefficients: coeffs,
+    err: err,
+    fitness: (j['fitness'] as num?)?.toDouble() ?? double.nan,
+    sse: (j['sse'] as num?)?.toDouble() ?? double.nan,
+    maxDelay: (j['maxDelay'] as num?)?.toInt() ?? 0,
+  );
+}
+
+// ─── Test-set validation card ─────────────────────────────────
+
+class _TestValidationCard extends StatelessWidget {
+  final double r2Test;
+  final double rmseTest;
+
+  const _TestValidationCard({required this.r2Test, required this.rmseTest});
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.fact_check, size: 16, color: AppColors.accent),
+                SizedBox(width: 8),
+                Text(
+                  'Test Set Validation (held-out 15%)',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: StatCard(
+                    label: 'R² (TEST)',
+                    value: r2Test.isFinite ? r2Test.toStringAsFixed(6) : 'N/A',
+                    icon: Icons.my_location,
+                    valueColor: r2Test > 0.95
+                        ? AppColors.success
+                        : AppColors.warning,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: StatCard(
+                    label: 'RMSE (TEST)',
+                    value: rmseTest.isFinite
+                        ? rmseTest.toStringAsFixed(6)
+                        : 'N/A',
+                    icon: Icons.straighten,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 // ─── Model equation card ──────────────────────────────────────
 
 class _ModelEquationCard extends StatelessWidget {
-  final dynamic best;
+  final Chromosome best;
 
   const _ModelEquationCard({required this.best});
 
@@ -211,7 +335,7 @@ class _ModelEquationCard extends StatelessWidget {
 
   String _buildEquation() {
     final buf = StringBuffer('y(k) = ');
-    final coeffs = best.coefficients;
+    final coeffs = best.coefficients ?? [];
     final regressors = best.regressors;
 
     for (var i = 0; i < regressors.length && i < coeffs.length; i++) {
@@ -232,10 +356,9 @@ class _ModelEquationCard extends StatelessWidget {
     return buf.toString();
   }
 
-  String _regressorToString(dynamic reg) {
-    final terms = reg.terms;
+  String _regressorToString(Regressor reg) {
     final parts = <String>[];
-    for (final ct in terms) {
+    for (final ct in reg.components) {
       final t = ct.term;
       final name = t.isDenominator ? 'y' : 'u${t.variable}';
       final delay = t.delay;

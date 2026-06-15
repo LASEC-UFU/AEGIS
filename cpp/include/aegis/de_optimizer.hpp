@@ -52,6 +52,11 @@ struct GenerationReport {
     double rmse_test           = 0.0;
     double bic                 = 0.0;
     double aic                 = 0.0;
+    double r2_train             = 0.0;
+    double r2_val               = 0.0;
+    double population_variance = 0.0;
+    int    unique_structures   = 0;
+    double success_rate        = 0.0;
     double population_diversity= 0.0;
     int    stagnation          = 0;
     double mu_f                = 0.0;

@@ -157,6 +157,7 @@ EvalResult IndividualEvaluator::evaluate(
         nullptr, nullptr, 0,
         k
     );
+    chrom.metrics = result.metrics;
 
     // ── Stability ─────────────────────────────────────────────────────
     result.stability = stability_analyzer_.analyze(chrom);

@@ -388,9 +388,22 @@ GenerationReport DifferentialEvolutionOptimizer::build_report(int generation) co
     GenerationReport r;
     r.generation = generation;
 
-    Chromosome best = best_chromosome();
+    Chromosome best;
+    best.fitness = std::numeric_limits<double>::infinity();
+    for (const auto& isl : islands_) {
+        Chromosome b = isl->best_chromosome();
+        if (b.fitness < best.fitness) best = b;
+    }
     r.best_fitness  = best.fitness;
     r.num_terms     = best.num_regressors();
+
+    r.rmse_train = best.metrics.rmse_train;
+    r.rmse_val   = best.metrics.rmse_val;
+    r.rmse_test  = best.metrics.rmse_test;
+    r.bic        = best.metrics.bic;
+    r.aic        = best.metrics.aic;
+    r.r2_train   = best.metrics.r2_train;
+    r.r2_val     = best.metrics.r2_val;
 
     if (!best.coefficients.empty()) {
         r.best_coefficients = best.coefficients;
@@ -429,6 +442,12 @@ GenerationReport DifferentialEvolutionOptimizer::build_report(int generation) co
                 }
         if (pop_count > 1) var /= pop_count;
         r.population_diversity = std::sqrt(var);
+        r.population_variance  = var;
+        r.unique_structures     = static_cast<int>(hashes.size());
+
+        double sr_sum = 0.0;
+        for (const auto& isl : islands_) sr_sum += isl->success_rate();
+        r.success_rate = sr_sum / static_cast<double>(islands_.size());
     }
 
     if (!best.err.empty())
@@ -455,12 +474,16 @@ void DifferentialEvolutionOptimizer::run_async(
             // Check external stop
             if (should_stop && should_stop()) break;
 
-            // Run one generation on each island (parallelised by thread pool)
+            // Run one generation on each island (each island is independent,
+            // so they can be evolved concurrently on separate threads)
             {
                 std::lock_guard<std::mutex> lk(islands_mutex_);
+                std::vector<std::thread> workers;
+                workers.reserve(islands_.size());
                 for (auto& isl : islands_) {
-                    isl->run_generation();
+                    workers.emplace_back([&isl] { isl->run_generation(); });
                 }
+                for (auto& w : workers) w.join();
             }
 
             // Migration

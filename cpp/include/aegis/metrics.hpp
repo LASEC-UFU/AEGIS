@@ -12,6 +12,7 @@ struct ModelMetrics {
     double rmse_original = std::numeric_limits<double>::quiet_NaN();
     double r2_train      = std::numeric_limits<double>::quiet_NaN();
     double r2_val        = std::numeric_limits<double>::quiet_NaN();
+    double r2_test       = std::numeric_limits<double>::quiet_NaN();
     double sse           = std::numeric_limits<double>::quiet_NaN();
     double aic           = std::numeric_limits<double>::quiet_NaN();
     double bic           = std::numeric_limits<double>::quiet_NaN();

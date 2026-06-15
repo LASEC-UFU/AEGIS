@@ -4,6 +4,7 @@
 #include <sstream>
 #include <algorithm>
 #include <stdexcept>
+#include <cmath>
 
 #ifndef __EMSCRIPTEN__
 
@@ -479,7 +480,12 @@ std::string build_broadcast_json(
     double rmse_test,
     double bic,
     double aic,
+    double r2_train,
+    double r2_val,
     double population_diversity,
+    double population_variance,
+    int    unique_structures,
+    double success_rate,
     int    stagnation,
     double mu_f,
     double mu_cr,
@@ -517,7 +523,12 @@ std::string build_broadcast_json(
       << "\"rmse_test\":"           << fmt(rmse_test)        << ","
       << "\"bic\":"                 << fmt(bic)              << ","
       << "\"aic\":"                 << fmt(aic)              << ","
+      << "\"r2_train\":"            << fmt(r2_train)         << ","
+      << "\"r2_validation\":"       << fmt(r2_val)           << ","
       << "\"population_diversity\":" << fmt(population_diversity) << ","
+      << "\"population_variance\":" << fmt(population_variance) << ","
+      << "\"unique_structures\":"   << unique_structures     << ","
+      << "\"success_rate\":"        << fmt(success_rate)     << ","
       << "\"stagnation\":"          << stagnation            << ","
       << "\"mu_f\":"                << fmt(mu_f)             << ","
       << "\"mu_cr\":"               << fmt(mu_cr)            << ","

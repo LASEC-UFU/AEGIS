@@ -10,6 +10,7 @@
 #include <string>
 #include <memory>
 #include <atomic>
+#include <condition_variable>
 
 namespace aegis {
 
@@ -151,6 +152,8 @@ private:
     void split_data();
     bool setup_agent();
     bool handle_suggestion(const AgentSuggestion& s, TuningLogEntry& entry);
+    /** Evaluate best_chromosome_ on the held-out test split (rmse_test/r2_test). */
+    void compute_test_metrics();
 };
 
 } // namespace aegis

@@ -81,6 +81,7 @@ ModelMetrics Metrics::compute(
     }
     if (n_test > 0 && y_test && y_hat_test) {
         m.rmse_test = rmse(y_test, y_hat_test, n_test);
+        m.r2_test   = r2(y_test, y_hat_test, n_test);
     }
     return m;
 }

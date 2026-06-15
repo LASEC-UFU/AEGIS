@@ -122,7 +122,9 @@ class AegisFfiService {
     if (snap.isEmpty) return null;
     try {
       final json = jsonDecode(snap) as Map<String, dynamic>;
-      return _snapshotFromJson(json);
+      final result = _snapshotFromJson(json);
+      history.addSnapshot(result);
+      return result;
     } catch (_) {
       return null;
     }
@@ -202,27 +204,44 @@ class AegisFfiService {
     }
 
     final gen = n('generation');
+    final bestFitness = d('best_fitness', double.infinity);
+
+    // Improvement metrics, derived from previously-recorded snapshots.
+    final fitHistory = history.fitnessHistory;
+    double impAbs = 0, impRel = 0;
+    if (fitHistory.isNotEmpty) {
+      final prev = fitHistory.last;
+      impAbs = prev - bestFitness;
+      impRel = prev.abs() > 1e-30 ? impAbs / prev.abs() : 0;
+    }
+    double improvementRate(int window) {
+      if (fitHistory.length < window) return 0;
+      final old = fitHistory[fitHistory.length - window];
+      if (old.abs() < 1e-30) return 0;
+      return (old - bestFitness) / old.abs();
+    }
+
     return GenerationSnapshot(
       generation:            gen,
       elapsed:               Duration.zero,
-      bestFitness:           d('best_fitness', double.infinity),
+      bestFitness:           bestFitness,
       worstFitness:          double.infinity,
-      meanFitness:           d('best_fitness', double.infinity),
-      medianFitness:         d('best_fitness', double.infinity),
+      meanFitness:           bestFitness,
+      medianFitness:         bestFitness,
       stdDevFitness:         d('population_diversity'),
       q1Fitness:             double.infinity,
       q3Fitness:             double.infinity,
-      improvementAbsolute:   0,
-      improvementRelative:   0,
-      improvementRate5:      0,
-      improvementRate20:     0,
+      improvementAbsolute:   impAbs,
+      improvementRelative:   impRel,
+      improvementRate5:      improvementRate(5),
+      improvementRate20:     improvementRate(20),
       stagnationCounter:     n('stagnation'),
-      uniqueStructures:      0,
+      uniqueStructures:      n('unique_structures'),
       structureEntropy:      0,
       phenotypicDiversity:   d('population_diversity'),
       regressorFrequency:    {},
-      populationVariance:    0,
-      successRate:           0,
+      populationVariance:    d('population_variance'),
+      successRate:           d('success_rate'),
       successRateHistory:    [],
       bestModelComplexity:   n('num_terms'),
       bestModelMaxDegree:    0,
@@ -231,7 +250,7 @@ class AegisFfiService {
       bestModelRMSE:         d('rmse_train'),
       bestModelValidationRMSE: d('rmse_validation').isFinite
           ? d('rmse_validation') : null,
-      bestModelR2:           0,
+      bestModelR2:           d('r2_train'),
       residualAutocorrelation: arr('residual_autocorr').isEmpty
           ? null : arr('residual_autocorr'),
       islandSnapshots:       [],
