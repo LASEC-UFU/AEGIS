@@ -31,7 +31,7 @@ struct DEConfig {
     int    max_regressors    = 8;
     int    max_terms_per_reg = 3;
     int    num_variables     = 2;     // set from data
-    int    max_delay         = 20;
+    int    max_delay         = 40;
     double pmin              = 0.5;
     double pmax              = 5.0;
 
@@ -47,19 +47,20 @@ struct DEConfig {
 
     // Threading
     int    num_threads       = 0;     // 0 = auto (hardware_concurrency)
+    uint64_t random_seed     = 0;     // 0 = time-based seed
 };
 
 /** Progress report emitted every generation. */
 struct GenerationReport {
     int    generation          = 0;
-    double best_fitness        = 0.0;
-    double rmse_train          = 0.0;
-    double rmse_val            = 0.0;
-    double rmse_test           = 0.0;
-    double bic                 = 0.0;
-    double aic                 = 0.0;
-    double r2_train             = 0.0;
-    double r2_val               = 0.0;
+    double best_fitness        = std::numeric_limits<double>::infinity();
+    double rmse_train          = std::numeric_limits<double>::quiet_NaN();
+    double rmse_val            = std::numeric_limits<double>::quiet_NaN();
+    double rmse_test           = std::numeric_limits<double>::quiet_NaN();
+    double bic                 = std::numeric_limits<double>::quiet_NaN();
+    double aic                 = std::numeric_limits<double>::quiet_NaN();
+    double r2_train            = std::numeric_limits<double>::quiet_NaN();
+    double r2_val              = std::numeric_limits<double>::quiet_NaN();
     double population_variance = 0.0;
     int    unique_structures   = 0;
     double success_rate        = 0.0;
@@ -123,16 +124,16 @@ public:
     /** Update config at runtime (for agent tuning). */
     void update_config(const DEConfig& new_cfg);
 
-    /** Update fitness weights at runtime (for phase transitions). */
-    void update_weights(const FitnessWeights& w) { evaluator_.weights() = w; }
+    /** Update fitness weights and rescore the population on one common scale. */
+    void update_weights(const FitnessWeights& w);
     const FitnessWeights& weights() const noexcept { return evaluator_.weights(); }
 
     /** Override the validation window used by this island ("regime"). The
      *  pointer must remain valid for the island's lifetime. */
-    void set_validation_window(const double* val_data, int val_rows) {
-        val_data_ = val_data;
-        val_rows_ = val_rows;
-    }
+    void set_validation_window(const double* val_data, int val_rows);
+
+    /** Fully reevaluate the population after data-dependent settings change. */
+    void reevaluate_population();
 
     /** Reevaluate a chromosome under this island's weights + validation
      *  regime, in place. Tracks contexts_survived/worst_fitness_seen for

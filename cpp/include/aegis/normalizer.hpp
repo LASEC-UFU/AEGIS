@@ -15,11 +15,13 @@ struct ColumnNorm {
     double lo    = 0.0;   // output range low  (default 1e-6)
     double hi    = 1.0;   // output range high (default 1.0)
     bool   valid = false; // true after fit()
+    bool   bounded = true; // min-max maps to [lo,hi]; robust/z-score do not
 
     /** Map raw x → [lo, hi]. */
     double transform(double x) const noexcept {
         if (scale < 1e-30) return (lo + hi) * 0.5;
         double v = (x - shift) / scale;
+        if (!bounded) return v;
         // Remap [0,1] to [lo,hi]
         v = lo + v * (hi - lo);
         return std::max(lo, std::min(hi, v));
@@ -27,6 +29,7 @@ struct ColumnNorm {
 
     /** Invert: [lo, hi] → raw. */
     double inverse(double y) const noexcept {
+        if (!bounded) return shift + y * scale;
         if (hi <= lo) return shift;
         double v = (y - lo) / (hi - lo);
         return shift + v * scale;
@@ -36,7 +39,7 @@ struct ColumnNorm {
 class Normalizer {
 public:
     explicit Normalizer(NormalizerType type = NormalizerType::MinMax,
-                        double lo = 1e-6, double hi = 1.0)
+                        double lo = -1.0, double hi = 1.0)
         : type_(type), lo_(lo), hi_(hi) {}
 
     /**

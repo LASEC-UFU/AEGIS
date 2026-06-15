@@ -1,12 +1,12 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:fl_chart/fl_chart.dart';
-
 
 import '../theme/app_theme.dart';
 import '../state/app_state.dart';
 import '../../agent/tunable_parameter.dart';
 import '../../agent/generation_snapshot.dart';
+import '../../services/optimization_agent.dart';
 
 /// Agent dashboard — exposes all indicators and tuning controls.
 class AgentDashboardScreen extends ConsumerStatefulWidget {
@@ -93,19 +93,29 @@ class _AgentDashboardScreenState extends ConsumerState<AgentDashboardScreen> {
     'stability': 'Estabilidade',
   };
 
-  String _islandRoleLabel(String role) =>
-      _islandRoleLabels[role] ?? role;
+  String _islandRoleLabel(String role) => _islandRoleLabels[role] ?? role;
 
   Widget _buildEmpty() {
-    return Center(
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
       child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.psychology, size: 64, color: AppColors.gray700),
-          const SizedBox(height: 16),
-          const Text(
-            'Agent dashboard will activate during evolution',
-            style: TextStyle(color: AppColors.textSecondary, fontSize: 15),
+          _buildAgentSelector(),
+          const SizedBox(height: 48),
+          Center(
+            child: Column(
+              children: [
+                Icon(Icons.psychology, size: 64, color: AppColors.gray700),
+                const SizedBox(height: 16),
+                const Text(
+                  'O dashboard sera ativado durante a evolucao',
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 15,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -141,6 +151,8 @@ class _AgentDashboardScreenState extends ConsumerState<AgentDashboardScreen> {
           flex: 2,
           child: Column(
             children: [
+              _buildAgentSelector(),
+              const SizedBox(height: 20),
               _buildTuningPanel(params),
               const SizedBox(height: 20),
               _buildAgentActivityLog(),
@@ -162,6 +174,8 @@ class _AgentDashboardScreenState extends ConsumerState<AgentDashboardScreen> {
         const SizedBox(height: 20),
         _buildFitnessBreakdown(snap),
         const SizedBox(height: 20),
+        _buildAgentSelector(),
+        const SizedBox(height: 20),
         _buildTuningPanel(params),
         const SizedBox(height: 20),
         _buildAgentActivityLog(),
@@ -170,6 +184,81 @@ class _AgentDashboardScreenState extends ConsumerState<AgentDashboardScreen> {
         const SizedBox(height: 20),
         _buildERRChart(snap),
       ],
+    );
+  }
+
+  Widget _buildAgentSelector() {
+    final mode = ref.watch(agentModeProvider);
+    final notifier = ref.read(engineProvider.notifier);
+    final description = switch (mode) {
+      AgentMode.off => 'Monitoramento automatico desativado.',
+      AgentMode.local =>
+        'Politica adaptativa local, sem rede, com uma decisao conservadora '
+            'a cada janela de 25 geracoes.',
+      AgentMode.remote =>
+        'Supervisor remoto via Claude API. Requer ANTHROPIC_API_KEY.',
+    };
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.memory, size: 16, color: AppColors.accent),
+                SizedBox(width: 8),
+                Text(
+                  'Supervisor adaptativo',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            SegmentedButton<AgentMode>(
+              showSelectedIcon: false,
+              segments: const [
+                ButtonSegment(
+                  value: AgentMode.off,
+                  icon: Icon(Icons.power_settings_new, size: 16),
+                  label: Text('Desligado'),
+                ),
+                ButtonSegment(
+                  value: AgentMode.local,
+                  icon: Icon(Icons.computer, size: 16),
+                  label: Text('Local'),
+                ),
+                ButtonSegment(
+                  value: AgentMode.remote,
+                  icon: Icon(Icons.cloud_outlined, size: 16),
+                  label: Text('Remoto'),
+                ),
+              ],
+              selected: {mode},
+              onSelectionChanged: (selection) {
+                ref.read(engineProvider.notifier).setAgentMode(selection.first);
+              },
+            ),
+            const SizedBox(height: 12),
+            Text(
+              description,
+              style: const TextStyle(
+                color: AppColors.textTertiary,
+                fontSize: 12,
+              ),
+            ),
+            if (mode == AgentMode.remote && !notifier.agentAvailable) ...[
+              const SizedBox(height: 8),
+              const Text(
+                'Chave remota nao encontrada; o motor continuara sem '
+                'sugestoes ate a chave ser configurada.',
+                style: TextStyle(color: AppColors.warning, fontSize: 11),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 
@@ -218,7 +307,8 @@ class _AgentDashboardScreenState extends ConsumerState<AgentDashboardScreen> {
                     final param = entry['param']?.toString() ?? '?';
                     final newValue = (entry['newValue'] as num?)?.toDouble();
                     final reason = entry['reason']?.toString() ?? '';
-                    final rejection = entry['rejectionReason']?.toString() ?? '';
+                    final rejection =
+                        entry['rejectionReason']?.toString() ?? '';
                     final gen = entry['generation']?.toString() ?? '?';
 
                     return Padding(
@@ -511,11 +601,7 @@ class _AgentDashboardScreenState extends ConsumerState<AgentDashboardScreen> {
           padding: const EdgeInsets.all(20),
           child: Column(
             children: [
-              Icon(
-                Icons.tune,
-                size: 32,
-                color: AppColors.gray600,
-              ),
+              Icon(Icons.tune, size: 32, color: AppColors.gray600),
               const SizedBox(height: 12),
               const Text(
                 'Parameters will appear when engine is initialized',
@@ -536,11 +622,7 @@ class _AgentDashboardScreenState extends ConsumerState<AgentDashboardScreen> {
           children: [
             Row(
               children: [
-                const Icon(
-                  Icons.tune,
-                  size: 16,
-                  color: AppColors.accent,
-                ),
+                const Icon(Icons.tune, size: 16, color: AppColors.accent),
                 const SizedBox(width: 8),
                 const Text(
                   'Tunable Parameters',

@@ -5,9 +5,7 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 
 import '../agent/generation_snapshot.dart';
-
-typedef TuningSuggestion = void Function(
-    String param, double value, String reason);
+import 'optimization_agent.dart';
 
 /// LLM agent that calls the Claude API directly from Dart.
 ///
@@ -19,7 +17,8 @@ typedef TuningSuggestion = void Function(
 ///   1. Constructor argument
 ///   2. ANTHROPIC_API_KEY environment variable
 ///   3. File `anthropic_api_key.txt` next to the executable
-class LlmAgent {
+class LlmAgent implements OptimizationAgent {
+  @override
   TuningSuggestion? onSuggestion;
 
   final String _apiKey;
@@ -29,7 +28,7 @@ class LlmAgent {
   static const int _cooldown = 50; // minimum generations between Claude calls
   bool _calling = false;
 
-  static const String _model = 'claude-opus-4-7';
+  static const String _model = 'claude-opus-4-8';
 
   static const String _systemPrompt =
       'You are the strategic layer supervising a Differential Evolution (DE) '
@@ -71,7 +70,6 @@ class LlmAgent {
       '| mutationFactor       | 0.0 | 2.0  |\n'
       '| crossoverRate        | 0.0 | 1.0  |\n'
       '| migrationRate        | 0.0 | 0.3  |\n'
-      '| maxRegressors        | 2   | 20   |\n'
       '| reinitializationRatio| 0.0 | 0.5  |\n'
       '| complexityPenalty    | 0.0 | 1.0  |\n'
       '| noInputPenalty       | 0.0 | 2.0  |\n'
@@ -90,8 +88,8 @@ class LlmAgent {
       '- bestModelValidationRMSE >> bestModelRMSE, or freeRunRmse much '
       'larger than bestModelRMSE → overfitting/divergent simulation → '
       'increase freeRunPenalty (theta) or denominatorPenalty/stabilityPenalty\n'
-      '- residualInputCorr high during phase 2/3 → likely missing input '
-      'regressors → increase maxRegressors or maxDelay\n'
+      '- residualInputCorr high during phase 2/3 with low input contribution '
+      '→ increase noInputPenalty\n'
       '- successRate near 0 for many generations → increase mutationFactor '
       'or migrationRate\n'
       '- muCR near 1.0 with good diversity → decrease crossoverRate\n'
@@ -101,9 +99,8 @@ class LlmAgent {
       'Suggest at most ONE parameter. Reply null when the engine is healthy.';
 
   LlmAgent({String? apiKey})
-      : _apiKey = apiKey ??
-            Platform.environment['ANTHROPIC_API_KEY'] ??
-            _readKeyFile();
+    : _apiKey =
+          apiKey ?? Platform.environment['ANTHROPIC_API_KEY'] ?? _readKeyFile();
 
   static String _readKeyFile() {
     try {
@@ -116,14 +113,23 @@ class LlmAgent {
 
   bool get hasApiKey => _apiKey.isNotEmpty;
 
+  @override
+  String get name => 'Claude remoto';
+
+  @override
+  bool get available => hasApiKey;
+
   /// Called every generation from EngineNotifier._onGeneration.
+  @override
   void processSnapshot(GenerationSnapshot snap) {
     if (_calling) return;
     if (snap.generation - _lastCallGen < _cooldown) return;
     if (_apiKey.isEmpty) return;
+    _lastCallGen = snap.generation;
     _callClaude(snap); // fire-and-forget; _calling flag prevents overlap
   }
 
+  @override
   void dispose() => _http.close();
 
   Future<void> _callClaude(GenerationSnapshot snap) async {
@@ -131,11 +137,10 @@ class LlmAgent {
     try {
       final suggestion = await _askClaude(snap);
       if (suggestion != null) {
-        final param  = suggestion['param']  as String;
-        final value  = (suggestion['value'] as num).toDouble();
+        final param = suggestion['param'] as String;
+        final value = (suggestion['value'] as num).toDouble();
         final reason = suggestion['reason'] as String? ?? '';
-        _lastCallGen = snap.generation;
-        onSuggestion?.call(param, value, reason);
+        onSuggestion?.call(param, value, 'Agente remoto: $reason');
         // ignore: avoid_print
         print('[LLM Agent] Gen ${snap.generation}: $param → $value ($reason)');
       }
@@ -149,48 +154,50 @@ class LlmAgent {
 
   Future<Map<String, dynamic>?> _askClaude(GenerationSnapshot snap) async {
     final islandData = snap.islandSnapshots
-        .map((s) => {
-              'id':         s.islandId,
-              'bestFitness':s.stats.bestFitness,
-              'stagnation': s.stagnationCounter,
-              'successRate':s.successRate,
-              'muF':        s.muF,
-              'muCR':       s.muCR,
-            })
+        .map(
+          (s) => {
+            'id': s.islandId,
+            'bestFitness': s.stats.bestFitness,
+            'stagnation': s.stagnationCounter,
+            'successRate': s.successRate,
+            'muF': s.muF,
+            'muCR': s.muCR,
+          },
+        )
         .toList();
 
     final userContent = jsonEncode({
-      'generation':              snap.generation,
-      'phase':                   snap.phase,
-      'phaseName':               snap.phaseName,
-      'bestFitness':             snap.bestFitness,
-      'meanFitness':             snap.meanFitness,
-      'stdDevFitness':           snap.stdDevFitness,
-      'stagnationCounter':       snap.stagnationCounter,
-      'phenotypicDiversity':     snap.phenotypicDiversity,
-      'successRate':             snap.successRate,
-      'bestModelComplexity':     snap.bestModelComplexity,
-      'bestModelRMSE':           snap.bestModelRMSE,
+      'generation': snap.generation,
+      'phase': snap.phase,
+      'phaseName': snap.phaseName,
+      'bestFitness': snap.bestFitness,
+      'meanFitness': snap.meanFitness,
+      'stdDevFitness': snap.stdDevFitness,
+      'stagnationCounter': snap.stagnationCounter,
+      'phenotypicDiversity': snap.phenotypicDiversity,
+      'successRate': snap.successRate,
+      'bestModelComplexity': snap.bestModelComplexity,
+      'bestModelRMSE': snap.bestModelRMSE,
       'bestModelValidationRMSE': snap.bestModelValidationRMSE,
-      'bestModelR2':             snap.bestModelR2,
-      'freeRunRmse':             snap.freeRunRmse,
-      'inputContributionRatio':  snap.inputContributionRatio,
-      'residualInputCorr':       snap.residualInputCorr,
-      'fitnessBreakdown':        snap.fitnessBreakdown,
-      'islands':                 islandData,
+      'bestModelR2': snap.bestModelR2,
+      'freeRunRmse': snap.freeRunRmse,
+      'inputContributionRatio': snap.inputContributionRatio,
+      'residualInputCorr': snap.residualInputCorr,
+      'fitnessBreakdown': snap.fitnessBreakdown,
+      'islands': islandData,
     });
 
     final response = await _http.post(
       Uri.parse('https://api.anthropic.com/v1/messages'),
       headers: {
-        'x-api-key':         _apiKey,
+        'x-api-key': _apiKey,
         'anthropic-version': '2023-06-01',
-        'content-type':      'application/json',
+        'content-type': 'application/json',
       },
       body: jsonEncode({
-        'model':    _model,
+        'model': _model,
         'max_tokens': 256,
-        'system':   _systemPrompt,
+        'system': _systemPrompt,
         'messages': [
           {'role': 'user', 'content': userContent},
         ],
@@ -225,8 +232,8 @@ class LlmAgent {
 
     final param = changes.keys.first;
     return {
-      'param':  param,
-      'value':  changes[param],
+      'param': param,
+      'value': changes[param],
       'reason': json['reason'] as String? ?? '',
     };
   }

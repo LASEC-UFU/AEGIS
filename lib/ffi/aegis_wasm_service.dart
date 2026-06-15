@@ -53,8 +53,16 @@ external JSString _jsGetSnapshot(int p);
 @JS('AegisWasm.getBestModel')
 external JSString _jsGetBestModel(int p);
 
+@JS('AegisWasm.getTuningLog')
+external JSString _jsGetTuningLog(int p);
+
 @JS('AegisWasm.applyTuning')
-external int _jsApplyTuning(int p, JSString param, double value, JSString reason);
+external int _jsApplyTuning(
+  int p,
+  JSString param,
+  double value,
+  JSString reason,
+);
 
 // ── Service class ─────────────────────────────────────────────────────────
 
@@ -102,11 +110,17 @@ class AegisFfiService {
     }
 
     final rc = _jsLoadData(_pipeline, flat.toJS, rows, cols);
-    if (rc != 0) { _disposePipeline(); return false; }
+    if (rc != 0) {
+      _disposePipeline();
+      return false;
+    }
 
     final config = _buildConfigJson(outputCol, numIslands);
     final rc2 = _jsConfigure(_pipeline, config.toJS);
-    if (rc2 != 0) { _disposePipeline(); return false; }
+    if (rc2 != 0) {
+      _disposePipeline();
+      return false;
+    }
 
     state = EngineState.idle;
     return true;
@@ -164,7 +178,9 @@ class AegisFfiService {
     if (raw.isEmpty) return null;
     try {
       final json = jsonDecode(raw) as Map<String, dynamic>;
-      return _snapshotFromJson(json);
+      final result = _snapshotFromJson(json);
+      history.addSnapshot(result);
+      return result;
     } catch (_) {
       return null;
     }
@@ -192,6 +208,18 @@ class AegisFfiService {
     }
   }
 
+  List<Map<String, dynamic>> getTuningLog() {
+    if (_pipeline == 0) return [];
+    final raw = _jsGetTuningLog(_pipeline).toDart;
+    if (raw.isEmpty) return [];
+    try {
+      final list = jsonDecode(raw) as List;
+      return list.cast<Map<String, dynamic>>();
+    } catch (_) {
+      return [];
+    }
+  }
+
   // ── Cleanup ───────────────────────────────────────────────────────────────
 
   void dispose() => _disposePipeline();
@@ -207,24 +235,31 @@ class AegisFfiService {
 
   String _buildConfigJson(int outputCol, int numIslands) {
     double p(String k) => parameters.get(k)?.currentValue ?? 0.0;
-    int    i(String k) => p(k).toInt();
+    int i(String k) => p(k).toInt();
 
     return jsonEncode({
-      'normalizerType':    'minmax',
-      'outputCol':         outputCol,
-      'numIslands':        numIslands,
-      'populationSize':    i('populationSize'),
-      'mutationFactor':    p('mutationFactor'),
-      'crossoverRate':     p('crossoverRate'),
-      'elitismCount':      i('elitismCount'),
+      'normalizerType': 'minmax',
+      'outputCol': outputCol,
+      'numIslands': numIslands,
+      'populationSize': i('populationSize'),
+      'mutationFactor': p('mutationFactor'),
+      'crossoverRate': p('crossoverRate'),
+      'elitismCount': i('elitismCount'),
       'migrationInterval': i('migrationInterval'),
-      'migrationRate':     p('migrationRate'),
-      'maxRegressors':     i('maxRegressors'),
-      'maxDelay':          i('maxDelay'),
-      'pmin':              0.5,
-      'pmax':              p('maxExponent'),
-      'stagnationLimit':   i('stagnationLimit'),
+      'migrationRate': p('migrationRate'),
+      'maxRegressors': i('maxRegressors'),
+      'maxDelay': i('maxDelay'),
+      'pmin': 0.5,
+      'pmax': p('maxExponent'),
+      'stagnationLimit': i('stagnationLimit'),
       'complexityPenalty': p('complexityPenalty'),
+      'noInputPenalty': p('noInputPenalty'),
+      'freeRunPenalty': p('freeRunPenalty'),
+      'freeRunHorizon': i('freeRunHorizon'),
+      'inputContributionMin': p('inputContributionMin'),
+      'gammaAnnealStart': p('gammaAnnealStart'),
+      'gammaAnnealEnd': p('gammaAnnealEnd'),
+      'phaseStagnationLimit': i('phaseStagnationLimit'),
       'reinitializationRatio': p('reinitializationRatio'),
     });
   }
@@ -232,9 +267,8 @@ class AegisFfiService {
   // ── Snapshot deserializer ──────────────────────────────────────────────────
 
   GenerationSnapshot _snapshotFromJson(Map<String, dynamic> j) {
-    double d(String k, [double def = 0.0]) =>
-        (j[k] as num?)?.toDouble() ?? def;
-    int    n(String k, [int def = 0]) => (j[k] as num?)?.toInt() ?? def;
+    double d(String k, [double def = 0.0]) => (j[k] as num?)?.toDouble() ?? def;
+    int n(String k, [int def = 0]) => (j[k] as num?)?.toInt() ?? def;
 
     List<double> arr(String k) {
       final raw = j[k];
@@ -242,41 +276,92 @@ class AegisFfiService {
       return [];
     }
 
+    Map<String, double> fitnessBreakdown() {
+      final raw = j['fitness_breakdown'];
+      if (raw is Map) {
+        return raw.map(
+          (k, v) => MapEntry(k.toString(), (v as num?)?.toDouble() ?? 0.0),
+        );
+      }
+      return {};
+    }
+
+    double? optd(String k) {
+      final v = j[k];
+      if (v == null) return null;
+      final dv = (v as num).toDouble();
+      return dv.isFinite ? dv : null;
+    }
+
+    List<String> islandRoles() {
+      final raw = j['island_roles'];
+      if (raw is List) return raw.map((e) => e.toString()).toList();
+      return [];
+    }
+
     final gen = n('generation');
+    final bestFitness = d('best_fitness', double.infinity);
+    final fitHistory = history.fitnessHistory;
+    double impAbs = 0;
+    double impRel = 0;
+    if (fitHistory.isNotEmpty) {
+      final prev = fitHistory.last;
+      impAbs = prev - bestFitness;
+      impRel = prev.abs() > 1e-30 ? impAbs / prev.abs() : 0;
+    }
+
+    double improvementRate(int window) {
+      if (fitHistory.length < window) return 0;
+      final old = fitHistory[fitHistory.length - window];
+      if (old.abs() < 1e-30) return 0;
+      return (old - bestFitness) / old.abs();
+    }
+
     return GenerationSnapshot(
-      generation:              gen,
-      elapsed:                 Duration.zero,
-      bestFitness:             d('best_fitness', double.infinity),
-      worstFitness:            double.infinity,
-      meanFitness:             d('best_fitness', double.infinity),
-      medianFitness:           d('best_fitness', double.infinity),
-      stdDevFitness:           d('population_diversity'),
-      q1Fitness:               double.infinity,
-      q3Fitness:               double.infinity,
-      improvementAbsolute:     0,
-      improvementRelative:     0,
-      improvementRate5:        0,
-      improvementRate20:       0,
-      stagnationCounter:       n('stagnation'),
-      uniqueStructures:        0,
-      structureEntropy:        0,
-      phenotypicDiversity:     d('population_diversity'),
-      regressorFrequency:      {},
-      populationVariance:      0,
-      successRate:             0,
-      successRateHistory:      [],
-      bestModelComplexity:     n('num_terms'),
-      bestModelMaxDegree:      0,
-      bestModelMaxDelay:       0,
-      bestModelERR:            arr('residual_autocorr'),
-      bestModelRMSE:           d('rmse_train'),
+      generation: gen,
+      elapsed: Duration.zero,
+      bestFitness: bestFitness,
+      worstFitness: double.infinity,
+      meanFitness: bestFitness,
+      medianFitness: bestFitness,
+      stdDevFitness: d('population_diversity'),
+      q1Fitness: double.infinity,
+      q3Fitness: double.infinity,
+      improvementAbsolute: impAbs,
+      improvementRelative: impRel,
+      improvementRate5: improvementRate(5),
+      improvementRate20: improvementRate(20),
+      stagnationCounter: n('stagnation'),
+      uniqueStructures: n('unique_structures'),
+      structureEntropy: d('structure_entropy'),
+      phenotypicDiversity: d('population_diversity'),
+      regressorFrequency: {},
+      populationVariance: d('population_variance'),
+      successRate: d('success_rate'),
+      successRateHistory: [],
+      bestModelComplexity: n('num_terms'),
+      bestModelMaxDegree: 0,
+      bestModelMaxDelay: 0,
+      bestModelERR: arr('residual_autocorr'),
+      bestModelRMSE: d('rmse_train'),
       bestModelValidationRMSE: d('rmse_validation').isFinite
-          ? d('rmse_validation') : null,
-      bestModelR2:             0,
+          ? d('rmse_validation')
+          : null,
+      bestModelR2: d('r2_train'),
       residualAutocorrelation: arr('residual_autocorr').isEmpty
-          ? null : arr('residual_autocorr'),
-      islandSnapshots:         [],
-      migrationImpact:         null,
+          ? null
+          : arr('residual_autocorr'),
+      islandSnapshots: [],
+      migrationImpact: null,
+      phase: n('phase'),
+      phaseName: (j['phase_name'] as String?) ?? '',
+      freeRunRmse: optd('free_run_rmse'),
+      inputContributionRatio: optd('input_contribution_ratio'),
+      residualInputCorr: optd('residual_input_corr'),
+      fitnessBreakdown: fitnessBreakdown(),
+      bestContextsSurvived: n('best_contexts_survived'),
+      bestWorstFitnessSeen: optd('best_worst_fitness_seen'),
+      islandRoles: islandRoles(),
     );
   }
 }

@@ -56,8 +56,6 @@ build CMakeFiles/aegis_core.dir/src/normalizer.cpp.obj: CXX_COMPILER__aegis_core
   INCLUDES = -IC:/SourceCode/AEGIS/cpp/include -IC:/SourceCode/AEGIS/cpp/include/aegis
   OBJECT_DIR = CMakeFiles\aegis_core.dir
   OBJECT_FILE_DIR = CMakeFiles\aegis_core.dir\src
-  TARGET_COMPILE_PDB = CMakeFiles\aegis_core.dir\
-  TARGET_PDB = libaegis_core.pdb
 
 build CMakeFiles/aegis_core.dir/src/regressor_library.cpp.obj: CXX_COMPILER__aegis_core_unscanned_Release C$:/SourceCode/AEGIS/cpp/src/regressor_library.cpp || cmake_object_order_depends_target_aegis_core
   DEFINES = -DAEGIS_EXPORTS -DAEGIS_OPENMP -Daegis_core_EXPORTS
@@ -66,8 +64,6 @@ build CMakeFiles/aegis_core.dir/src/regressor_library.cpp.obj: CXX_COMPILER__aeg
   INCLUDES = -IC:/SourceCode/AEGIS/cpp/include -IC:/SourceCode/AEGIS/cpp/include/aegis
   OBJECT_DIR = CMakeFiles\aegis_core.dir
   OBJECT_FILE_DIR = CMakeFiles\aegis_core.dir\src
-  TARGET_COMPILE_PDB = CMakeFiles\aegis_core.dir\
-  TARGET_PDB = libaegis_core.pdb
 
 build CMakeFiles/aegis_core.dir/src/rational_model.cpp.obj: CXX_COMPILER__aegis_core_unscanned_Release C$:/SourceCode/AEGIS/cpp/src/rational_model.cpp || cmake_object_order_depends_target_aegis_core
   DEFINES = -DAEGIS_EXPORTS -DAEGIS_OPENMP -Daegis_core_EXPORTS
@@ -76,8 +72,6 @@ build CMakeFiles/aegis_core.dir/src/rational_model.cpp.obj: CXX_COMPILER__aegis_
   INCLUDES = -IC:/SourceCode/AEGIS/cpp/include -IC:/SourceCode/AEGIS/cpp/include/aegis
   OBJECT_DIR = CMakeFiles\aegis_core.dir
   OBJECT_FILE_DIR = CMakeFiles\aegis_core.dir\src
-  TARGET_COMPILE_PDB = CMakeFiles\aegis_core.dir\
-  TARGET_PDB = libaegis_core.pdb
 
 build CMakeFiles/aegis_core.dir/src/metrics.cpp.obj: CXX_COMPILER__aegis_core_unscanned_Release C$:/SourceCode/AEGIS/cpp/src/metrics.cpp || cmake_object_order_depends_target_aegis_core
   DEFINES = -DAEGIS_EXPORTS -DAEGIS_OPENMP -Daegis_core_EXPORTS
@@ -86,8 +80,6 @@ build CMakeFiles/aegis_core.dir/src/metrics.cpp.obj: CXX_COMPILER__aegis_core_un
   INCLUDES = -IC:/SourceCode/AEGIS/cpp/include -IC:/SourceCode/AEGIS/cpp/include/aegis
   OBJECT_DIR = CMakeFiles\aegis_core.dir
   OBJECT_FILE_DIR = CMakeFiles\aegis_core.dir\src
-  TARGET_COMPILE_PDB = CMakeFiles\aegis_core.dir\
-  TARGET_PDB = libaegis_core.pdb
 
 build CMakeFiles/aegis_core.dir/src/residual_analyzer.cpp.obj: CXX_COMPILER__aegis_core_unscanned_Release C$:/SourceCode/AEGIS/cpp/src/residual_analyzer.cpp || cmake_object_order_depends_target_aegis_core
   DEFINES = -DAEGIS_EXPORTS -DAEGIS_OPENMP -Daegis_core_EXPORTS
@@ -96,8 +88,6 @@ build CMakeFiles/aegis_core.dir/src/residual_analyzer.cpp.obj: CXX_COMPILER__aeg
   INCLUDES = -IC:/SourceCode/AEGIS/cpp/include -IC:/SourceCode/AEGIS/cpp/include/aegis
   OBJECT_DIR = CMakeFiles\aegis_core.dir
   OBJECT_FILE_DIR = CMakeFiles\aegis_core.dir\src
-  TARGET_COMPILE_PDB = CMakeFiles\aegis_core.dir\
-  TARGET_PDB = libaegis_core.pdb
 
 build CMakeFiles/aegis_core.dir/src/stability_analyzer.cpp.obj: CXX_COMPILER__aegis_core_unscanned_Release C$:/SourceCode/AEGIS/cpp/src/stability_analyzer.cpp || cmake_object_order_depends_target_aegis_core
   DEFINES = -DAEGIS_EXPORTS -DAEGIS_OPENMP -Daegis_core_EXPORTS
@@ -106,8 +96,6 @@ build CMakeFiles/aegis_core.dir/src/stability_analyzer.cpp.obj: CXX_COMPILER__ae
   INCLUDES = -IC:/SourceCode/AEGIS/cpp/include -IC:/SourceCode/AEGIS/cpp/include/aegis
   OBJECT_DIR = CMakeFiles\aegis_core.dir
   OBJECT_FILE_DIR = CMakeFiles\aegis_core.dir\src
-  TARGET_COMPILE_PDB = CMakeFiles\aegis_core.dir\
-  TARGET_PDB = libaegis_core.pdb
 
 build CMakeFiles/aegis_core.dir/src/collinearity_analyzer.cpp.obj: CXX_COMPILER__aegis_core_unscanned_Release C$:/SourceCode/AEGIS/cpp/src/collinearity_analyzer.cpp || cmake_object_order_depends_target_aegis_core
   DEFINES = -DAEGIS_EXPORTS -DAEGIS_OPENMP -Daegis_core_EXPORTS
@@ -116,8 +104,6 @@ build CMakeFiles/aegis_core.dir/src/collinearity_analyzer.cpp.obj: CXX_COMPILER_
   INCLUDES = -IC:/SourceCode/AEGIS/cpp/include -IC:/SourceCode/AEGIS/cpp/include/aegis
   OBJECT_DIR = CMakeFiles\aegis_core.dir
   OBJECT_FILE_DIR = CMakeFiles\aegis_core.dir\src
-  TARGET_COMPILE_PDB = CMakeFiles\aegis_core.dir\
-  TARGET_PDB = libaegis_core.pdb
 
 build CMakeFiles/aegis_core.dir/src/excitation_analyzer.cpp.obj: CXX_COMPILER__aegis_core_unscanned_Release C$:/SourceCode/AEGIS/cpp/src/excitation_analyzer.cpp || cmake_object_order_depends_target_aegis_core
   DEFINES = -DAEGIS_EXPORTS -DAEGIS_OPENMP -Daegis_core_EXPORTS
@@ -126,8 +112,6 @@ build CMakeFiles/aegis_core.dir/src/excitation_analyzer.cpp.obj: CXX_COMPILER__a
   INCLUDES = -IC:/SourceCode/AEGIS/cpp/include -IC:/SourceCode/AEGIS/cpp/include/aegis
   OBJECT_DIR = CMakeFiles\aegis_core.dir
   OBJECT_FILE_DIR = CMakeFiles\aegis_core.dir\src
-  TARGET_COMPILE_PDB = CMakeFiles\aegis_core.dir\
-  TARGET_PDB = libaegis_core.pdb
 
 build CMakeFiles/aegis_core.dir/src/population_diversity_monitor.cpp.obj: CXX_COMPILER__aegis_core_unscanned_Release C$:/SourceCode/AEGIS/cpp/src/population_diversity_monitor.cpp || cmake_object_order_depends_target_aegis_core
   DEFINES = -DAEGIS_EXPORTS -DAEGIS_OPENMP -Daegis_core_EXPORTS
@@ -136,8 +120,6 @@ build CMakeFiles/aegis_core.dir/src/population_diversity_monitor.cpp.obj: CXX_CO
   INCLUDES = -IC:/SourceCode/AEGIS/cpp/include -IC:/SourceCode/AEGIS/cpp/include/aegis
   OBJECT_DIR = CMakeFiles\aegis_core.dir
   OBJECT_FILE_DIR = CMakeFiles\aegis_core.dir\src
-  TARGET_COMPILE_PDB = CMakeFiles\aegis_core.dir\
-  TARGET_PDB = libaegis_core.pdb
 
 build CMakeFiles/aegis_core.dir/src/overfitting_detector.cpp.obj: CXX_COMPILER__aegis_core_unscanned_Release C$:/SourceCode/AEGIS/cpp/src/overfitting_detector.cpp || cmake_object_order_depends_target_aegis_core
   DEFINES = -DAEGIS_EXPORTS -DAEGIS_OPENMP -Daegis_core_EXPORTS
@@ -146,8 +128,6 @@ build CMakeFiles/aegis_core.dir/src/overfitting_detector.cpp.obj: CXX_COMPILER__
   INCLUDES = -IC:/SourceCode/AEGIS/cpp/include -IC:/SourceCode/AEGIS/cpp/include/aegis
   OBJECT_DIR = CMakeFiles\aegis_core.dir
   OBJECT_FILE_DIR = CMakeFiles\aegis_core.dir\src
-  TARGET_COMPILE_PDB = CMakeFiles\aegis_core.dir\
-  TARGET_PDB = libaegis_core.pdb
 
 build CMakeFiles/aegis_core.dir/src/underfitting_detector.cpp.obj: CXX_COMPILER__aegis_core_unscanned_Release C$:/SourceCode/AEGIS/cpp/src/underfitting_detector.cpp || cmake_object_order_depends_target_aegis_core
   DEFINES = -DAEGIS_EXPORTS -DAEGIS_OPENMP -Daegis_core_EXPORTS
@@ -156,8 +136,6 @@ build CMakeFiles/aegis_core.dir/src/underfitting_detector.cpp.obj: CXX_COMPILER_
   INCLUDES = -IC:/SourceCode/AEGIS/cpp/include -IC:/SourceCode/AEGIS/cpp/include/aegis
   OBJECT_DIR = CMakeFiles\aegis_core.dir
   OBJECT_FILE_DIR = CMakeFiles\aegis_core.dir\src
-  TARGET_COMPILE_PDB = CMakeFiles\aegis_core.dir\
-  TARGET_PDB = libaegis_core.pdb
 
 build CMakeFiles/aegis_core.dir/src/automatic_pruner.cpp.obj: CXX_COMPILER__aegis_core_unscanned_Release C$:/SourceCode/AEGIS/cpp/src/automatic_pruner.cpp || cmake_object_order_depends_target_aegis_core
   DEFINES = -DAEGIS_EXPORTS -DAEGIS_OPENMP -Daegis_core_EXPORTS
@@ -166,8 +144,6 @@ build CMakeFiles/aegis_core.dir/src/automatic_pruner.cpp.obj: CXX_COMPILER__aegi
   INCLUDES = -IC:/SourceCode/AEGIS/cpp/include -IC:/SourceCode/AEGIS/cpp/include/aegis
   OBJECT_DIR = CMakeFiles\aegis_core.dir
   OBJECT_FILE_DIR = CMakeFiles\aegis_core.dir\src
-  TARGET_COMPILE_PDB = CMakeFiles\aegis_core.dir\
-  TARGET_PDB = libaegis_core.pdb
 
 build CMakeFiles/aegis_core.dir/src/individual_evaluator.cpp.obj: CXX_COMPILER__aegis_core_unscanned_Release C$:/SourceCode/AEGIS/cpp/src/individual_evaluator.cpp || cmake_object_order_depends_target_aegis_core
   DEFINES = -DAEGIS_EXPORTS -DAEGIS_OPENMP -Daegis_core_EXPORTS
@@ -176,8 +152,6 @@ build CMakeFiles/aegis_core.dir/src/individual_evaluator.cpp.obj: CXX_COMPILER__
   INCLUDES = -IC:/SourceCode/AEGIS/cpp/include -IC:/SourceCode/AEGIS/cpp/include/aegis
   OBJECT_DIR = CMakeFiles\aegis_core.dir
   OBJECT_FILE_DIR = CMakeFiles\aegis_core.dir\src
-  TARGET_COMPILE_PDB = CMakeFiles\aegis_core.dir\
-  TARGET_PDB = libaegis_core.pdb
 
 build CMakeFiles/aegis_core.dir/src/local_refiner.cpp.obj: CXX_COMPILER__aegis_core_unscanned_Release C$:/SourceCode/AEGIS/cpp/src/local_refiner.cpp || cmake_object_order_depends_target_aegis_core
   DEFINES = -DAEGIS_EXPORTS -DAEGIS_OPENMP -Daegis_core_EXPORTS
@@ -186,8 +160,6 @@ build CMakeFiles/aegis_core.dir/src/local_refiner.cpp.obj: CXX_COMPILER__aegis_c
   INCLUDES = -IC:/SourceCode/AEGIS/cpp/include -IC:/SourceCode/AEGIS/cpp/include/aegis
   OBJECT_DIR = CMakeFiles\aegis_core.dir
   OBJECT_FILE_DIR = CMakeFiles\aegis_core.dir\src
-  TARGET_COMPILE_PDB = CMakeFiles\aegis_core.dir\
-  TARGET_PDB = libaegis_core.pdb
 
 build CMakeFiles/aegis_core.dir/src/de_optimizer.cpp.obj: CXX_COMPILER__aegis_core_unscanned_Release C$:/SourceCode/AEGIS/cpp/src/de_optimizer.cpp || cmake_object_order_depends_target_aegis_core
   DEFINES = -DAEGIS_EXPORTS -DAEGIS_OPENMP -Daegis_core_EXPORTS
@@ -196,8 +168,6 @@ build CMakeFiles/aegis_core.dir/src/de_optimizer.cpp.obj: CXX_COMPILER__aegis_co
   INCLUDES = -IC:/SourceCode/AEGIS/cpp/include -IC:/SourceCode/AEGIS/cpp/include/aegis
   OBJECT_DIR = CMakeFiles\aegis_core.dir
   OBJECT_FILE_DIR = CMakeFiles\aegis_core.dir\src
-  TARGET_COMPILE_PDB = CMakeFiles\aegis_core.dir\
-  TARGET_PDB = libaegis_core.pdb
 
 build CMakeFiles/aegis_core.dir/src/identification_pipeline.cpp.obj: CXX_COMPILER__aegis_core_unscanned_Release C$:/SourceCode/AEGIS/cpp/src/identification_pipeline.cpp || cmake_object_order_depends_target_aegis_core
   DEFINES = -DAEGIS_EXPORTS -DAEGIS_OPENMP -Daegis_core_EXPORTS
@@ -206,8 +176,6 @@ build CMakeFiles/aegis_core.dir/src/identification_pipeline.cpp.obj: CXX_COMPILE
   INCLUDES = -IC:/SourceCode/AEGIS/cpp/include -IC:/SourceCode/AEGIS/cpp/include/aegis
   OBJECT_DIR = CMakeFiles\aegis_core.dir
   OBJECT_FILE_DIR = CMakeFiles\aegis_core.dir\src
-  TARGET_COMPILE_PDB = CMakeFiles\aegis_core.dir\
-  TARGET_PDB = libaegis_core.pdb
 
 build CMakeFiles/aegis_core.dir/src/agent_controller.cpp.obj: CXX_COMPILER__aegis_core_unscanned_Release C$:/SourceCode/AEGIS/cpp/src/agent_controller.cpp || cmake_object_order_depends_target_aegis_core
   DEFINES = -DAEGIS_EXPORTS -DAEGIS_OPENMP -Daegis_core_EXPORTS
@@ -216,8 +184,6 @@ build CMakeFiles/aegis_core.dir/src/agent_controller.cpp.obj: CXX_COMPILER__aegi
   INCLUDES = -IC:/SourceCode/AEGIS/cpp/include -IC:/SourceCode/AEGIS/cpp/include/aegis
   OBJECT_DIR = CMakeFiles\aegis_core.dir
   OBJECT_FILE_DIR = CMakeFiles\aegis_core.dir\src
-  TARGET_COMPILE_PDB = CMakeFiles\aegis_core.dir\
-  TARGET_PDB = libaegis_core.pdb
 
 build CMakeFiles/aegis_core.dir/src/aegis_api.cpp.obj: CXX_COMPILER__aegis_core_unscanned_Release C$:/SourceCode/AEGIS/cpp/src/aegis_api.cpp || cmake_object_order_depends_target_aegis_core
   DEFINES = -DAEGIS_EXPORTS -DAEGIS_OPENMP -Daegis_core_EXPORTS
@@ -226,8 +192,6 @@ build CMakeFiles/aegis_core.dir/src/aegis_api.cpp.obj: CXX_COMPILER__aegis_core_
   INCLUDES = -IC:/SourceCode/AEGIS/cpp/include -IC:/SourceCode/AEGIS/cpp/include/aegis
   OBJECT_DIR = CMakeFiles\aegis_core.dir
   OBJECT_FILE_DIR = CMakeFiles\aegis_core.dir\src
-  TARGET_COMPILE_PDB = CMakeFiles\aegis_core.dir\
-  TARGET_PDB = libaegis_core.pdb
 
 
 # =============================================================================
@@ -244,10 +208,186 @@ build libaegis_core.dll libaegis_core.dll.a: CXX_SHARED_LIBRARY_LINKER__aegis_co
   POST_BUILD = cd .
   PRE_LINK = cd .
   RESTAT = 1
-  TARGET_COMPILE_PDB = CMakeFiles\aegis_core.dir\
   TARGET_FILE = libaegis_core.dll
   TARGET_IMPLIB = libaegis_core.dll.a
-  TARGET_PDB = libaegis_core.pdb
+  TARGET_PDB = aegis_core.dll.dbg
+
+# =============================================================================
+# Object build statements for EXECUTABLE target test_harness
+
+
+#############################################
+# Order-only phony target for test_harness
+
+build cmake_object_order_depends_target_test_harness: phony || cmake_object_order_depends_target_aegis_core
+
+build CMakeFiles/test_harness.dir/test_harness.cpp.obj: CXX_COMPILER__test_harness_unscanned_Release C$:/SourceCode/AEGIS/cpp/test_harness.cpp || cmake_object_order_depends_target_test_harness
+  DEP_FILE = CMakeFiles\test_harness.dir\test_harness.cpp.obj.d
+  FLAGS = -O3 -DNDEBUG -std=gnu++17
+  INCLUDES = -IC:/SourceCode/AEGIS/cpp/include
+  OBJECT_DIR = CMakeFiles\test_harness.dir
+  OBJECT_FILE_DIR = CMakeFiles\test_harness.dir
+
+
+# =============================================================================
+# Link build statements for EXECUTABLE target test_harness
+
+
+#############################################
+# Link the executable test_harness.exe
+
+build test_harness.exe: CXX_EXECUTABLE_LINKER__test_harness_Release CMakeFiles/test_harness.dir/test_harness.cpp.obj | libaegis_core.dll.a || libaegis_core.dll
+  FLAGS = -O3 -DNDEBUG
+  LINK_LIBRARIES = libaegis_core.dll.a  -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32
+  OBJECT_DIR = CMakeFiles\test_harness.dir
+  POST_BUILD = cd .
+  PRE_LINK = cd .
+  TARGET_FILE = test_harness.exe
+  TARGET_IMPLIB = libtest_harness.dll.a
+  TARGET_PDB = test_harness.exe.dbg
+
+# =============================================================================
+# Object build statements for EXECUTABLE target diag_harness
+
+
+#############################################
+# Order-only phony target for diag_harness
+
+build cmake_object_order_depends_target_diag_harness: phony || cmake_object_order_depends_target_aegis_core
+
+build CMakeFiles/diag_harness.dir/diag_harness.cpp.obj: CXX_COMPILER__diag_harness_unscanned_Release C$:/SourceCode/AEGIS/cpp/diag_harness.cpp || cmake_object_order_depends_target_diag_harness
+  DEP_FILE = CMakeFiles\diag_harness.dir\diag_harness.cpp.obj.d
+  FLAGS = -O3 -DNDEBUG -std=gnu++17
+  INCLUDES = -IC:/SourceCode/AEGIS/cpp/include
+  OBJECT_DIR = CMakeFiles\diag_harness.dir
+  OBJECT_FILE_DIR = CMakeFiles\diag_harness.dir
+
+
+# =============================================================================
+# Link build statements for EXECUTABLE target diag_harness
+
+
+#############################################
+# Link the executable diag_harness.exe
+
+build diag_harness.exe: CXX_EXECUTABLE_LINKER__diag_harness_Release CMakeFiles/diag_harness.dir/diag_harness.cpp.obj | libaegis_core.dll.a || libaegis_core.dll
+  FLAGS = -O3 -DNDEBUG
+  LINK_LIBRARIES = libaegis_core.dll.a  -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32
+  OBJECT_DIR = CMakeFiles\diag_harness.dir
+  POST_BUILD = cd .
+  PRE_LINK = cd .
+  TARGET_FILE = diag_harness.exe
+  TARGET_IMPLIB = libdiag_harness.dll.a
+  TARGET_PDB = diag_harness.exe.dbg
+
+# =============================================================================
+# Object build statements for EXECUTABLE target core_tests
+
+
+#############################################
+# Order-only phony target for core_tests
+
+build cmake_object_order_depends_target_core_tests: phony || .
+
+build CMakeFiles/core_tests.dir/core_tests.cpp.obj: CXX_COMPILER__core_tests_unscanned_Release C$:/SourceCode/AEGIS/cpp/core_tests.cpp || cmake_object_order_depends_target_core_tests
+  DEP_FILE = CMakeFiles\core_tests.dir\core_tests.cpp.obj.d
+  FLAGS = -O3 -DNDEBUG -std=gnu++17 -fopenmp
+  INCLUDES = -IC:/SourceCode/AEGIS/cpp/include
+  OBJECT_DIR = CMakeFiles\core_tests.dir
+  OBJECT_FILE_DIR = CMakeFiles\core_tests.dir
+
+build CMakeFiles/core_tests.dir/src/normalizer.cpp.obj: CXX_COMPILER__core_tests_unscanned_Release C$:/SourceCode/AEGIS/cpp/src/normalizer.cpp || cmake_object_order_depends_target_core_tests
+  DEP_FILE = CMakeFiles\core_tests.dir\src\normalizer.cpp.obj.d
+  FLAGS = -O3 -DNDEBUG -std=gnu++17 -fopenmp
+  INCLUDES = -IC:/SourceCode/AEGIS/cpp/include
+  OBJECT_DIR = CMakeFiles\core_tests.dir
+  OBJECT_FILE_DIR = CMakeFiles\core_tests.dir\src
+
+build CMakeFiles/core_tests.dir/src/regressor_library.cpp.obj: CXX_COMPILER__core_tests_unscanned_Release C$:/SourceCode/AEGIS/cpp/src/regressor_library.cpp || cmake_object_order_depends_target_core_tests
+  DEP_FILE = CMakeFiles\core_tests.dir\src\regressor_library.cpp.obj.d
+  FLAGS = -O3 -DNDEBUG -std=gnu++17 -fopenmp
+  INCLUDES = -IC:/SourceCode/AEGIS/cpp/include
+  OBJECT_DIR = CMakeFiles\core_tests.dir
+  OBJECT_FILE_DIR = CMakeFiles\core_tests.dir\src
+
+build CMakeFiles/core_tests.dir/src/rational_model.cpp.obj: CXX_COMPILER__core_tests_unscanned_Release C$:/SourceCode/AEGIS/cpp/src/rational_model.cpp || cmake_object_order_depends_target_core_tests
+  DEP_FILE = CMakeFiles\core_tests.dir\src\rational_model.cpp.obj.d
+  FLAGS = -O3 -DNDEBUG -std=gnu++17 -fopenmp
+  INCLUDES = -IC:/SourceCode/AEGIS/cpp/include
+  OBJECT_DIR = CMakeFiles\core_tests.dir
+  OBJECT_FILE_DIR = CMakeFiles\core_tests.dir\src
+
+build CMakeFiles/core_tests.dir/src/metrics.cpp.obj: CXX_COMPILER__core_tests_unscanned_Release C$:/SourceCode/AEGIS/cpp/src/metrics.cpp || cmake_object_order_depends_target_core_tests
+  DEP_FILE = CMakeFiles\core_tests.dir\src\metrics.cpp.obj.d
+  FLAGS = -O3 -DNDEBUG -std=gnu++17 -fopenmp
+  INCLUDES = -IC:/SourceCode/AEGIS/cpp/include
+  OBJECT_DIR = CMakeFiles\core_tests.dir
+  OBJECT_FILE_DIR = CMakeFiles\core_tests.dir\src
+
+build CMakeFiles/core_tests.dir/src/residual_analyzer.cpp.obj: CXX_COMPILER__core_tests_unscanned_Release C$:/SourceCode/AEGIS/cpp/src/residual_analyzer.cpp || cmake_object_order_depends_target_core_tests
+  DEP_FILE = CMakeFiles\core_tests.dir\src\residual_analyzer.cpp.obj.d
+  FLAGS = -O3 -DNDEBUG -std=gnu++17 -fopenmp
+  INCLUDES = -IC:/SourceCode/AEGIS/cpp/include
+  OBJECT_DIR = CMakeFiles\core_tests.dir
+  OBJECT_FILE_DIR = CMakeFiles\core_tests.dir\src
+
+build CMakeFiles/core_tests.dir/src/stability_analyzer.cpp.obj: CXX_COMPILER__core_tests_unscanned_Release C$:/SourceCode/AEGIS/cpp/src/stability_analyzer.cpp || cmake_object_order_depends_target_core_tests
+  DEP_FILE = CMakeFiles\core_tests.dir\src\stability_analyzer.cpp.obj.d
+  FLAGS = -O3 -DNDEBUG -std=gnu++17 -fopenmp
+  INCLUDES = -IC:/SourceCode/AEGIS/cpp/include
+  OBJECT_DIR = CMakeFiles\core_tests.dir
+  OBJECT_FILE_DIR = CMakeFiles\core_tests.dir\src
+
+build CMakeFiles/core_tests.dir/src/population_diversity_monitor.cpp.obj: CXX_COMPILER__core_tests_unscanned_Release C$:/SourceCode/AEGIS/cpp/src/population_diversity_monitor.cpp || cmake_object_order_depends_target_core_tests
+  DEP_FILE = CMakeFiles\core_tests.dir\src\population_diversity_monitor.cpp.obj.d
+  FLAGS = -O3 -DNDEBUG -std=gnu++17 -fopenmp
+  INCLUDES = -IC:/SourceCode/AEGIS/cpp/include
+  OBJECT_DIR = CMakeFiles\core_tests.dir
+  OBJECT_FILE_DIR = CMakeFiles\core_tests.dir\src
+
+build CMakeFiles/core_tests.dir/src/individual_evaluator.cpp.obj: CXX_COMPILER__core_tests_unscanned_Release C$:/SourceCode/AEGIS/cpp/src/individual_evaluator.cpp || cmake_object_order_depends_target_core_tests
+  DEP_FILE = CMakeFiles\core_tests.dir\src\individual_evaluator.cpp.obj.d
+  FLAGS = -O3 -DNDEBUG -std=gnu++17 -fopenmp
+  INCLUDES = -IC:/SourceCode/AEGIS/cpp/include
+  OBJECT_DIR = CMakeFiles\core_tests.dir
+  OBJECT_FILE_DIR = CMakeFiles\core_tests.dir\src
+
+build CMakeFiles/core_tests.dir/src/de_optimizer.cpp.obj: CXX_COMPILER__core_tests_unscanned_Release C$:/SourceCode/AEGIS/cpp/src/de_optimizer.cpp || cmake_object_order_depends_target_core_tests
+  DEP_FILE = CMakeFiles\core_tests.dir\src\de_optimizer.cpp.obj.d
+  FLAGS = -O3 -DNDEBUG -std=gnu++17 -fopenmp
+  INCLUDES = -IC:/SourceCode/AEGIS/cpp/include
+  OBJECT_DIR = CMakeFiles\core_tests.dir
+  OBJECT_FILE_DIR = CMakeFiles\core_tests.dir\src
+
+
+# =============================================================================
+# Link build statements for EXECUTABLE target core_tests
+
+
+#############################################
+# Link the executable core_tests.exe
+
+build core_tests.exe: CXX_EXECUTABLE_LINKER__core_tests_Release CMakeFiles/core_tests.dir/core_tests.cpp.obj CMakeFiles/core_tests.dir/src/normalizer.cpp.obj CMakeFiles/core_tests.dir/src/regressor_library.cpp.obj CMakeFiles/core_tests.dir/src/rational_model.cpp.obj CMakeFiles/core_tests.dir/src/metrics.cpp.obj CMakeFiles/core_tests.dir/src/residual_analyzer.cpp.obj CMakeFiles/core_tests.dir/src/stability_analyzer.cpp.obj CMakeFiles/core_tests.dir/src/population_diversity_monitor.cpp.obj CMakeFiles/core_tests.dir/src/individual_evaluator.cpp.obj CMakeFiles/core_tests.dir/src/de_optimizer.cpp.obj | C$:/Strawberry/c/lib/libgomp.dll.a C$:/Strawberry/c/x86_64-w64-mingw32/lib/libmingwthrd.a
+  FLAGS = -O3 -DNDEBUG
+  LINK_LIBRARIES = -lws2_32  C:/Strawberry/c/lib/libgomp.dll.a  C:/Strawberry/c/x86_64-w64-mingw32/lib/libmingwthrd.a  -lkernel32 -luser32 -lgdi32 -lwinspool -lshell32 -lole32 -loleaut32 -luuid -lcomdlg32 -ladvapi32
+  OBJECT_DIR = CMakeFiles\core_tests.dir
+  POST_BUILD = cd .
+  PRE_LINK = cd .
+  TARGET_FILE = core_tests.exe
+  TARGET_IMPLIB = libcore_tests.dll.a
+  TARGET_PDB = core_tests.exe.dbg
+
+
+#############################################
+# Utility command for test
+
+build CMakeFiles/test.util: CUSTOM_COMMAND
+  COMMAND = C:\WINDOWS\system32\cmd.exe /C "cd /D C:\SourceCode\AEGIS\cpp\build_win && C:\Strawberry\c\bin\ctest.exe --force-new-ctest-process "
+  DESC = Running tests...
+  pool = console
+  restat = 1
+
+build test: phony CMakeFiles/test.util
 
 
 #############################################
@@ -319,6 +459,12 @@ build install/strip: phony CMakeFiles/install/strip.util
 
 build aegis_core: phony libaegis_core.dll
 
+build core_tests: phony core_tests.exe
+
+build diag_harness: phony diag_harness.exe
+
+build test_harness: phony test_harness.exe
+
 # =============================================================================
 # Folder targets.
 
@@ -327,7 +473,7 @@ build aegis_core: phony libaegis_core.dll
 #############################################
 # Folder: C:/SourceCode/AEGIS/cpp/build_win
 
-build all: phony libaegis_core.dll
+build all: phony libaegis_core.dll test_harness.exe diag_harness.exe core_tests.exe
 
 # =============================================================================
 # Built-in targets
@@ -336,14 +482,14 @@ build all: phony libaegis_core.dll
 #############################################
 # Re-run CMake if any of its inputs changed.
 
-build build.ninja: RERUN_CMAKE | C$:/SourceCode/AEGIS/cpp/CMakeLists.txt C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeCXXCompiler.cmake.in C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeCXXCompilerABI.cpp C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeCXXInformation.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeCommonLanguageInclude.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeCompilerIdDetection.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeDetermineCXXCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeDetermineCompileFeatures.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeDetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeDetermineCompilerABI.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeDetermineCompilerId.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeDetermineRCCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeDetermineSystem.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeFindBinUtils.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeGenericSystem.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeInitializeConfigs.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeLanguageInformation.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeNinjaFindMake.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeParseImplicitIncludeInfo.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeParseImplicitLinkInfo.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeParseLibraryArchitecture.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeRCCompiler.cmake.in C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeRCInformation.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeSystem.cmake.in C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeSystemSpecificInformation.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeSystemSpecificInitialize.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeTestCXXCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeTestCompilerCommon.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeTestRCCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/ADSP-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/ARMCC-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/ARMClang-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/AppleClang-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/Borland-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/CMakeCommonCompilerMacros.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/Clang-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/Clang-DetermineCompilerInternal.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/Compaq-CXX-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/Cray-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/CrayClang-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/Embarcadero-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/Fujitsu-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/FujitsuClang-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/GHS-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/GNU-CXX-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/GNU-CXX.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/GNU-FindBinUtils.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/GNU.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/HP-CXX-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/IAR-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/IBMCPP-CXX-DetermineVersionInternal.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/IBMClang-CXX-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/Intel-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/IntelLLVM-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/LCC-CXX-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/MSVC-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/NVHPC-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/NVIDIA-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/OpenWatcom-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/OrangeC-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/PGI-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/PathScale-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/SCO-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/SunPro-CXX-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/TI-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/TIClang-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/Tasking-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/VisualAge-CXX-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/Watcom-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/XL-CXX-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/XLClang-CXX-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/zOS-CXX-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/FindOpenMP.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/FindPackageHandleStandardArgs.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/FindPackageMessage.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Internal/CMakeDetermineLinkerId.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Internal/FeatureTesting.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Platform/Windows-Determine-CXX.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Platform/Windows-GNU-CXX-ABI.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Platform/Windows-GNU-CXX.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Platform/Windows-GNU.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Platform/Windows-Initialize.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Platform/Windows-windres.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Platform/Windows.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Platform/WindowsPaths.cmake CMakeCache.txt CMakeFiles/3.29.2/CMakeCXXCompiler.cmake CMakeFiles/3.29.2/CMakeRCCompiler.cmake CMakeFiles/3.29.2/CMakeSystem.cmake
+build build.ninja: RERUN_CMAKE | C$:/SourceCode/AEGIS/cpp/CMakeLists.txt C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeCXXInformation.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeCommonLanguageInclude.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeGenericSystem.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeInitializeConfigs.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeLanguageInformation.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeParseImplicitLinkInfo.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeRCInformation.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeSystemSpecificInformation.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeSystemSpecificInitialize.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/CMakeCommonCompilerMacros.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/GNU-CXX.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/GNU.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/FindOpenMP.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/FindPackageHandleStandardArgs.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/FindPackageMessage.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Platform/Windows-GNU-CXX-ABI.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Platform/Windows-GNU-CXX.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Platform/Windows-GNU.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Platform/Windows-Initialize.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Platform/Windows-windres.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Platform/Windows.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Platform/WindowsPaths.cmake CMakeCache.txt CMakeFiles/3.29.2/CMakeCXXCompiler.cmake CMakeFiles/3.29.2/CMakeRCCompiler.cmake CMakeFiles/3.29.2/CMakeSystem.cmake
   pool = console
 
 
 #############################################
 # A missing CMake input file is not an error.
 
-build C$:/SourceCode/AEGIS/cpp/CMakeLists.txt C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeCXXCompiler.cmake.in C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeCXXCompilerABI.cpp C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeCXXInformation.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeCommonLanguageInclude.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeCompilerIdDetection.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeDetermineCXXCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeDetermineCompileFeatures.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeDetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeDetermineCompilerABI.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeDetermineCompilerId.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeDetermineRCCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeDetermineSystem.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeFindBinUtils.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeGenericSystem.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeInitializeConfigs.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeLanguageInformation.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeNinjaFindMake.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeParseImplicitIncludeInfo.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeParseImplicitLinkInfo.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeParseLibraryArchitecture.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeRCCompiler.cmake.in C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeRCInformation.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeSystem.cmake.in C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeSystemSpecificInformation.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeSystemSpecificInitialize.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeTestCXXCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeTestCompilerCommon.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeTestRCCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/ADSP-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/ARMCC-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/ARMClang-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/AppleClang-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/Borland-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/CMakeCommonCompilerMacros.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/Clang-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/Clang-DetermineCompilerInternal.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/Compaq-CXX-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/Cray-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/CrayClang-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/Embarcadero-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/Fujitsu-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/FujitsuClang-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/GHS-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/GNU-CXX-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/GNU-CXX.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/GNU-FindBinUtils.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/GNU.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/HP-CXX-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/IAR-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/IBMCPP-CXX-DetermineVersionInternal.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/IBMClang-CXX-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/Intel-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/IntelLLVM-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/LCC-CXX-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/MSVC-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/NVHPC-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/NVIDIA-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/OpenWatcom-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/OrangeC-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/PGI-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/PathScale-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/SCO-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/SunPro-CXX-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/TI-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/TIClang-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/Tasking-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/VisualAge-CXX-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/Watcom-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/XL-CXX-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/XLClang-CXX-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/zOS-CXX-DetermineCompiler.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/FindOpenMP.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/FindPackageHandleStandardArgs.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/FindPackageMessage.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Internal/CMakeDetermineLinkerId.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Internal/FeatureTesting.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Platform/Windows-Determine-CXX.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Platform/Windows-GNU-CXX-ABI.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Platform/Windows-GNU-CXX.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Platform/Windows-GNU.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Platform/Windows-Initialize.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Platform/Windows-windres.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Platform/Windows.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Platform/WindowsPaths.cmake CMakeCache.txt CMakeFiles/3.29.2/CMakeCXXCompiler.cmake CMakeFiles/3.29.2/CMakeRCCompiler.cmake CMakeFiles/3.29.2/CMakeSystem.cmake: phony
+build C$:/SourceCode/AEGIS/cpp/CMakeLists.txt C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeCXXInformation.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeCommonLanguageInclude.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeGenericSystem.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeInitializeConfigs.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeLanguageInformation.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeParseImplicitLinkInfo.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeRCInformation.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeSystemSpecificInformation.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/CMakeSystemSpecificInitialize.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/CMakeCommonCompilerMacros.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/GNU-CXX.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Compiler/GNU.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/FindOpenMP.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/FindPackageHandleStandardArgs.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/FindPackageMessage.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Platform/Windows-GNU-CXX-ABI.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Platform/Windows-GNU-CXX.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Platform/Windows-GNU.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Platform/Windows-Initialize.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Platform/Windows-windres.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Platform/Windows.cmake C$:/Strawberry/c/share/cmake-3.29/Modules/Platform/WindowsPaths.cmake CMakeCache.txt CMakeFiles/3.29.2/CMakeCXXCompiler.cmake CMakeFiles/3.29.2/CMakeRCCompiler.cmake CMakeFiles/3.29.2/CMakeSystem.cmake: phony
 
 
 #############################################

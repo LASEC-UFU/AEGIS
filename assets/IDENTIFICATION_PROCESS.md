@@ -81,12 +81,12 @@ Três estratégias configuráveis via JSON (`normalizerType`):
 
 | Tipo | Parâmetro JSON | Descrição |
 |------|----------------|-----------|
-| `minmax` (padrão) | `"minmax"` | Escala para `[norm_lo, norm_hi]` (padrão `[1e-6, 1.0]`) |
+| `minmax` (padrão) | `"minmax"` | Escala para `[norm_lo, norm_hi]` (padrão `[-1.0, 1.0]`) |
 | `robust` | `"robust"` | Mediana + IQR — resistente a outliers |
 | `zscore` | `"zscore"` | Média zero, desvio padrão unitário |
 
 **Dart (fallback):** `lib/engine/identification/data_normalizer.dart` — MinMax com
-`lowerBound = 0.01`, `upperBound = 1.0`.
+`lowerBound = -1.0`, `upperBound = 1.0`, ajustado apenas no prefixo de treino.
 
 ### 1.2 Divisão dos dados
 
@@ -98,8 +98,8 @@ A separação é **sequencial** (preserva a ordem temporal — essencial para s�
 | Validação | 15% | `validationRatio` |
 | Teste | 15% (restante) | — |
 
-**C++:** feito internamente em `IdentificationPipeline::split_data()` após normalização.  
-**Dart:** `lib/engine/identification/data_splitter.dart` e passado explicitamente via FFI.
+**C++/WASM:** recebe a série bruta completa e faz internamente a normalização e o `split`.
+**Dart fallback:** usa `lib/engine/identification/data_splitter.dart`.
 
 ---
 
@@ -161,7 +161,7 @@ Definido o cromossomo, monta-se a matriz de regressores $\Psi$ (`cpp/src/regress
 
 ### 4.3 Fitness composto
 
-$$f = \text{RMSE}_{\text{val}} + \alpha \cdot \max(0, \text{BIC}) + \beta \cdot P_D + \gamma \cdot P_C + \delta \cdot P_E + \eta \cdot P_S$$
+$$f = \text{RMSE}_{\text{val}} + \alpha \cdot \frac{\text{BIC}}{n} + \beta P_D + \gamma P_C + \delta P_E + \eta P_S + \zeta P_I + \theta \text{RMSE}_{\text{free}}$$
 
 Fitness menor = modelo melhor.
 
@@ -213,7 +213,7 @@ continuamente, variáveis por mutação discreta rara (probabilidade 10%).
 | Máx. termos/regressor | `maxTermsPerReg` | 3 | 1–5 |
 | Expoente mínimo | `pmin` | 0.5 | 0.1–1.0 |
 | Expoente máximo | `pmax` | 5.0 | 1.0–10.0 |
-| Atraso máximo | `maxDelay` | 20 | 1–200 |
+| Atraso máximo | `maxDelay` | 40 | 1–200 |
 | Máx. gerações | `maxGenerations` | 5000 | 100–100000 |
 | Limite de estagnação | `stagnationLimit` | 500 | 50–5000 |
 | Threads | `numThreads` | auto | 1–64 |

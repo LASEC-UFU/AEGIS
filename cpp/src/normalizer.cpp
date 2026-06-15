@@ -22,6 +22,8 @@ static double percentile(std::vector<double>& v, double p) {
 // ── Normalizer ─────────────────────────────────────────────────────────────
 
 void Normalizer::fit(const double* data, int rows, int cols) {
+    if (!data || rows <= 0 || cols <= 0)
+        throw std::invalid_argument("Normalizer: data must be non-empty");
     cols_.resize(cols);
     switch (type_) {
         case NormalizerType::MinMax:    fit_minmax(data, rows, cols); break;
@@ -32,6 +34,7 @@ void Normalizer::fit(const double* data, int rows, int cols) {
         c.lo    = lo_;
         c.hi    = hi_;
         c.valid = true;
+        c.bounded = type_ == NormalizerType::MinMax;
     }
 }
 

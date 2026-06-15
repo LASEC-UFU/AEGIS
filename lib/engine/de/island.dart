@@ -204,6 +204,13 @@ class Island {
     );
   }
 
+  /// Replaces the worst fraction with fresh random structures.
+  void restart(double ratio) {
+    final fresh = chromosomeFactory.createPopulation(population.size, rng);
+    population.reinitializeWorst(ratio.clamp(0.0, 0.5).toDouble(), fresh);
+    stagnationCounter = 0;
+  }
+
   /// Snapshot of island state for reporting.
   IslandSnapshot snapshot() {
     final stats = population.computeStats();

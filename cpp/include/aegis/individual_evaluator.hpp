@@ -7,14 +7,15 @@
 namespace aegis {
 
 struct FitnessWeights {
-    double alpha = 1.0;   // BIC penalty weight
+    double alpha = 0.05;  // normalized BIC regularization weight
     double beta  = 0.1;   // denominator-term penalty
     double gamma = 0.01;  // complexity penalty (regressors count)
     double delta = 0.01;  // exponent-range penalty
     double eta   = 1.0;   // stability penalty
-    double zeta  = 0.5;   // no-input (pure autoregressive) penalty
+    double zeta  = 0.5;   // input-contribution deficit penalty
     double theta = 0.0;   // free-run (simulation) RMSE penalty weight
     int    free_run_horizon = 50; // samples used for free-run RMSE
+    double input_contribution_target = 0.3;
 };
 
 struct EvalResult {
@@ -54,6 +55,9 @@ public:
         int           cols,
         int           output_col
     ) const;
+
+    /** Recompute only the composite fitness after objective weights change. */
+    bool rescore(Chromosome& chrom, int output_col) const;
 
     /** Evaluate ERR for an already-fitted chromosome. */
     std::vector<double> compute_err(

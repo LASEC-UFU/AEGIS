@@ -12,6 +12,7 @@ namespace aegis {
 
 double Regressor::evaluate(const double* data, int k, int rows, int cols,
                             bool use_signed_power) const noexcept {
+    (void)rows;
     double val = 1.0;
     for (const auto& t : terms) {
         int ki = k - t.delay;
@@ -101,6 +102,13 @@ void pseudo_linearize(
 bool qr_solve(const double* A, int m, int n, const double* b, double* x) {
     if (m < n || n <= 0) return false;
 
+    double matrix_scale = 0.0;
+    for (size_t i = 0; i < static_cast<size_t>(m) * n; ++i)
+        matrix_scale = std::max(matrix_scale, std::abs(A[i]));
+    if (matrix_scale < 1e-30) return false;
+    const double rank_tol = std::numeric_limits<double>::epsilon()
+        * static_cast<double>(std::max(m, n)) * matrix_scale;
+
     // Work copies
     std::vector<double> R(A, A + static_cast<size_t>(m) * n);
     std::vector<double> Qb(b, b + m);
@@ -112,7 +120,7 @@ bool qr_solve(const double* A, int m, int n, const double* b, double* x) {
         for (int i = j; i < m; ++i)
             norm += R[static_cast<size_t>(i) * n + j] * R[static_cast<size_t>(i) * n + j];
         norm = std::sqrt(norm);
-        if (norm < 1e-30) return false; // rank deficient
+        if (norm < rank_tol) return false; // rank deficient
 
         double alpha = -std::copysign(norm, R[static_cast<size_t>(j) * n + j]);
         std::vector<double> v(m - j, 0.0);
@@ -151,7 +159,7 @@ bool qr_solve(const double* A, int m, int n, const double* b, double* x) {
         for (int k = i + 1; k < n; ++k)
             s -= R[static_cast<size_t>(i) * n + k] * x[k];
         double diag = R[static_cast<size_t>(i) * n + i];
-        if (std::abs(diag) < 1e-30) return false;
+        if (std::abs(diag) < rank_tol) return false;
         x[i] = s / diag;
     }
 

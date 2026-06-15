@@ -28,8 +28,8 @@ class DEEngine {
   final ParameterRegistry parameters;
   late final ChromosomeFactory chromosomeFactory;
   late final FitnessEvaluator fitnessEvaluator;
-  late final Migration migration;
-  late final CompositeCriterion stoppingCriteria;
+  late Migration migration;
+  late CompositeCriterion stoppingCriteria;
 
   // ── State ──
   final List<Island> islands = [];
@@ -206,11 +206,52 @@ class DEEngine {
     if (param == null) return;
     final oldValue = param.currentValue;
     parameters.update(paramName, newValue);
+    final appliedValue = parameters.get(paramName)!.currentValue;
+
+    switch (paramName) {
+      case 'mutationFactor':
+        for (final island in islands) {
+          island.updateConfig(
+            island.config.copyWith(mutationFactor: appliedValue),
+          );
+        }
+      case 'crossoverRate':
+        for (final island in islands) {
+          island.updateConfig(
+            island.config.copyWith(crossoverRate: appliedValue),
+          );
+        }
+      case 'elitismCount':
+        for (final island in islands) {
+          island.updateConfig(
+            island.config.copyWith(elitismCount: appliedValue.toInt()),
+          );
+        }
+      case 'migrationRate':
+      case 'migrationInterval':
+        migration = Migration(
+          topology: migration.topology,
+          interval: parameters.get('migrationInterval')!.currentValue.toInt(),
+          rate: parameters.get('migrationRate')!.currentValue,
+        );
+      case 'stagnationLimit':
+        stoppingCriteria = CompositeCriterion([
+          MaxGenerations(5000),
+          StagnationLimit(appliedValue.toInt()),
+          PopulationVariance(1e-10),
+          RelativeImprovement(1e-8),
+        ]);
+      case 'reinitializationRatio':
+        for (final island in islands) {
+          island.restart(appliedValue);
+        }
+    }
+
     history.addTuningAction(
       TuningAction(
         parameterName: paramName,
         oldValue: oldValue,
-        newValue: newValue,
+        newValue: appliedValue,
         generation: _generation,
         reason: reason,
       ),

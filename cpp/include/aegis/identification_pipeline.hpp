@@ -55,7 +55,7 @@ const char* island_role_name(IslandRole r);
 struct PipelineConfig {
     // Data
     NormalizerType normalizer_type = NormalizerType::MinMax;
-    double         norm_lo         = 1e-6;
+    double         norm_lo         = -1.0;
     double         norm_hi         = 1.0;
     double         train_ratio     = 0.70;
     double         val_ratio       = 0.15;
@@ -213,7 +213,7 @@ private:
     FitnessWeights phase_weights(IdentificationPhase phase, double gamma) const;
     /** Apply an island's role specialization on top of the phase profile. */
     FitnessWeights apply_role_profile(FitnessWeights w, IslandRole role) const;
-    /** Reflex layer: advance phases, anneal gamma, log transitions. Mutates rpt.phase/phase_name. */
+    /** Reflex layer: advance phases and log transitions. Mutates rpt.phase/phase_name. */
     void update_phase(GenerationReport& rpt);
 };
 

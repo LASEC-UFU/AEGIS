@@ -1,4 +1,8 @@
 C:/SourceCode/AEGIS/cpp/build_win/CMakeFiles/aegis_core.dir
+C:/SourceCode/AEGIS/cpp/build_win/CMakeFiles/test_harness.dir
+C:/SourceCode/AEGIS/cpp/build_win/CMakeFiles/diag_harness.dir
+C:/SourceCode/AEGIS/cpp/build_win/CMakeFiles/core_tests.dir
+C:/SourceCode/AEGIS/cpp/build_win/CMakeFiles/test.dir
 C:/SourceCode/AEGIS/cpp/build_win/CMakeFiles/edit_cache.dir
 C:/SourceCode/AEGIS/cpp/build_win/CMakeFiles/rebuild_cache.dir
 C:/SourceCode/AEGIS/cpp/build_win/CMakeFiles/list_install_components.dir

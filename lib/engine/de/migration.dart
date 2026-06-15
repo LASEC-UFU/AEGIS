@@ -21,12 +21,12 @@ class Migration {
 
   /// Check if migration should occur at this generation.
   bool shouldMigrate(int generation) =>
-      generation > 0 && generation % interval == 0;
+      rate > 0 && interval > 0 && generation > 0 && generation % interval == 0;
 
   /// Perform migration between islands.
   /// Returns the fitness improvement caused by migration (for indicators).
   double migrate(List<Island> islands) {
-    if (islands.length < 2) return 0;
+    if (islands.length < 2 || rate <= 0) return 0;
 
     final numMigrants = (islands[0].population.size * rate).ceil().clamp(1, 5);
     var totalImprovement = 0.0;

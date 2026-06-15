@@ -61,6 +61,8 @@ double RationalModel::eval_numerator(
     const double* data, int k, int rows, int cols,
     const double* y_buf, int output_col
 ) const noexcept {
+    (void)y_buf;
+    (void)output_col;
     double num = chrom_.intercept;
     for (size_t j = 0; j < chrom_.regressors.size(); ++j) {
         const auto& reg = chrom_.regressors[j];
@@ -75,6 +77,8 @@ double RationalModel::eval_denominator(
     const double* data, int k, int rows, int cols,
     const double* y_buf, int output_col
 ) const noexcept {
+    (void)y_buf;
+    (void)output_col;
     double denom = 1.0;
     for (size_t j = 0; j < chrom_.regressors.size(); ++j) {
         const auto& reg = chrom_.regressors[j];
@@ -115,18 +119,25 @@ std::vector<double> RationalModel::predict_one_step(
 // ── predict_free_run ─────────────────────────────────────────────────────
 
 std::vector<double> RationalModel::predict_free_run(
-    const double* data, int rows, int cols, int output_col
+    const double* data, int rows, int cols, int output_col, int horizon
 ) const {
     const int md = chrom_.max_delay();
-    const int n  = rows - md;
+    const int available = rows - md;
+    const int n = horizon > 0 ? std::min(available, horizon) : available;
+    if (n <= 0) return {};
+    const int needed_rows = md + n;
 
     // Make a mutable copy of data so we can overwrite the output column
-    std::vector<double> data_buf(data, data + static_cast<size_t>(rows) * cols);
+    std::vector<double> data_buf(
+        data, data + static_cast<size_t>(needed_rows) * cols
+    );
     std::vector<double> yhat(n);
 
     for (int i = 0; i < n; ++i) {
         int k = i + md;
-        double yp = evaluate_at(data_buf.data(), k, rows, cols, nullptr, output_col);
+        double yp = evaluate_at(
+            data_buf.data(), k, needed_rows, cols, nullptr, output_col
+        );
         if (!std::isfinite(yp)) yp = 0.0;
         yhat[i] = yp;
         // Feed prediction back for future time steps

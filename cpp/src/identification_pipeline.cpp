@@ -62,6 +62,32 @@ const char* pipeline_state_str(PipelineState s) {
 
 // ── PipelineConfig JSON parsing (minimal) ─────────────────────────────────
 
+static void sync_report_best(GenerationReport& r, const Chromosome& best) {
+    if (!best.evaluated) return;
+
+    r.best_fitness = best.fitness;
+    r.num_terms = best.num_regressors();
+    r.best_contexts_survived = best.contexts_survived;
+    r.best_worst_fitness_seen = best.worst_fitness_seen;
+    r.rmse_train = best.metrics.rmse_train;
+    r.rmse_val = best.metrics.rmse_val;
+    r.rmse_test = best.metrics.rmse_test;
+    r.bic = best.metrics.bic;
+    r.aic = best.metrics.aic;
+    r.r2_train = best.metrics.r2_train;
+    r.r2_val = best.metrics.r2_val;
+    r.free_run_rmse = best.metrics.rmse_free_run;
+    r.input_contribution_ratio = best.metrics.input_contribution_ratio;
+    r.residual_input_corr = best.metrics.residual_input_corr;
+    r.fitness_breakdown = best.fitness_breakdown;
+    r.best_coefficients = best.coefficients;
+    r.best_intercept = best.intercept;
+    r.best_exponents.clear();
+    for (const auto& reg : best.regressors)
+        for (const auto& term : reg.terms)
+            r.best_exponents.push_back(term.exponent);
+}
+
 bool PipelineConfig::from_json(const std::string& json) {
     auto getd = [&](const std::string& key, double def) -> double {
         auto p = json.find("\"" + key + "\"");
@@ -96,6 +122,7 @@ bool PipelineConfig::from_json(const std::string& json) {
     val_ratio        = getd("validationRatio",0.15);
     output_col       = geti("outputCol",     -1);
     ws_port          = geti("webSocketPort",  8765);
+    enable_ws        = ws_port > 0;
 
     de.num_islands      = geti("numIslands",       3);
     de.population_size  = geti("populationSize",  50);
@@ -111,10 +138,11 @@ bool PipelineConfig::from_json(const std::string& json) {
     de.max_terms_per_reg= geti("maxTermsPerReg",   3);
     de.pmin             = getd("pmin",            0.5);
     de.pmax             = getd("pmax",            5.0);
-    de.max_delay        = geti("maxDelay",         20);
+    de.max_delay        = geti("maxDelay",         40);
     de.num_threads      = geti("numThreads",        0);
+    de.random_seed      = static_cast<uint64_t>(getd("randomSeed", 0));
 
-    weights.alpha = getd("alpha",           1.0);
+    weights.alpha = getd("alpha",          0.05);
     weights.beta  = getd("denominatorPenalty", 0.1);
     weights.gamma = getd("complexityPenalty",0.01);
     weights.delta = getd("exponentPenalty",  0.01);
@@ -125,6 +153,7 @@ bool PipelineConfig::from_json(const std::string& json) {
 
     free_run_penalty       = getd("freeRunPenalty",       0.5);
     input_contribution_min = getd("inputContributionMin", 0.3);
+    weights.input_contribution_target = input_contribution_min;
     gamma_anneal_start     = getd("gammaAnnealStart",      weights.gamma);
     gamma_anneal_end       = getd("gammaAnnealEnd",        std::max(weights.gamma, 0.1));
     phase_stagnation_limit = geti("phaseStagnationLimit",  150);
@@ -171,8 +200,43 @@ bool IdentificationPipeline::load_data(const double* data, int rows, int cols) {
 }
 
 bool IdentificationPipeline::configure(const std::string& json_config) {
-    cfg_.from_json(json_config);
+    if (!cfg_.from_json(json_config) || raw_cols_ <= 0) return false;
     if (cfg_.output_col < 0) cfg_.output_col = raw_cols_ - 1;
+    if (cfg_.output_col < 0 || cfg_.output_col >= raw_cols_) return false;
+    if (cfg_.train_ratio <= 0.0 || cfg_.val_ratio < 0.0 ||
+        cfg_.train_ratio + cfg_.val_ratio >= 1.0) return false;
+
+    cfg_.de.num_islands = std::clamp(cfg_.de.num_islands, 1, 16);
+    cfg_.de.population_size = std::clamp(cfg_.de.population_size, 4, 500);
+    cfg_.de.elitism_count = std::clamp(
+        cfg_.de.elitism_count, 0, cfg_.de.population_size - 1
+    );
+    cfg_.de.max_regressors = std::clamp(cfg_.de.max_regressors, 1, 30);
+    cfg_.de.max_terms_per_reg = std::clamp(cfg_.de.max_terms_per_reg, 1, 5);
+    cfg_.de.max_delay = std::clamp(cfg_.de.max_delay, 1, 200);
+    cfg_.de.pmin = std::max(0.1, cfg_.de.pmin);
+    cfg_.de.pmax = std::max(cfg_.de.pmin, cfg_.de.pmax);
+    cfg_.de.mu_f = std::clamp(cfg_.de.mu_f, 0.01, 2.0);
+    cfg_.de.mu_cr = std::clamp(cfg_.de.mu_cr, 0.0, 1.0);
+    cfg_.de.migration_rate = std::clamp(cfg_.de.migration_rate, 0.0, 1.0);
+    cfg_.de.migration_interval = std::max(1, cfg_.de.migration_interval);
+    cfg_.de.max_generations = std::max(1, cfg_.de.max_generations);
+    cfg_.de.stagnation_limit = std::max(1, cfg_.de.stagnation_limit);
+    cfg_.de.reinit_ratio = std::clamp(cfg_.de.reinit_ratio, 0.0, 1.0);
+    cfg_.weights.alpha = std::max(0.0, cfg_.weights.alpha);
+    cfg_.weights.beta = std::max(0.0, cfg_.weights.beta);
+    cfg_.weights.gamma = std::max(0.0, cfg_.weights.gamma);
+    cfg_.weights.delta = std::max(0.0, cfg_.weights.delta);
+    cfg_.weights.eta = std::max(0.0, cfg_.weights.eta);
+    cfg_.weights.zeta = std::max(0.0, cfg_.weights.zeta);
+    cfg_.weights.theta = std::max(0.0, cfg_.weights.theta);
+    cfg_.weights.free_run_horizon = std::max(1, cfg_.weights.free_run_horizon);
+    cfg_.input_contribution_min = std::clamp(cfg_.input_contribution_min, 0.0, 1.0);
+    cfg_.weights.input_contribution_target = cfg_.input_contribution_min;
+    cfg_.free_run_penalty = std::max(0.0, cfg_.free_run_penalty);
+    cfg_.gamma_anneal_start = std::max(0.0, cfg_.gamma_anneal_start);
+    cfg_.gamma_anneal_end = std::max(0.0, cfg_.gamma_anneal_end);
+    cfg_.phase_stagnation_limit = std::max(2, cfg_.phase_stagnation_limit);
     cfg_.de.num_variables = raw_cols_;
     return true;
 }
@@ -265,25 +329,25 @@ FitnessWeights IdentificationPipeline::phase_weights(
             // Strongly discourage purely-autoregressive models so the
             // population is forced to explore input-dependent structures
             // before any nonlinear / free-run penalties kick in.
-            w.zeta  = std::max(cfg_.weights.zeta, 1.0);
+            w.zeta  = std::max(cfg_.weights.zeta, 5.0);
             w.theta = 0.0;
             break;
         case IdentificationPhase::NonlinearExpansion:
             // Relax the input-usage pressure and start ramping in the
             // free-run penalty as candidate structures gain nonlinear terms.
-            w.zeta  = cfg_.weights.zeta * 0.6;
-            w.theta = cfg_.free_run_penalty * 0.3;
+            w.zeta  = std::max(cfg_.weights.zeta * 0.6, 2.0);
+            w.theta = cfg_.free_run_penalty * 0.5;
             break;
         case IdentificationPhase::ParsimonyValidation:
             // Full free-run penalty: candidates must remain accurate under
             // simulation, not just one-step-ahead prediction.
-            w.zeta  = cfg_.weights.zeta;
+            w.zeta  = std::max(cfg_.weights.zeta, 1.0);
             w.theta = cfg_.free_run_penalty;
             break;
         case IdentificationPhase::LocalRefinement:
             // Final polishing: maximum pressure for parsimony and
             // simulation accuracy.
-            w.zeta  = cfg_.weights.zeta;
+            w.zeta  = std::max(cfg_.weights.zeta, 1.0);
             w.theta = cfg_.free_run_penalty * 1.5;
             break;
     }
@@ -321,9 +385,8 @@ void IdentificationPipeline::update_phase(GenerationReport& rpt) {
 
     auto cur = static_cast<IdentificationPhase>(phase_.load());
 
-    // Gamma annealing: linearly ramps the complexity penalty from
-    // gamma_anneal_start to gamma_anneal_end over the run, regardless of
-    // phase, so models are gently pushed toward parsimony as time passes.
+    // Select the complexity pressure for the next phase from run progress.
+    // The value remains fixed until another phase transition.
     double progress = cfg_.de.max_generations > 0
         ? std::clamp(static_cast<double>(rpt.generation) / cfg_.de.max_generations, 0.0, 1.0)
         : 0.0;
@@ -380,9 +443,10 @@ void IdentificationPipeline::update_phase(GenerationReport& rpt) {
     }
 
     bool phase_changed = next != cur;
-    bool gamma_changed = std::abs(gamma - last_gamma_applied_) > 1e-4;
 
-    if (phase_changed || gamma_changed) {
+    // Keep one objective scale within each phase. Continuously changing
+    // gamma makes stagnation and greedy selection compare different goals.
+    if (phase_changed) {
         FitnessWeights base = phase_weights(next, gamma);
         for (int i = 0; i < (int)island_roles_.size(); ++i)
             de_->update_weights_for_island(i, apply_role_profile(base, island_roles_[i]));
@@ -418,18 +482,40 @@ void IdentificationPipeline::update_phase(GenerationReport& rpt) {
 }
 
 bool IdentificationPipeline::start() {
-    if (state_.load() == PipelineState::Running) return false;
+    const auto current_state = state_.load();
+    if (current_state == PipelineState::Running ||
+        current_state == PipelineState::Paused) return false;
     if (raw_data_.empty()) return false;
+    const int configured_train_rows =
+        static_cast<int>(raw_rows_ * cfg_.train_ratio);
+    if (configured_train_rows <= cfg_.de.max_delay) {
+        state_.store(PipelineState::Error);
+        return false;
+    }
 
     // Join any previous run's threads before discarding de_/agent_
     if (de_) de_->stop();
     if (worker_thread_.joinable()) worker_thread_.join();
+    if (results_refresh_thread_.joinable()) results_refresh_thread_.join();
     if (agent_) agent_.reset();
 
+    generation_.store(0);
+    best_fitness_.store(std::numeric_limits<double>::infinity());
+    phase_.store(static_cast<int>(IdentificationPhase::StructuralExploration));
+    {
+        std::lock_guard<std::mutex> lk(results_mutex_);
+        best_chromosome_ = Chromosome();
+        latest_report_ = GenerationReport();
+        latest_report_.phase_name =
+            phase_name(IdentificationPhase::StructuralExploration);
+        tuning_log_.clear();
+    }
     state_.store(PipelineState::Running);
 
     // Normalise and split
-    normalizer_ = std::make_unique<Normalizer>(cfg_.normalizer_type, 1e-6, 1.0);
+    normalizer_ = std::make_unique<Normalizer>(
+        cfg_.normalizer_type, cfg_.norm_lo, cfg_.norm_hi
+    );
     // Fit on training portion
     int n_train = static_cast<int>(raw_rows_ * cfg_.train_ratio);
     normalizer_->fit(raw_data_.data(), n_train, raw_cols_);
@@ -441,12 +527,21 @@ bool IdentificationPipeline::start() {
     split_data();
     std::swap(raw_data_, norm_data); // restore original
 
-    de_ = std::make_unique<DifferentialEvolutionOptimizer>(cfg_.de);
+    DEConfig initial_de = cfg_.de;
+    initial_de.pmax = std::min(cfg_.de.pmax, 1.5);
+    initial_de.max_delay = std::max(
+        1, std::min(cfg_.de.max_delay, std::max(5, cfg_.de.max_delay / 2))
+    );
+    FitnessWeights initial_weights = phase_weights(
+        IdentificationPhase::StructuralExploration, cfg_.gamma_anneal_start
+    );
+
+    de_ = std::make_unique<DifferentialEvolutionOptimizer>(initial_de);
     de_->initialize(
         train_data_.data(), train_rows_,
         val_rows_ > 0 ? val_data_.data() : nullptr, val_rows_,
         test_rows_ > 0 ? test_data_.data() : nullptr, test_rows_,
-        raw_cols_, cfg_.output_col, cfg_.weights
+        raw_cols_, cfg_.output_col, initial_weights
     );
 
     // ── Merged disruptive idea: specialized islands (objective x regime) ──
@@ -497,12 +592,6 @@ bool IdentificationPipeline::start() {
         for (int i = 0; i < (int)island_roles_.size(); ++i)
             de_->update_weights_for_island(i, apply_role_profile(base, island_roles_[i]));
     }
-    {
-        double pmax1  = std::min(cfg_.de.pmax, 1.5);
-        int    delay1 = std::max(1, std::min(cfg_.de.max_delay, std::max(5, cfg_.de.max_delay / 2)));
-        de_->update_search_space(pmax1, delay1);
-    }
-
 #ifndef __EMSCRIPTEN__
     setup_agent();
 
@@ -511,17 +600,23 @@ bool IdentificationPipeline::start() {
             GenerationReport rpt = report;
             update_phase(rpt);
 
+            Chromosome live = de_->best_chromosome();
+            sync_report_best(rpt, live);
             generation_.store(rpt.generation);
             best_fitness_.store(rpt.best_fitness);
             {
                 std::lock_guard<std::mutex> lk(results_mutex_);
                 latest_report_ = rpt;
+                if (live.evaluated) best_chromosome_ = std::move(live);
             }
             if (agent_) {
                 agent_->broadcast(build_broadcast_json(rpt));
             }
         },
         [this]() -> bool {
+            using namespace std::chrono_literals;
+            while (state_.load() == PipelineState::Paused)
+                std::this_thread::sleep_for(20ms);
             return state_.load() == PipelineState::Stopped;
         }
     );
@@ -575,10 +670,13 @@ int IdentificationPipeline::step(int n) {
             GenerationReport rpt = report;
             update_phase(rpt);
 
+            Chromosome live = de_->best_chromosome();
+            sync_report_best(rpt, live);
             generation_.store(rpt.generation);
             best_fitness_.store(rpt.best_fitness);
             std::lock_guard<std::mutex> lk(results_mutex_);
             latest_report_ = rpt;
+            if (live.evaluated) best_chromosome_ = std::move(live);
         },
         [this]() -> bool {
             auto s = state_.load();

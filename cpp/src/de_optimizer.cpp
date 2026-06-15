@@ -73,7 +73,7 @@ Chromosome Island::random_chromosome() {
 // ── PRNG helpers ──────────────────────────────────────────────────────────
 
 double Island::gauss_rand(double mean, double std) {
-    static std::normal_distribution<double> nd;
+    std::normal_distribution<double> nd;
     return nd(rng_) * std + mean;
 }
 
@@ -242,14 +242,14 @@ void Island::jade_end_generation() {
     mu_cr_ = clamp(mu_cr_, 0.01, 0.99);
     success_f_.clear();
     success_cr_.clear();
-    success_count_ = 0;
-    trial_count_   = 0;
 }
 
 // ── run_generation ───────────────────────────────────────────────────────
 
 void Island::run_generation() {
     const int sz = static_cast<int>(pop_.size());
+    success_count_ = 0;
+    trial_count_   = 0;
 
     // Sort pop to find elites
     std::vector<int> idx(sz);
@@ -257,12 +257,15 @@ void Island::run_generation() {
     std::sort(idx.begin(), idx.end(),
               [&](int a, int b){ return pop_[a].fitness < pop_[b].fitness; });
 
-    std::vector<Chromosome> new_pop(sz);
-    // Keep elites
+    std::vector<bool> is_elite(sz, false);
     for (int e = 0; e < std::min(cfg_.elitism_count, sz); ++e)
-        new_pop[e] = pop_[idx[e]];
+        is_elite[idx[e]] = true;
 
+    // Start from a complete copy so every target survives unless a better
+    // trial replaces it. This also preserves elites at their original index.
+    std::vector<Chromosome> new_pop = pop_;
     for (int i = 0; i < sz; ++i) {
+        if (is_elite[i]) continue;
         ++trial_count_;
         double f_i, cr_i;
         Chromosome mutant = mutate_jade(i, f_i, cr_i);
@@ -273,18 +276,11 @@ void Island::run_generation() {
                             val_data_, val_rows_, cols_, output_col_);
 
         bool replace = trial.evaluated && trial.fitness < pop_[i].fitness;
-        // Never replace an elite
-        bool is_elite = false;
-        for (int e = 0; e < std::min(cfg_.elitism_count, sz); ++e)
-            if (idx[e] == i) { is_elite = true; break; }
-
-        if (replace && !is_elite) {
+        if (replace) {
             new_pop[i] = trial;
             ++success_count_;
             success_f_.push_back(f_i);
             success_cr_.push_back(cr_i);
-        } else {
-            if (!is_elite) new_pop[i] = pop_[i];
         }
     }
     pop_ = new_pop;
@@ -372,21 +368,54 @@ double Island::success_rate() const {
 
 void Island::accept_migrants(const std::vector<Chromosome>& migrants) {
     if (migrants.empty()) return;
+    const size_t count = std::min(migrants.size(), pop_.size());
     // Sort current population, replace worst
     std::vector<int> idx(pop_.size());
     std::iota(idx.begin(), idx.end(), 0);
-    std::partial_sort(idx.begin(), idx.begin() + (int)migrants.size(), idx.end(),
+    std::partial_sort(idx.begin(), idx.begin() + static_cast<int>(count), idx.end(),
         [&](int a, int b){ return pop_[a].fitness > pop_[b].fitness; }); // worst first
-    for (size_t m = 0; m < migrants.size() && m < idx.size(); ++m)
+    for (size_t m = 0; m < count; ++m)
         pop_[idx[m]] = migrants[m];
 }
 
 void Island::reevaluate(Chromosome& c) const {
+    c.evaluated = false;
+    c.fitness = std::numeric_limits<double>::infinity();
     evaluator_.evaluate(c, train_data_, train_rows_,
                         val_data_, val_rows_, cols_, output_col_);
+    if (!c.evaluated || !std::isfinite(c.fitness)) return;
     ++c.contexts_survived;
     if (std::isnan(c.worst_fitness_seen) || c.fitness > c.worst_fitness_seen)
         c.worst_fitness_seen = c.fitness;
+}
+
+void Island::reevaluate_population() {
+    for (auto& c : pop_) {
+        c.evaluated = false;
+        c.fitness = std::numeric_limits<double>::infinity();
+        evaluator_.evaluate(c, train_data_, train_rows_,
+                            val_data_, val_rows_, cols_, output_col_);
+    }
+    stagnation_ = 0;
+    prev_best_ = best_fitness();
+}
+
+void Island::update_weights(const FitnessWeights& w) {
+    evaluator_.weights() = w;
+    for (auto& c : pop_) {
+        if (!evaluator_.rescore(c, output_col_)) {
+            c.evaluated = false;
+            c.fitness = std::numeric_limits<double>::infinity();
+        }
+    }
+    stagnation_ = 0;
+    prev_best_ = best_fitness();
+}
+
+void Island::set_validation_window(const double* val_data, int val_rows) {
+    val_data_ = val_data;
+    val_rows_ = val_rows;
+    reevaluate_population();
 }
 
 void Island::update_config(const DEConfig& new_cfg) {
@@ -413,8 +442,10 @@ void DifferentialEvolutionOptimizer::initialize(
 
     islands_.clear();
     for (int i = 0; i < cfg_.num_islands; ++i) {
-        uint64_t seed = static_cast<uint64_t>(std::chrono::steady_clock::now()
-                        .time_since_epoch().count()) + i * 104729ULL;
+        uint64_t seed = cfg_.random_seed != 0
+            ? cfg_.random_seed + i * 104729ULL
+            : static_cast<uint64_t>(std::chrono::steady_clock::now()
+                .time_since_epoch().count()) + i * 104729ULL;
         islands_.push_back(std::make_unique<Island>(
             i, cfg_, seed,
             train_data_, train_rows_, val_data_, val_rows_,
@@ -424,10 +455,11 @@ void DifferentialEvolutionOptimizer::initialize(
 }
 
 void DifferentialEvolutionOptimizer::migrate() {
-    if (islands_.size() < 2) return;
+    if (islands_.size() < 2 || cfg_.migration_rate <= 0.0) return;
     int n = static_cast<int>(islands_.size());
     int n_migrants = std::max(1, static_cast<int>(
         cfg_.population_size * cfg_.migration_rate));
+    n_migrants = std::min(n_migrants, cfg_.population_size);
 
     for (int i = 0; i < n; ++i) {
         auto& src = *islands_[i];
@@ -599,7 +631,9 @@ void DifferentialEvolutionOptimizer::run_async(
                 std::vector<std::thread> workers;
                 workers.reserve(islands_.size());
                 for (auto& isl : islands_) {
-                    workers.emplace_back([&isl] { isl->run_generation(); });
+                    workers.emplace_back(
+                        [island = isl.get()] { island->run_generation(); }
+                    );
                 }
                 for (auto& w : workers) w.join();
             }
@@ -726,7 +760,10 @@ void DifferentialEvolutionOptimizer::apply_tuning(
         else if (param == "exponentPenalty")    w.delta = value;
         else if (param == "alpha")              w.alpha = value;
         else if (param == "freeRunHorizon")     w.free_run_horizon = static_cast<int>(value);
-        for (auto& isl : islands_) isl->update_weights(w);
+        for (auto& isl : islands_) {
+            isl->update_weights(w);
+            if (param == "freeRunHorizon") isl->reevaluate_population();
+        }
     }
     // Other params are reflected in cfg_ for next iteration
 }

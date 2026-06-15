@@ -40,7 +40,8 @@ public:
      * Returns a vector of length (rows - max_delay).
      */
     std::vector<double> predict_free_run(
-        const double* data, int rows, int cols, int output_col
+        const double* data, int rows, int cols, int output_col,
+        int horizon = -1
     ) const;
 
     /**

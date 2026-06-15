@@ -99,14 +99,14 @@ double Metrics::composite_fitness(
 ) noexcept {
     double free_run_term = std::isfinite(free_run_rmse) ? theta * free_run_rmse : 0.0;
     double f = rmse_val
-        + alpha  * std::max(0.0, bic_val)
+        + alpha  * bic_val
         + beta   * denom_penalty
         + gamma  * complexity
         + delta  * exp_penalty
         + eta    * stability_penalty
         + zeta   * no_input_penalty
         + free_run_term;
-    return std::isfinite(f) ? f : std::numeric_limits<double>::max();
+    return std::isfinite(f) ? f : std::numeric_limits<double>::infinity();
 }
 
 } // namespace aegis

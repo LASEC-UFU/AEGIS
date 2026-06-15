@@ -64,6 +64,34 @@ endif()
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   install(TARGETS aegis_core DESTINATION bin)
   install(FILES include/aegis/aegis_api.h DESTINATION include)
+
+  add_executable(test_harness test_harness.cpp)
+  target_link_libraries(test_harness PRIVATE aegis_core)
+
+  add_executable(diag_harness diag_harness.cpp)
+  target_link_libraries(diag_harness PRIVATE aegis_core)
+
+  enable_testing()
+  add_executable(core_tests
+    core_tests.cpp
+    src/normalizer.cpp
+    src/regressor_library.cpp
+    src/rational_model.cpp
+    src/metrics.cpp
+    src/residual_analyzer.cpp
+    src/stability_analyzer.cpp
+    src/population_diversity_monitor.cpp
+    src/individual_evaluator.cpp
+    src/de_optimizer.cpp
+  )
+  target_include_directories(core_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  if(WIN32)
+    target_link_libraries(core_tests PRIVATE ws2_32)
+  endif()
+  if(OpenMP_CXX_FOUND)
+    target_link_libraries(core_tests PRIVATE OpenMP::OpenMP_CXX)
+  endif()
+  add_test(NAME aegis_core_tests COMMAND core_tests)
 endif()
 
 # ── WASM target (Emscripten only) ────────────────────────────────

@@ -31,12 +31,12 @@ struct ModelMetrics {
  *  to the hierarchical agent and the UI ("fitness_breakdown"). */
 struct FitnessBreakdown {
     double rmse            = 0.0; // base RMSE term (validation or train)
-    double bic_term        = 0.0; // alpha * max(0, bic)
+    double bic_term        = 0.0; // alpha * (BIC / n)
     double denom_term      = 0.0; // beta  * denom_penalty
     double complexity_term = 0.0; // gamma * complexity
     double exponent_term   = 0.0; // delta * exp_penalty
     double stability_term  = 0.0; // eta   * stability_penalty
-    double no_input_term   = 0.0; // zeta  * no_input_penalty
+    double no_input_term   = 0.0; // zeta * normalized input-contribution deficit
     double free_run_term   = 0.0; // theta * free_run_rmse
 };
 
@@ -83,7 +83,7 @@ public:
 
     /**
      * Composite fitness used by DE:
-     *   fitness = RMSE_val + alpha*BIC + beta*denom_penalty + gamma*complexity
+     *   fitness = RMSE_val + alpha*(BIC/n) + beta*denom_penalty + gamma*complexity
      *           + delta*exp_penalty + eta*stability_penalty + zeta*no_input_penalty
      *           + theta*free_run_rmse
      */

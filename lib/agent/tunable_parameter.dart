@@ -165,8 +165,8 @@ class ParameterRegistry {
         description: 'Maximum time delay',
         minValue: 1,
         maxValue: 50,
-        currentValue: 20,
-        defaultValue: 20,
+        currentValue: 40,
+        defaultValue: 40,
         type: ParameterType.integer,
       ),
     );

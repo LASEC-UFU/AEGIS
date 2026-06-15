@@ -97,6 +97,13 @@
         Module._aegis_free_string(ptr);
         return s;
       },
+      getTuningLog: function (p) {
+        var ptr = Module._aegis_get_tuning_log(p);
+        if (!ptr) return '';
+        var s = Module.UTF8ToString(ptr);
+        Module._aegis_free_string(ptr);
+        return s;
+      },
 
       // Apply agent tuning
       applyTuning: function (p, paramName, value, reason) {

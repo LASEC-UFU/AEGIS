@@ -14,11 +14,16 @@ class DataNormalizer {
   /// Returns the normalized matrix and the min/max values used.
   static NormalizationResult normalize(
     Matrix data, {
-    double lowerBound = 0.01,
+    double lowerBound = -1.0,
     double upperBound = 1.0,
+    int? fitRows,
   }) {
     final rows = data.rows;
     final cols = data.cols;
+    if (rows <= 0 || cols <= 0) {
+      throw ArgumentError('Data matrix must be non-empty');
+    }
+    final fittedRows = (fitRows ?? rows).clamp(1, rows).toInt();
     final normalized = Matrix(rows, cols);
     final minValues = Float64List(cols);
     final maxValues = Float64List(cols);
@@ -30,7 +35,7 @@ class DataNormalizer {
       var min = double.infinity;
       var max = double.negativeInfinity;
       final off = c * rows;
-      for (var r = 0; r < rows; r++) {
+      for (var r = 0; r < fittedRows; r++) {
         final v = data.data[off + r];
         if (v < min) min = v;
         if (v > max) max = v;
@@ -72,7 +77,7 @@ class DataNormalizer {
     double normalized,
     double min,
     double max, {
-    double lowerBound = 0.01,
+    double lowerBound = -1.0,
     double upperBound = 1.0,
   }) {
     final range = upperBound - lowerBound;

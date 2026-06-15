@@ -170,11 +170,11 @@ Opções: linha de cabeçalho (toggle), seleção de colunas, preview dos primei
 
 | Tipo | Chave JSON | Descrição |
 |------|------------|-----------|
-| Min-Max (padrão) | `"minmax"` | Escala para $[10^{-6}, 1.0]$ |
+| Min-Max (padrão) | `"minmax"` | Escala para $[-1.0, 1.0]$ |
 | Robusto | `"robust"` | Mediana + IQR — resistente a outliers |
 | Z-score | `"zscore"` | Média zero, desvio padrão unitário |
 
-**Dart fallback:** Min-Max com $L = 0.01$, $R = 0.99$, resultado $\in [0.01, 1.0]$.
+**Dart fallback:** Min-Max ajustado no prefixo de treino e escalado para $[-1.0, 1.0]$.
 
 ### 5.3 Particionamento Sequencial
 
@@ -306,7 +306,7 @@ onde $\mathbf{q}_j$ é a $j$-ésima coluna ortogonalizada (do QR de $\Psi$).
 
 ### 9.4 Fitness Composto
 
-$$f = \text{RMSE}_{\text{val}} + \alpha \cdot \max(0, \text{BIC}) + \beta \cdot P_D + \gamma \cdot P_C + \delta \cdot P_E + \eta \cdot P_S$$
+$$f = \text{RMSE}_{\text{val}} + \alpha \cdot \frac{\text{BIC}}{n} + \beta P_D + \gamma P_C + \delta P_E + \eta P_S + \zeta P_I + \theta \text{RMSE}_{\text{free}}$$
 
 | Termo | Penalidade | Propósito |
 |-------|-----------|-----------|
@@ -314,6 +314,7 @@ $$f = \text{RMSE}_{\text{val}} + \alpha \cdot \max(0, \text{BIC}) + \beta \cdot 
 | $P_C$ | `complexityPenalty` | Penaliza número de termos |
 | $P_E$ | `exponentPenalty` | Penaliza expoentes distantes de 1.0 |
 | $P_S$ | `stabilityPenalty` | Penaliza raízes do denominador fora do círculo unitário |
+| $P_I$ | `noInputPenalty` | Penaliza déficit em relação à contribuição-alvo da entrada |
 
 ### 9.5 Critérios de Informação
 
@@ -416,8 +417,8 @@ Cada geração produz um snapshot com campos incluindo:
 | 6 | `migrationRate` | 0.0 | **0.1** | 0.3 |
 | 7 | `maxRegressors` | 2 | **8** | 20 |
 | 8 | `maxExponent` ($p_{\max}$) | 1 | **3** | 5 |
-| 9 | `maxDelay` ($\tau_{\max}$) | 1 | **20** | 50 |
-| 10 | `complexityPenalty` | 0.0 | **1.0** | 10.0 |
+| 9 | `maxDelay` ($\tau_{\max}$) | 1 | **40** | 50 |
+| 10 | `complexityPenalty` | 0.0 | **0.01** | 1.0 |
 | 11 | `stagnationLimit` | 50 | **500** | 5000 |
 | 12 | `reinitializationRatio` | 0.0 | **0.1** | 0.5 |
 
@@ -586,7 +587,7 @@ AEGIS/
 │   │
 │   ├── engine/                            # Motor DE Dart puro (fallback)
 │   │   ├── de/                            # Island, Population, Migration, DEEngine
-│   │   ├── fitness/                       # BIC fitness, calculador ERR
+│   │   ├── fitness/                       # Fitness composto, calculador ERR
 │   │   ├── identification/                # Normalizer, Splitter, Validator
 │   │   └── stopping/                      # 5 critérios de parada
 │   │

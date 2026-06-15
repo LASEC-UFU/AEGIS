@@ -41,7 +41,7 @@ class ChromosomeFactory {
     this.maxTermsPerRegressor = 3,
     this.maxExponent = 3.0,
     this.minExponent = 1.0,
-    this.maxDelay = 20,
+    this.maxDelay = 40,
     this.allowRational = false,
   });
 

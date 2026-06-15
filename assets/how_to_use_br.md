@@ -32,7 +32,7 @@ Os dados são divididos sequencialmente em **70% treino · 15% validação · 15
 3. O algoritmo evolui populações em múltiplas ilhas para encontrar a melhor estrutura de modelo NARX.
 4. Use **Pause** / **Resume** para interromper sem perder o progresso. Use **Stop** para encerrar antecipadamente.
 
-A barra de status mostra a geração atual, melhor fitness (BIC), $R^2$ e tempo decorrido.
+A barra de status mostra a geração atual, melhor fitness composto, $R^2$ e tempo decorrido.
 
 ### Seleção de Motor (automática)
 
@@ -54,7 +54,7 @@ A aba **Agent** fornece visibilidade em tempo real do processo evolutivo.
 
 | Indicador | O que significa |
 |-----------|----------------|
-| **Best BIC** | Melhor fitness composto encontrado (menor = melhor) |
+| **Best Fitness** | Melhor fitness composto encontrado (menor = melhor) |
 | **RMSE Train / Val** | Erros de treino e validação |
 | **$R^2$** | Coeficiente de determinação (1 = ajuste perfeito) |
 | **Stagnation** | Gerações sem melhoria |
@@ -75,8 +75,8 @@ A aba **Agent** fornece visibilidade em tempo real do processo evolutivo.
 | `migrationRate` | 0.1 | Aumentar se ilhas estagnam independentemente |
 | `maxRegressors` | 8 | Aumentar se RMSE for alto e o modelo parecer simples demais |
 | `maxExponent` | 3 | Aumentar para permitir termos mais não-lineares |
-| `maxDelay` | 20 | Definir como a memória esperada do sistema (em amostras) |
-| `complexityPenalty` | 1.0 | Aumentar em overfitting; diminuir em underfitting |
+| `maxDelay` | 40 | Definir como a memória esperada do sistema (em amostras) |
+| `complexityPenalty` | 0.01 | Aumentar em overfitting; diminuir em underfitting |
 | `stagnationLimit` | 500 | Reduzir para parar mais cedo em runs claramente convergidos |
 | `reinitializationRatio` | 0.1 | Aumentar para escapar de ótimos locais |
 

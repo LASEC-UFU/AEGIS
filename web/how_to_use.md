@@ -32,7 +32,7 @@ The data is split sequentially into **70% training · 15% validation · 15% test
 3. The algorithm evolves populations across multiple islands to find the best NARX model structure.
 4. Use **Pause** / **Resume** to interrupt without losing progress. Use **Stop** to end early.
 
-The status bar shows the current generation, best fitness (BIC), $R^2$, and elapsed time.
+The status bar shows the current generation, best composite fitness, $R^2$, and elapsed time.
 
 ### Engine Selection (automatic)
 
@@ -54,7 +54,7 @@ The **Agent** tab provides real-time insight into the evolutionary process.
 
 | Indicator | What it means |
 |-----------|---------------|
-| **Best BIC** | Best composite fitness found (lower = better) |
+| **Best Fitness** | Best composite fitness found (lower = better) |
 | **RMSE Train / Val** | Training and validation errors |
 | **$R^2$** | Coefficient of determination (1 = perfect fit) |
 | **Stagnation** | Generations without improvement |
@@ -75,8 +75,8 @@ The **Agent** tab provides real-time insight into the evolutionary process.
 | `migrationRate` | 0.1 | Increase if islands stagnate independently |
 | `maxRegressors` | 8 | Increase if RMSE is high and model seems too simple |
 | `maxExponent` | 3 | Increase to allow more nonlinear terms |
-| `maxDelay` | 20 | Set to the expected system memory (in samples) |
-| `complexityPenalty` | 1.0 | Increase if overfitting; decrease if underfitting |
+| `maxDelay` | 40 | Set to the expected system memory (in samples) |
+| `complexityPenalty` | 0.01 | Increase if overfitting; decrease if underfitting |
 | `stagnationLimit` | 500 | Lower to stop sooner in clearly converged runs |
 | `reinitializationRatio` | 0.1 | Increase to escape local optima |
 

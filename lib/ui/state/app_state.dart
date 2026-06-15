@@ -11,7 +11,9 @@ import '../../agent/generation_history.dart';
 import '../../agent/tunable_parameter.dart';
 import '../../ffi/aegis_library.dart';
 import '../../ffi/aegis_ffi_service.dart';
+import '../../services/local_adaptive_agent.dart';
 import '../../services/llm_agent.dart';
+import '../../services/optimization_agent.dart';
 
 // ─── Data providers ───────────────────────────────────────────
 
@@ -19,6 +21,7 @@ final loadedDataProvider = StateProvider<DataLoadResult?>((ref) => null);
 final variableNamesProvider = StateProvider<List<String>>((ref) => []);
 final inputIndicesProvider = StateProvider<List<int>>((ref) => []);
 final outputIndexProvider = StateProvider<int>((ref) => 0);
+final agentModeProvider = StateProvider<AgentMode>((ref) => AgentMode.local);
 
 // ─── Engine provider ─────────────────────────────────────────
 
@@ -75,10 +78,13 @@ class EngineNotifier extends StateNotifier<EngineUiState> {
   AegisFfiService? _ffiService;
   Timer? _pollTimer;
 
-  // ── LLM agent (Claude API, active only when C++ engine is running) ───────
-  LlmAgent? _agent;
+  // ── Adaptive supervisor (local policy or remote Claude API) ─────────────
+  OptimizationAgent? _agent;
+  AgentMode? _activeAgentMode;
 
-  EngineNotifier(this._ref) : super(const EngineUiState());
+  EngineNotifier(this._ref) : super(const EngineUiState()) {
+    _ensureAgent();
+  }
 
   bool get _usingCpp => _ffiService != null;
 
@@ -90,8 +96,26 @@ class EngineNotifier extends StateNotifier<EngineUiState> {
   /// Returns null if unavailable or not using the C++ backend.
   Map<String, dynamic>? getBestModelJson() => _ffiService?.getBestModel();
 
-  /// Log of tuning actions applied by the agent (C++ backend only).
-  List<Map<String, dynamic>> getTuningLog() => _ffiService?.getTuningLog() ?? [];
+  /// Log of tuning actions applied by the active backend.
+  List<Map<String, dynamic>> getTuningLog() {
+    if (_usingCpp) return _ffiService?.getTuningLog() ?? [];
+    return (_engine?.history.tuningActions ?? [])
+        .map(
+          (action) => {
+            'accepted': true,
+            'param': action.parameterName,
+            'oldValue': action.oldValue,
+            'newValue': action.newValue,
+            'generation': action.generation,
+            'reason': action.reason ?? '',
+            'rejectionReason': '',
+          },
+        )
+        .toList();
+  }
+
+  String get agentName => _agent?.name ?? 'Agente desligado';
+  bool get agentAvailable => _agent?.available ?? true;
 
   GenerationHistory? get history =>
       _usingCpp ? _ffiService!.history : _engine?.history;
@@ -104,24 +128,19 @@ class EngineNotifier extends StateNotifier<EngineUiState> {
   void initialize({int numIslands = 3}) {
     final data = _ref.read(loadedDataProvider);
     if (data == null) return;
+    _ensureAgent(force: true);
 
     final outputCol = _ref.read(outputIndexProvider);
 
-    // Normalize
-    final normalized = DataNormalizer.normalize(data.data);
-
-    // Split
-    final split = DataSplitter.split(normalized.data);
-
-    // Try C++ backend first (available on Windows with native build)
+    // The C++/WASM pipeline owns normalization and sequential splitting.
+    // Pass the complete raw series so it does not split an already-split set.
     if (AegisLibrary.isAvailable) {
       _ffiService?.dispose();
       _ffiService = AegisFfiService(AegisLibrary.instance!);
       _ffiService!.onGenerationComplete = _onGeneration;
       _ffiService!.onStateChanged = _onStateChanged;
       final ok = _ffiService!.initialize(
-        normalizedData: split.training,
-        validationData: split.validation,
+        normalizedData: data.data,
         outputCol: outputCol,
         numVariables: data.numCols,
         numIslands: numIslands,
@@ -141,6 +160,13 @@ class EngineNotifier extends StateNotifier<EngineUiState> {
       _ffiService?.dispose();
       _ffiService = null;
     }
+
+    // Dart fallback owns its own normalization and split.
+    final normalized = DataNormalizer.normalize(
+      data.data,
+      fitRows: (data.numRows * 0.7).floor(),
+    );
+    final split = DataSplitter.split(normalized.data);
 
     // Dart engine fallback (web + native without DLL)
     _engine = DEEngine(numIslands: numIslands);
@@ -165,31 +191,36 @@ class EngineNotifier extends StateNotifier<EngineUiState> {
   // ── Start ──────────────────────────────────────────────────────────────
 
   void start() {
+    _ensureAgent();
     if (_usingCpp) {
-      _ffiService!.start();
-      _agent ??= LlmAgent()
-        ..onSuggestion = (p, v, r) => applyTuning(p, v, reason: r);
-      // Poll the C++ engine every ~16 ms for snapshots
-      _pollTimer?.cancel();
-      _pollTimer = Timer.periodic(const Duration(milliseconds: 200), (_) {
-        final snap = _ffiService?.pollSnapshot();
-        if (snap != null) _onGeneration(snap);
-
-        final status = _ffiService?.pollStatus();
-        if (status != null) {
-          final stateStr = status['state'] as String? ?? '';
-          if (stateStr == 'completed') {
-            _pollTimer?.cancel();
-            _onStateChanged(EngineState.completed);
-          } else if (stateStr == 'stopped') {
-            _pollTimer?.cancel();
-            _onStateChanged(EngineState.stopped);
-          }
-        }
-      });
+      if (_ffiService!.start()) _startCppPolling();
       return;
     }
 
+    _startDartLoop();
+  }
+
+  void _startCppPolling() {
+    _pollTimer?.cancel();
+    _pollTimer = Timer.periodic(const Duration(milliseconds: 200), (_) {
+      final snap = _ffiService?.pollSnapshot();
+      if (snap != null) _onGeneration(snap);
+
+      final status = _ffiService?.pollStatus();
+      if (status != null) {
+        final stateStr = status['state'] as String? ?? '';
+        if (stateStr == 'completed') {
+          _pollTimer?.cancel();
+          _onStateChanged(EngineState.completed);
+        } else if (stateStr == 'stopped') {
+          _pollTimer?.cancel();
+          _onStateChanged(EngineState.stopped);
+        }
+      }
+    });
+  }
+
+  void _startDartLoop() {
     if (_engine == null) return;
     _runTimer?.cancel();
     _runTimer = Timer.periodic(const Duration(milliseconds: 16), (_) {
@@ -227,10 +258,39 @@ class EngineNotifier extends StateNotifier<EngineUiState> {
   }
 
   void resume() {
-    start();
+    if (_usingCpp) {
+      _ffiService?.resume();
+      _startCppPolling();
+    } else {
+      _startDartLoop();
+    }
   }
 
   // ── Agent tuning ───────────────────────────────────────────────────────
+
+  void setAgentMode(AgentMode mode) {
+    _ref.read(agentModeProvider.notifier).state = mode;
+    _ensureAgent(force: true);
+  }
+
+  void _ensureAgent({bool force = false}) {
+    final mode = _ref.read(agentModeProvider);
+    if (!force && mode == _activeAgentMode) return;
+
+    _agent?.dispose();
+    _agent = switch (mode) {
+      AgentMode.off => null,
+      AgentMode.local => LocalAdaptiveAgent(
+        currentParameters: () =>
+            parameters?.currentValues ?? const <String, double>{},
+      ),
+      AgentMode.remote => LlmAgent(),
+    };
+    _activeAgentMode = mode;
+    _agent?.onSuggestion = (parameter, value, reason) {
+      applyTuning(parameter, value, reason: reason);
+    };
+  }
 
   void applyTuning(String param, double value, {String? reason}) {
     if (_usingCpp) {
@@ -247,6 +307,7 @@ class EngineNotifier extends StateNotifier<EngineUiState> {
         ? (_ffiService?.state ?? EngineState.running)
         : (_engine?.state ?? EngineState.idle);
 
+    _ensureAgent();
     _agent?.processSnapshot(snapshot);
 
     state = EngineUiState(
@@ -255,7 +316,8 @@ class EngineNotifier extends StateNotifier<EngineUiState> {
       latestSnapshot: snapshot,
       bestFitness: snapshot.bestFitness,
       elapsed: snapshot.elapsed,
-      statusMessage: 'Gen ${snapshot.generation} | '
+      statusMessage:
+          'Gen ${snapshot.generation} | '
           'Best: ${snapshot.bestFitness.toStringAsFixed(4)} | '
           'R²: ${snapshot.bestModelR2.toStringAsFixed(4)}',
     );

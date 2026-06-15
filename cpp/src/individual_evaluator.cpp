@@ -65,6 +65,7 @@ double IndividualEvaluator::compute_residual_input_corr(
     const std::vector<double>& residuals,
     const double* data, int rows, int cols, int output_col, int max_delay
 ) const noexcept {
+    (void)rows;
     if (residuals.empty()) return std::numeric_limits<double>::quiet_NaN();
     const int n = static_cast<int>(residuals.size());
 
@@ -94,6 +95,48 @@ double IndividualEvaluator::compute_residual_input_corr(
         max_abs_corr = std::max(max_abs_corr, std::abs(corr));
     }
     return max_abs_corr;
+}
+
+bool IndividualEvaluator::rescore(Chromosome& chrom, int output_col) const {
+    if (!chrom.evaluated) return false;
+
+    const double fit_rmse = std::isfinite(chrom.metrics.rmse_val)
+        ? chrom.metrics.rmse_val
+        : chrom.metrics.rmse_train;
+    if (!std::isfinite(fit_rmse)) return false;
+
+    const double bic_score =
+        std::isfinite(chrom.metrics.bic) && chrom.metrics.n_train > 0
+        ? chrom.metrics.bic / static_cast<double>(chrom.metrics.n_train)
+        : 1e6;
+    const double denom_pen     = compute_denom_penalty(chrom);
+    const double complex_p     = compute_complexity_penalty(chrom);
+    const double exp_pen       = compute_exponent_penalty(chrom, 0.5, 5.0);
+    const double stab_pen      = stability_analyzer_.analyze(chrom).penalty;
+    const double input_ratio = chrom.metrics.input_contribution_ratio;
+    const double target = std::max(weights_.input_contribution_target, 1e-12);
+    const double no_input_pen = std::isfinite(input_ratio)
+        ? std::max(0.0, target - clamp(input_ratio, 0.0, 1.0)) / target
+        : compute_no_input_penalty(chrom, output_col);
+    const double free_run_rmse = chrom.metrics.rmse_free_run;
+
+    chrom.fitness = Metrics::composite_fitness(
+        fit_rmse,
+        bic_score,
+        denom_pen, complex_p, exp_pen, stab_pen, no_input_pen, free_run_rmse,
+        weights_.alpha, weights_.beta, weights_.gamma,
+        weights_.delta, weights_.eta, weights_.zeta, weights_.theta
+    );
+    chrom.fitness_breakdown.rmse            = fit_rmse;
+    chrom.fitness_breakdown.bic_term        = weights_.alpha * bic_score;
+    chrom.fitness_breakdown.denom_term      = weights_.beta  * denom_pen;
+    chrom.fitness_breakdown.complexity_term = weights_.gamma * complex_p;
+    chrom.fitness_breakdown.exponent_term   = weights_.delta * exp_pen;
+    chrom.fitness_breakdown.stability_term  = weights_.eta   * stab_pen;
+    chrom.fitness_breakdown.no_input_term   = weights_.zeta  * no_input_pen;
+    chrom.fitness_breakdown.free_run_term =
+        std::isfinite(free_run_rmse) ? weights_.theta * free_run_rmse : 0.0;
+    return std::isfinite(chrom.fitness);
 }
 
 // ── ERR computation ───────────────────────────────────────────────────────
@@ -196,9 +239,8 @@ EvalResult IndividualEvaluator::evaluate(
     if (!std::isfinite(sse_train)) { result.has_nan_inf = true; return result; }
     chrom.sse = sse_train;
 
-    const int k = chrom.num_regressors();
+    const int k = chrom.num_regressors() + 1; // regressors plus intercept
     double bic_v = Metrics::bic(sse_train, n_train_usable, k);
-    double aic_v = Metrics::aic(sse_train, n_train_usable, k);
 
     // ── Validation predictions ─────────────────────────────────────────
     double rmse_val = std::numeric_limits<double>::infinity();
@@ -223,6 +265,14 @@ EvalResult IndividualEvaluator::evaluate(
     );
     chrom.metrics = result.metrics;
 
+    // Grade input usage by explanatory contribution, not merely by the
+    // presence of an input term whose fitted coefficient may be negligible.
+    result.err_values = compute_err(chrom, train_data, train_rows, cols, output_col);
+    chrom.err         = result.err_values;
+    result.metrics.input_contribution_ratio =
+        compute_input_contribution_ratio(chrom, output_col);
+    chrom.metrics = result.metrics;
+
     // ── Stability ─────────────────────────────────────────────────────
     result.stability = stability_analyzer_.analyze(chrom);
     double stab_pen  = result.stability.penalty;
@@ -231,7 +281,13 @@ EvalResult IndividualEvaluator::evaluate(
     double denom_pen   = compute_denom_penalty(chrom);
     double complex_p   = compute_complexity_penalty(chrom);
     double exp_pen     = compute_exponent_penalty(chrom, 0.5, 5.0);
-    double no_input_pen = compute_no_input_penalty(chrom, output_col);
+    const double input_target =
+        std::max(weights_.input_contribution_target, 1e-12);
+    double no_input_pen = std::isfinite(result.metrics.input_contribution_ratio)
+        ? std::max(0.0, input_target - clamp(
+              result.metrics.input_contribution_ratio, 0.0, 1.0
+          )) / input_target
+        : compute_no_input_penalty(chrom, output_col);
 
     // ── Free-run (simulation) RMSE ──────────────────────────────────────
     // Simulated on the validation split when available (else training),
@@ -241,7 +297,9 @@ EvalResult IndividualEvaluator::evaluate(
     {
         const double* sim_data = val_data && val_rows > md ? val_data : train_data;
         int           sim_rows = val_data && val_rows > md ? val_rows  : train_rows;
-        std::vector<double> yhat_free = model.predict_free_run(sim_data, sim_rows, cols, output_col);
+        std::vector<double> yhat_free = model.predict_free_run(
+            sim_data, sim_rows, cols, output_col, weights_.free_run_horizon
+        );
         int n_sim = std::min(static_cast<int>(yhat_free.size()), weights_.free_run_horizon);
         if (n_sim > 0) {
             std::vector<double> y_sim(n_sim);
@@ -254,10 +312,12 @@ EvalResult IndividualEvaluator::evaluate(
     // ── Composite fitness ─────────────────────────────────────────────
     double fit_rmse = std::isfinite(rmse_val) ? rmse_val
                     : Metrics::rmse(y_train.data(), yhat_train.data(), n_train_usable);
-    double bic_clamped = std::isfinite(bic_v) ? bic_v : 1e6;
+    double bic_score = std::isfinite(bic_v)
+        ? bic_v / static_cast<double>(n_train_usable)
+        : 1e6;
     double fitness = Metrics::composite_fitness(
         fit_rmse,
-        bic_clamped,
+        bic_score,
         denom_pen, complex_p, exp_pen, stab_pen, no_input_pen, free_run_rmse,
         weights_.alpha, weights_.beta, weights_.gamma,
         weights_.delta, weights_.eta, weights_.zeta, weights_.theta
@@ -268,7 +328,7 @@ EvalResult IndividualEvaluator::evaluate(
 
     // ── Fitness breakdown (diagnostics for the hierarchical agent) ─────
     chrom.fitness_breakdown.rmse            = fit_rmse;
-    chrom.fitness_breakdown.bic_term        = weights_.alpha * std::max(0.0, bic_clamped);
+    chrom.fitness_breakdown.bic_term        = weights_.alpha * bic_score;
     chrom.fitness_breakdown.denom_term      = weights_.beta  * denom_pen;
     chrom.fitness_breakdown.complexity_term = weights_.gamma * complex_p;
     chrom.fitness_breakdown.exponent_term   = weights_.delta * exp_pen;
@@ -279,11 +339,6 @@ EvalResult IndividualEvaluator::evaluate(
     result.metrics.rmse_free_run = free_run_rmse;
 
     // ── ERR ───────────────────────────────────────────────────────────
-    result.err_values = compute_err(chrom, train_data, train_rows, cols, output_col);
-    chrom.err         = result.err_values;
-
-    result.metrics.input_contribution_ratio = compute_input_contribution_ratio(chrom, output_col);
-
     // ── Residual stats ────────────────────────────────────────────────
     std::vector<double> residuals(n_train_usable);
     for (int i = 0; i < n_train_usable; ++i)
