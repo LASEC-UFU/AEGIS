@@ -472,33 +472,7 @@ bool AgentController::parse_suggestion(const std::string&, AgentSuggestion&) { r
 
 namespace aegis {
 
-std::string build_broadcast_json(
-    int    generation,
-    double best_fitness,
-    double rmse_train,
-    double rmse_val,
-    double rmse_test,
-    double bic,
-    double aic,
-    double r2_train,
-    double r2_val,
-    double population_diversity,
-    double population_variance,
-    int    unique_structures,
-    double success_rate,
-    int    stagnation,
-    double mu_f,
-    double mu_cr,
-    int    num_terms,
-    bool   is_stable,
-    bool   overfitting,
-    bool   underfitting,
-    bool   pe_ok,
-    const std::vector<double>& residual_autocorr,
-    const std::vector<double>& best_coefficients,
-    const std::vector<double>& best_exponents,
-    const std::string& alerts
-) {
+std::string build_broadcast_json(const GenerationReport& r) {
     auto fmt = [](double v) -> std::string {
         if (!std::isfinite(v)) return "null";
         std::ostringstream s; s << std::fixed;
@@ -513,34 +487,63 @@ std::string build_broadcast_json(
         }
         return s + "]";
     };
+    auto str_arr = [&](const std::vector<std::string>& v) -> std::string {
+        std::string s = "[";
+        for (size_t i = 0; i < v.size(); ++i) {
+            if (i) s += ",";
+            s += "\"" + v[i] + "\"";
+        }
+        return s + "]";
+    };
+    const auto& fb = r.fitness_breakdown;
 
     std::ostringstream j;
     j << "{"
-      << "\"generation\":"          << generation            << ","
-      << "\"best_fitness\":"        << fmt(best_fitness)     << ","
-      << "\"rmse_train\":"          << fmt(rmse_train)       << ","
-      << "\"rmse_validation\":"     << fmt(rmse_val)         << ","
-      << "\"rmse_test\":"           << fmt(rmse_test)        << ","
-      << "\"bic\":"                 << fmt(bic)              << ","
-      << "\"aic\":"                 << fmt(aic)              << ","
-      << "\"r2_train\":"            << fmt(r2_train)         << ","
-      << "\"r2_validation\":"       << fmt(r2_val)           << ","
-      << "\"population_diversity\":" << fmt(population_diversity) << ","
-      << "\"population_variance\":" << fmt(population_variance) << ","
-      << "\"unique_structures\":"   << unique_structures     << ","
-      << "\"success_rate\":"        << fmt(success_rate)     << ","
-      << "\"stagnation\":"          << stagnation            << ","
-      << "\"mu_f\":"                << fmt(mu_f)             << ","
-      << "\"mu_cr\":"               << fmt(mu_cr)            << ","
-      << "\"num_terms\":"           << num_terms             << ","
-      << "\"is_stable\":"           << (is_stable?"true":"false") << ","
-      << "\"overfitting\":"         << (overfitting?"true":"false") << ","
-      << "\"underfitting\":"        << (underfitting?"true":"false") << ","
-      << "\"pe_ok\":"               << (pe_ok?"true":"false") << ","
-      << "\"residual_autocorr\":"   << arr(residual_autocorr) << ","
-      << "\"coefficients\":"        << arr(best_coefficients) << ","
-      << "\"exponents\":"           << arr(best_exponents)    << ","
-      << "\"alerts\":\""            << alerts                 << "\""
+      << "\"generation\":"          << r.generation            << ","
+      << "\"best_fitness\":"        << fmt(r.best_fitness)     << ","
+      << "\"rmse_train\":"          << fmt(r.rmse_train)       << ","
+      << "\"rmse_validation\":"     << fmt(r.rmse_val)         << ","
+      << "\"rmse_test\":"           << fmt(r.rmse_test)        << ","
+      << "\"bic\":"                 << fmt(r.bic)              << ","
+      << "\"aic\":"                 << fmt(r.aic)              << ","
+      << "\"r2_train\":"            << fmt(r.r2_train)         << ","
+      << "\"r2_validation\":"       << fmt(r.r2_val)           << ","
+      << "\"population_diversity\":" << fmt(r.population_diversity) << ","
+      << "\"population_variance\":" << fmt(r.population_variance) << ","
+      << "\"unique_structures\":"   << r.unique_structures     << ","
+      << "\"structure_entropy\":"   << fmt(r.structure_entropy) << ","
+      << "\"success_rate\":"        << fmt(r.success_rate)     << ","
+      << "\"stagnation\":"          << r.stagnation            << ","
+      << "\"mu_f\":"                << fmt(r.mu_f)             << ","
+      << "\"mu_cr\":"               << fmt(r.mu_cr)            << ","
+      << "\"num_terms\":"           << r.num_terms             << ","
+      << "\"is_stable\":"           << (r.is_stable?"true":"false") << ","
+      << "\"overfitting\":"         << (r.overfitting?"true":"false") << ","
+      << "\"underfitting\":"        << (r.underfitting?"true":"false") << ","
+      << "\"pe_ok\":"               << (r.pe_ok?"true":"false") << ","
+      << "\"residual_autocorr\":"   << arr(r.residual_autocorr) << ","
+      << "\"coefficients\":"        << arr(r.best_coefficients) << ","
+      << "\"intercept\":"           << fmt(r.best_intercept)    << ","
+      << "\"exponents\":"           << arr(r.best_exponents)    << ","
+      << "\"alerts\":\""            << r.alerts                 << "\","
+      << "\"phase\":"                << r.phase                 << ","
+      << "\"phase_name\":\""         << r.phase_name            << "\","
+      << "\"free_run_rmse\":"        << fmt(r.free_run_rmse)    << ","
+      << "\"input_contribution_ratio\":" << fmt(r.input_contribution_ratio) << ","
+      << "\"residual_input_corr\":"  << fmt(r.residual_input_corr) << ","
+      << "\"fitness_breakdown\":{"
+      <<   "\"rmse\":"            << fmt(fb.rmse)            << ","
+      <<   "\"bic_term\":"        << fmt(fb.bic_term)        << ","
+      <<   "\"denom_term\":"      << fmt(fb.denom_term)      << ","
+      <<   "\"complexity_term\":" << fmt(fb.complexity_term) << ","
+      <<   "\"exponent_term\":"   << fmt(fb.exponent_term)   << ","
+      <<   "\"stability_term\":"  << fmt(fb.stability_term)  << ","
+      <<   "\"no_input_term\":"   << fmt(fb.no_input_term)   << ","
+      <<   "\"free_run_term\":"   << fmt(fb.free_run_term)
+      << "},"
+      << "\"best_contexts_survived\":"  << r.best_contexts_survived << ","
+      << "\"best_worst_fitness_seen\":" << fmt(r.best_worst_fitness_seen) << ","
+      << "\"island_roles\":"            << str_arr(r.island_roles)
       << "}";
     return j.str();
 }

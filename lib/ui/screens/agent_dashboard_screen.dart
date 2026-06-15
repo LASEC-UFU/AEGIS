@@ -31,6 +31,19 @@ class _AgentDashboardScreenState extends ConsumerState<AgentDashboardScreen> {
           if (snap != null)
             Chip(
               avatar: const Icon(
+                Icons.timeline,
+                size: 14,
+                color: AppColors.accent,
+              ),
+              label: Text(
+                _phaseLabel(snap.phase, snap.phaseName),
+                style: const TextStyle(fontSize: 11),
+              ),
+            ),
+          const SizedBox(width: 8),
+          if (snap != null)
+            Chip(
+              avatar: const Icon(
                 Icons.psychology,
                 size: 14,
                 color: AppColors.accent,
@@ -58,6 +71,30 @@ class _AgentDashboardScreenState extends ConsumerState<AgentDashboardScreen> {
             ),
     );
   }
+
+  static const _phaseShortNames = [
+    'Fase 1: Exploração Estrutural',
+    'Fase 2: Expansão Não Linear',
+    'Fase 3: Parcimônia & Validação',
+    'Fase 4: Refinamento Local',
+  ];
+
+  String _phaseLabel(int phase, String phaseName) {
+    if (phase >= 0 && phase < _phaseShortNames.length) {
+      return _phaseShortNames[phase];
+    }
+    return phaseName.isNotEmpty ? phaseName : 'Fase $phase';
+  }
+
+  static const _islandRoleLabels = {
+    'balanced': 'Balanceada',
+    'parsimony': 'Parcimônia',
+    'free_run_fidelity': 'Fidelidade Free-Run',
+    'stability': 'Estabilidade',
+  };
+
+  String _islandRoleLabel(String role) =>
+      _islandRoleLabels[role] ?? role;
 
   Widget _buildEmpty() {
     return Center(
@@ -90,6 +127,8 @@ class _AgentDashboardScreenState extends ConsumerState<AgentDashboardScreen> {
             children: [
               _buildIndicatorsGrid(snap),
               const SizedBox(height: 20),
+              _buildFitnessBreakdown(snap),
+              const SizedBox(height: 20),
               _buildIslandMonitor(snap),
               const SizedBox(height: 20),
               _buildERRChart(snap),
@@ -97,8 +136,17 @@ class _AgentDashboardScreenState extends ConsumerState<AgentDashboardScreen> {
           ),
         ),
         const SizedBox(width: 20),
-        // Right: Tuning panel
-        Expanded(flex: 2, child: _buildTuningPanel(params)),
+        // Right: Tuning panel + agent activity log
+        Expanded(
+          flex: 2,
+          child: Column(
+            children: [
+              _buildTuningPanel(params),
+              const SizedBox(height: 20),
+              _buildAgentActivityLog(),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -112,12 +160,121 @@ class _AgentDashboardScreenState extends ConsumerState<AgentDashboardScreen> {
       children: [
         _buildIndicatorsGrid(snap),
         const SizedBox(height: 20),
+        _buildFitnessBreakdown(snap),
+        const SizedBox(height: 20),
         _buildTuningPanel(params),
+        const SizedBox(height: 20),
+        _buildAgentActivityLog(),
         const SizedBox(height: 20),
         _buildIslandMonitor(snap),
         const SizedBox(height: 20),
         _buildERRChart(snap),
       ],
+    );
+  }
+
+  // ─── Agent activity log ──────────────────────────────────────
+
+  Widget _buildAgentActivityLog() {
+    final log = ref.read(engineProvider.notifier).getTuningLog();
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.history, size: 16, color: AppColors.accent),
+                SizedBox(width: 8),
+                Text(
+                  'Agent Activity Log',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (log.isEmpty)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 8),
+                child: Text(
+                  'No tuning actions yet. The agent will appear here as it '
+                  'adjusts parameters during the run.',
+                  style: TextStyle(color: AppColors.textTertiary, fontSize: 12),
+                ),
+              )
+            else
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 320),
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: log.length,
+                  reverse: true,
+                  itemBuilder: (context, i) {
+                    // Show newest entries first.
+                    final entry = log[log.length - 1 - i];
+                    final accepted = entry['accepted'] == true;
+                    final param = entry['param']?.toString() ?? '?';
+                    final newValue = (entry['newValue'] as num?)?.toDouble();
+                    final reason = entry['reason']?.toString() ?? '';
+                    final rejection = entry['rejectionReason']?.toString() ?? '';
+                    final gen = entry['generation']?.toString() ?? '?';
+
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 6),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(
+                            accepted ? Icons.check_circle : Icons.cancel,
+                            size: 14,
+                            color: accepted
+                                ? AppColors.success
+                                : AppColors.error,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Gen $gen: $param → '
+                                  '${newValue?.toStringAsFixed(4) ?? '-'}',
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    fontFamily: 'monospace',
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                if (reason.isNotEmpty)
+                                  Text(
+                                    reason,
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: AppColors.textTertiary,
+                                    ),
+                                  ),
+                                if (!accepted && rejection.isNotEmpty)
+                                  Text(
+                                    'Rejected: $rejection',
+                                    style: const TextStyle(
+                                      fontSize: 11,
+                                      color: AppColors.error,
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -211,8 +368,134 @@ class _AgentDashboardScreenState extends ConsumerState<AgentDashboardScreen> {
                   '${snap.bestModelMaxDelay}',
                   AppColors.textPrimary,
                 ),
+                _IndicatorTile(
+                  'Free-Run RMSE',
+                  snap.freeRunRmse != null
+                      ? snap.freeRunRmse!.toStringAsFixed(6)
+                      : '—',
+                  AppColors.textPrimary,
+                ),
+                _IndicatorTile(
+                  'Input Contribution',
+                  snap.inputContributionRatio != null
+                      ? '${(snap.inputContributionRatio! * 100).toStringAsFixed(1)}%'
+                      : '—',
+                  snap.inputContributionRatio != null &&
+                          snap.inputContributionRatio! < 0.3
+                      ? AppColors.warning
+                      : AppColors.success,
+                ),
+                _IndicatorTile(
+                  'Residual×Input Corr',
+                  snap.residualInputCorr != null
+                      ? snap.residualInputCorr!.toStringAsFixed(4)
+                      : '—',
+                  snap.residualInputCorr != null &&
+                          snap.residualInputCorr!.abs() > 0.2
+                      ? AppColors.warning
+                      : AppColors.textPrimary,
+                ),
               ],
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─── Fitness breakdown ────────────────────────────────────────
+
+  Widget _buildFitnessBreakdown(GenerationSnapshot snap) {
+    final fb = snap.fitnessBreakdown;
+    if (fb.isEmpty) return const SizedBox.shrink();
+
+    const labels = {
+      'rmse': 'RMSE',
+      'bic_term': 'BIC (α)',
+      'denom_term': 'Denominador (β)',
+      'complexity_term': 'Complexidade (γ)',
+      'exponent_term': 'Expoente (δ)',
+      'stability_term': 'Estabilidade (η)',
+      'no_input_term': 'Sem Entrada (ζ)',
+      'free_run_term': 'Free-Run (θ)',
+    };
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Row(
+              children: [
+                Icon(Icons.donut_small, size: 16, color: AppColors.accent),
+                SizedBox(width: 8),
+                Text(
+                  'Composição do Fitness',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            ...labels.entries.map((e) {
+              final value = fb[e.key];
+              if (value == null) return const SizedBox.shrink();
+              return Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Row(
+                  children: [
+                    SizedBox(
+                      width: 130,
+                      child: Text(
+                        e.value,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textTertiary,
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Text(
+                        value.toStringAsFixed(6),
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontFamily: 'monospace',
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+            if (snap.bestContextsSurvived > 0) ...[
+              const Divider(height: 24),
+              Row(
+                children: [
+                  const SizedBox(
+                    width: 130,
+                    child: Text(
+                      'Robustez (campeão)',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textTertiary,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Text(
+                      'sobreviveu a ${snap.bestContextsSurvived} contexto(s)'
+                      '${snap.bestWorstFitnessSeen != null ? ' · pior fitness: ${snap.bestWorstFitnessSeen!.toStringAsFixed(6)}' : ''}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontFamily: 'monospace',
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),
@@ -318,6 +601,26 @@ class _AgentDashboardScreenState extends ConsumerState<AgentDashboardScreen> {
                 ),
               ],
             ),
+            if (snap.islandRoles.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: List.generate(snap.islandRoles.length, (i) {
+                  return Chip(
+                    label: Text(
+                      'I$i: ${_islandRoleLabel(snap.islandRoles[i])}',
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                    backgroundColor: AppColors
+                        .chartPalette[i % AppColors.chartPalette.length]
+                        .withValues(alpha: 0.18),
+                    visualDensity: VisualDensity.compact,
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  );
+                }),
+              ),
+            ],
             const SizedBox(height: 16),
             SizedBox(
               height: 160,

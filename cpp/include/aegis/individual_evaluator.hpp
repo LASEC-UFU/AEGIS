@@ -12,6 +12,9 @@ struct FitnessWeights {
     double gamma = 0.01;  // complexity penalty (regressors count)
     double delta = 0.01;  // exponent-range penalty
     double eta   = 1.0;   // stability penalty
+    double zeta  = 0.5;   // no-input (pure autoregressive) penalty
+    double theta = 0.0;   // free-run (simulation) RMSE penalty weight
+    int    free_run_horizon = 50; // samples used for free-run RMSE
 };
 
 struct EvalResult {
@@ -59,6 +62,7 @@ public:
     ) const;
 
     FitnessWeights& weights() noexcept { return weights_; }
+    const FitnessWeights& weights() const noexcept { return weights_; }
 
 private:
     FitnessWeights  weights_;
@@ -68,6 +72,20 @@ private:
     double compute_complexity_penalty(const Chromosome& chrom) const noexcept;
     double compute_exponent_penalty(const Chromosome& chrom,
                                     double pmin, double pmax) const noexcept;
+    /** Returns 1.0 if no regressor depends on an input variable (model is
+     *  purely autoregressive in the output), 0.0 otherwise. */
+    double compute_no_input_penalty(const Chromosome& chrom, int output_col) const noexcept;
+
+    /** Fraction of ERR mass attributed to regressors that depend on at
+     *  least one input variable (variable != output_col). In [0,1]. */
+    double compute_input_contribution_ratio(const Chromosome& chrom, int output_col) const noexcept;
+
+    /** Max |Pearson correlation| between residuals and each input variable
+     *  (lag 0), used to detect unmodeled input-dependent structure. */
+    double compute_residual_input_corr(
+        const std::vector<double>& residuals,
+        const double* data, int rows, int cols, int output_col, int max_delay
+    ) const noexcept;
 };
 
 } // namespace aegis

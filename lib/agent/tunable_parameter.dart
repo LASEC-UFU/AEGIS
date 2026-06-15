@@ -173,11 +173,23 @@ class ParameterRegistry {
     register(
       const TunableParameter(
         name: 'complexityPenalty',
-        description: 'Weight for complexity penalty in fitness',
+        description: 'Weight for complexity penalty in fitness (gamma)',
         minValue: 0.0,
-        maxValue: 10.0,
-        currentValue: 1.0,
-        defaultValue: 1.0,
+        maxValue: 1.0,
+        currentValue: 0.01,
+        defaultValue: 0.01,
+      ),
+    );
+    register(
+      const TunableParameter(
+        name: 'noInputPenalty',
+        description:
+            'Penalty applied when no regressor depends on an input '
+            '(discourages trivial autoregressive-only models)',
+        minValue: 0.0,
+        maxValue: 2.0,
+        currentValue: 0.5,
+        defaultValue: 0.5,
       ),
     );
     register(
@@ -199,6 +211,76 @@ class ParameterRegistry {
         maxValue: 0.5,
         currentValue: 0.1,
         defaultValue: 0.1,
+      ),
+    );
+
+    // ── AEGIS Curriculum (phased identification) ───────────────────────
+    register(
+      const TunableParameter(
+        name: 'freeRunPenalty',
+        description:
+            'Weight for free-run (simulation) RMSE penalty in fitness '
+            '(theta); ramps in during Nonlinear Expansion / Parsimony phases',
+        minValue: 0.0,
+        maxValue: 2.0,
+        currentValue: 0.5,
+        defaultValue: 0.5,
+      ),
+    );
+    register(
+      const TunableParameter(
+        name: 'freeRunHorizon',
+        description: 'Samples used when computing free-run RMSE',
+        minValue: 10,
+        maxValue: 500,
+        currentValue: 50,
+        defaultValue: 50,
+        type: ParameterType.integer,
+      ),
+    );
+    register(
+      const TunableParameter(
+        name: 'inputContributionMin',
+        description:
+            'Minimum ERR share from input-dependent regressors required '
+            'to leave Phase 1 (Structural Exploration)',
+        minValue: 0.0,
+        maxValue: 1.0,
+        currentValue: 0.3,
+        defaultValue: 0.3,
+      ),
+    );
+    register(
+      const TunableParameter(
+        name: 'gammaAnnealStart',
+        description: 'Complexity penalty (gamma) at generation 0',
+        minValue: 0.0,
+        maxValue: 1.0,
+        currentValue: 0.01,
+        defaultValue: 0.01,
+      ),
+    );
+    register(
+      const TunableParameter(
+        name: 'gammaAnnealEnd',
+        description: 'Complexity penalty (gamma) at the final generation',
+        minValue: 0.0,
+        maxValue: 1.0,
+        currentValue: 0.1,
+        defaultValue: 0.1,
+      ),
+    );
+    register(
+      const TunableParameter(
+        name: 'phaseStagnationLimit',
+        description:
+            'Stagnation generations that force an AEGIS Curriculum phase '
+            'transition',
+        minValue: 50,
+        maxValue: 1000,
+        currentValue: 150,
+        defaultValue: 150,
+        type: ParameterType.integer,
       ),
     );
   }

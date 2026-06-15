@@ -10,7 +10,7 @@
 #include <stdexcept>
 #include <sstream>
 #include <chrono>
-#include <unordered_set>
+#include <unordered_map>
 #include <thread>
 
 namespace aegis {
@@ -289,14 +289,70 @@ void Island::run_generation() {
     }
     pop_ = new_pop;
 
+    // Triggered hypermutation: if no trial succeeded this generation for
+    // several generations in a row, the population has stalled around a
+    // local optimum. Temporarily boost mu_f to widen the mutation step and
+    // help escape it (literature: "hypermutation" in stagnated EAs).
+    if (success_count_ == 0) ++zero_success_streak_;
+    else                       zero_success_streak_ = 0;
+    if (zero_success_streak_ >= cfg_.hypermutation_trigger) {
+        mu_f_ = clamp(mu_f_ * cfg_.hypermutation_boost, 0.01, 0.99);
+        zero_success_streak_ = 0;
+    }
+
     // Stagnation tracking
     double cur_best = best_fitness();
     if (cur_best < prev_best_ - 1e-12) stagnation_ = 0;
     else                                ++stagnation_;
     prev_best_ = cur_best;
 
+    // Stagnation-triggered partial reinitialization ("random immigrants"):
+    // periodically replace the worst non-elite individuals with fresh
+    // random chromosomes to reintroduce diversity into a stuck island.
+    if (cfg_.reinit_ratio > 0.0 && stagnation_ > 0 &&
+        stagnation_ % cfg_.reinit_interval == 0) {
+        reinitialize_worst();
+    }
+
     jade_end_generation();
     ++generation_;
+}
+
+void Island::reinitialize_worst() {
+    const int sz = static_cast<int>(pop_.size());
+    int n_reinit = std::max(1, static_cast<int>(std::ceil(sz * cfg_.reinit_ratio)));
+    n_reinit = std::min(n_reinit, sz - std::min(cfg_.elitism_count, sz));
+    if (n_reinit <= 0) return;
+
+    std::vector<int> idx(sz);
+    std::iota(idx.begin(), idx.end(), 0);
+    std::sort(idx.begin(), idx.end(),
+              [&](int a, int b){ return pop_[a].fitness > pop_[b].fitness; }); // worst first
+
+    for (int k = 0; k < n_reinit; ++k) {
+        Chromosome c = random_chromosome();
+        evaluator_.evaluate(c, train_data_, train_rows_,
+                            val_data_, val_rows_, cols_, output_col_);
+        pop_[idx[k]] = c;
+    }
+}
+
+void Island::restart(double ratio) {
+    const double saved_ratio = cfg_.reinit_ratio;
+    cfg_.reinit_ratio = ratio;
+    reinitialize_worst();
+    cfg_.reinit_ratio = saved_ratio;
+
+    // Reset JADE adaptation to its configured defaults to restore
+    // exploration breadth.
+    mu_f_  = cfg_.mu_f;
+    mu_cr_ = cfg_.mu_cr;
+    success_f_.clear();
+    success_cr_.clear();
+    success_count_ = 0;
+    trial_count_   = 0;
+    zero_success_streak_ = 0;
+    stagnation_ = 0;
 }
 
 Chromosome Island::best_chromosome() const {
@@ -323,6 +379,14 @@ void Island::accept_migrants(const std::vector<Chromosome>& migrants) {
         [&](int a, int b){ return pop_[a].fitness > pop_[b].fitness; }); // worst first
     for (size_t m = 0; m < migrants.size() && m < idx.size(); ++m)
         pop_[idx[m]] = migrants[m];
+}
+
+void Island::reevaluate(Chromosome& c) const {
+    evaluator_.evaluate(c, train_data_, train_rows_,
+                        val_data_, val_rows_, cols_, output_col_);
+    ++c.contexts_survived;
+    if (std::isnan(c.worst_fitness_seen) || c.fitness > c.worst_fitness_seen)
+        c.worst_fitness_seen = c.fitness;
 }
 
 void Island::update_config(const DEConfig& new_cfg) {
@@ -376,26 +440,64 @@ void DifferentialEvolutionOptimizer::migrate() {
         std::partial_sort(idx.begin(), idx.begin() + n_migrants, idx.end(),
             [&](int a, int b){ return pop[a].fitness < pop[b].fitness; });
 
-        std::vector<Chromosome> migrants;
-        for (int m = 0; m < n_migrants && m < (int)idx.size(); ++m)
-            migrants.push_back(pop[idx[m]]);
+        // Two-layer filter: a migrant must be reevaluated under the
+        // destination island's weights + validation regime, and only
+        // accepted if it would actually improve dst's worst individual.
+        // This naturally rejects "regionally trivial" solutions that only
+        // looked good under the source island's objective/regime.
+        double dst_worst = -std::numeric_limits<double>::infinity();
+        for (const auto& c : dst.population())
+            dst_worst = std::max(dst_worst, c.fitness);
 
-        dst.accept_migrants(migrants);
+        std::vector<Chromosome> migrants;
+        for (int m = 0; m < n_migrants && m < (int)idx.size(); ++m) {
+            Chromosome cand = pop[idx[m]];
+            dst.reevaluate(cand);
+            if (cand.evaluated && std::isfinite(cand.fitness) && cand.fitness < dst_worst)
+                migrants.push_back(cand);
+        }
+
+        // Escape valve: if the strict filter rejected every candidate AND
+        // the source island has been stagnant for a while, force through
+        // its single best candidate anyway. Without this, once all islands
+        // converge to similar fitness, the "strictly better than dst_worst"
+        // filter blocks migration entirely, removing it as an escape route.
+        if (migrants.empty() && !idx.empty() && src.stagnation() >= cfg_.reinit_interval) {
+            Chromosome cand = pop[idx[0]];
+            dst.reevaluate(cand);
+            if (cand.evaluated && std::isfinite(cand.fitness))
+                migrants.push_back(cand);
+        }
+
+        if (!migrants.empty()) dst.accept_migrants(migrants);
     }
+}
+
+Chromosome DifferentialEvolutionOptimizer::canonical_best_locked() const {
+    Chromosome best;
+    best.fitness = std::numeric_limits<double>::infinity();
+    if (islands_.empty()) return best;
+
+    // Reference island (Balanced role) defines the canonical scale.
+    best = islands_[0]->best_chromosome();
+    for (size_t i = 1; i < islands_.size(); ++i) {
+        Chromosome cand = islands_[i]->best_chromosome();
+        islands_[0]->reevaluate(cand); // canonical rescoring
+        if (cand.fitness < best.fitness) best = cand;
+    }
+    return best;
 }
 
 GenerationReport DifferentialEvolutionOptimizer::build_report(int generation) const {
     GenerationReport r;
     r.generation = generation;
 
-    Chromosome best;
-    best.fitness = std::numeric_limits<double>::infinity();
-    for (const auto& isl : islands_) {
-        Chromosome b = isl->best_chromosome();
-        if (b.fitness < best.fitness) best = b;
-    }
+    Chromosome best = canonical_best_locked();
     r.best_fitness  = best.fitness;
     r.num_terms     = best.num_regressors();
+    r.best_contexts_survived  = best.contexts_survived;
+    r.best_worst_fitness_seen = best.worst_fitness_seen;
+    r.island_roles  = island_roles_;
 
     r.rmse_train = best.metrics.rmse_train;
     r.rmse_val   = best.metrics.rmse_val;
@@ -407,10 +509,17 @@ GenerationReport DifferentialEvolutionOptimizer::build_report(int generation) co
 
     if (!best.coefficients.empty()) {
         r.best_coefficients = best.coefficients;
+        r.best_intercept    = best.intercept;
     }
     for (const auto& reg : best.regressors)
         for (const auto& t : reg.terms)
             r.best_exponents.push_back(t.exponent);
+
+    // AEGIS Curriculum indicators from the best chromosome
+    r.free_run_rmse            = best.metrics.rmse_free_run;
+    r.input_contribution_ratio = best.metrics.input_contribution_ratio;
+    r.residual_input_corr      = best.metrics.residual_input_corr;
+    r.fitness_breakdown        = best.fitness_breakdown;
 
     // Aggregate island stats
     if (!islands_.empty()) {
@@ -420,18 +529,27 @@ GenerationReport DifferentialEvolutionOptimizer::build_report(int generation) co
         for (const auto& isl : islands_)
             r.stagnation = std::max(r.stagnation, isl->stagnation());
 
-        // Diversity: unique hashes
-        std::unordered_set<uint32_t> hashes;
-        double var_sum = 0.0; int pop_count = 0;
+        // Diversity: unique hashes + Shannon entropy of structure distribution
+        std::unordered_map<uint32_t, int> hash_counts;
+        double var_sum = 0.0; int pop_count = 0; int total_structures = 0;
         for (const auto& isl : islands_) {
             for (const auto& c : isl->population()) {
-                hashes.insert(c.structural_hash());
+                ++hash_counts[c.structural_hash()];
+                ++total_structures;
                 if (c.evaluated && std::isfinite(c.fitness)) {
                     var_sum += c.fitness;
                     ++pop_count;
                 }
             }
         }
+        double entropy = 0.0;
+        if (total_structures > 0) {
+            for (const auto& [hash, count] : hash_counts) {
+                double p = static_cast<double>(count) / total_structures;
+                entropy -= p * std::log2(p);
+            }
+        }
+        r.structure_entropy = entropy;
         double mean_fit = pop_count > 0 ? var_sum / pop_count : 0.0;
         double var = 0.0;
         for (const auto& isl : islands_)
@@ -443,7 +561,7 @@ GenerationReport DifferentialEvolutionOptimizer::build_report(int generation) co
         if (pop_count > 1) var /= pop_count;
         r.population_diversity = std::sqrt(var);
         r.population_variance  = var;
-        r.unique_structures     = static_cast<int>(hashes.size());
+        r.unique_structures     = static_cast<int>(hash_counts.size());
 
         double sr_sum = 0.0;
         for (const auto& isl : islands_) sr_sum += isl->success_rate();
@@ -561,13 +679,7 @@ void DifferentialEvolutionOptimizer::wait() {
 
 Chromosome DifferentialEvolutionOptimizer::best_chromosome() const {
     std::lock_guard<std::mutex> lk(islands_mutex_);
-    Chromosome best;
-    best.fitness = std::numeric_limits<double>::infinity();
-    for (const auto& isl : islands_) {
-        Chromosome b = isl->best_chromosome();
-        if (b.fitness < best.fitness) best = b;
-    }
-    return best;
+    return canonical_best_locked();
 }
 
 void DifferentialEvolutionOptimizer::apply_tuning(
@@ -592,8 +704,81 @@ void DifferentialEvolutionOptimizer::apply_tuning(
         cfg_.migration_interval = static_cast<int>(value);
     } else if (param == "stagnationLimit") {
         cfg_.stagnation_limit = static_cast<int>(value);
+    } else if (param == "reinitializationRatio") {
+        cfg_.reinit_ratio = value;
+        for (auto& isl : islands_) {
+            DEConfig nc = isl->config();
+            nc.reinit_ratio = value;
+            nc.mu_f  = isl->mu_f();  // preserve JADE-adapted means
+            nc.mu_cr = isl->mu_cr();
+            isl->update_config(nc);
+        }
+    } else if (param == "complexityPenalty" || param == "noInputPenalty" ||
+               param == "freeRunPenalty"    || param == "denominatorPenalty" ||
+               param == "stabilityPenalty"  || param == "exponentPenalty" ||
+               param == "alpha"             || param == "freeRunHorizon") {
+        FitnessWeights w = islands_.empty() ? FitnessWeights() : islands_[0]->weights();
+        if      (param == "complexityPenalty")  w.gamma = value;
+        else if (param == "noInputPenalty")     w.zeta  = value;
+        else if (param == "freeRunPenalty")     w.theta = value;
+        else if (param == "denominatorPenalty") w.beta  = value;
+        else if (param == "stabilityPenalty")   w.eta   = value;
+        else if (param == "exponentPenalty")    w.delta = value;
+        else if (param == "alpha")              w.alpha = value;
+        else if (param == "freeRunHorizon")     w.free_run_horizon = static_cast<int>(value);
+        for (auto& isl : islands_) isl->update_weights(w);
     }
     // Other params are reflected in cfg_ for next iteration
+}
+
+void DifferentialEvolutionOptimizer::update_weights(const FitnessWeights& w) {
+    std::lock_guard<std::mutex> lk(islands_mutex_);
+    for (auto& isl : islands_) isl->update_weights(w);
+}
+
+FitnessWeights DifferentialEvolutionOptimizer::current_weights() const {
+    std::lock_guard<std::mutex> lk(islands_mutex_);
+    return islands_.empty() ? FitnessWeights() : islands_[0]->weights();
+}
+
+void DifferentialEvolutionOptimizer::update_weights_for_island(int idx, const FitnessWeights& w) {
+    std::lock_guard<std::mutex> lk(islands_mutex_);
+    if (idx >= 0 && idx < (int)islands_.size()) islands_[idx]->update_weights(w);
+}
+
+void DifferentialEvolutionOptimizer::trigger_restart(double ratio) {
+    std::lock_guard<std::mutex> lk(islands_mutex_);
+    for (auto& isl : islands_) isl->restart(ratio);
+}
+
+void DifferentialEvolutionOptimizer::set_island_validation_window(
+    int idx, const double* val_data, int val_rows
+) {
+    std::lock_guard<std::mutex> lk(islands_mutex_);
+    if (idx >= 0 && idx < (int)islands_.size())
+        islands_[idx]->set_validation_window(val_data, val_rows);
+}
+
+void DifferentialEvolutionOptimizer::set_island_role(int idx, const std::string& name) {
+    std::lock_guard<std::mutex> lk(islands_mutex_);
+    if ((int)island_roles_.size() != (int)islands_.size())
+        island_roles_.resize(islands_.size());
+    if (idx >= 0 && idx < (int)island_roles_.size())
+        island_roles_[idx] = name;
+}
+
+void DifferentialEvolutionOptimizer::update_search_space(double pmax, int max_delay) {
+    std::lock_guard<std::mutex> lk(islands_mutex_);
+    cfg_.pmax      = pmax;
+    cfg_.max_delay = max_delay;
+    for (auto& isl : islands_) {
+        DEConfig nc = isl->config();
+        nc.pmax      = pmax;
+        nc.max_delay = max_delay;
+        nc.mu_f      = isl->mu_f();
+        nc.mu_cr     = isl->mu_cr();
+        isl->update_config(nc);
+    }
 }
 
 } // namespace aegis

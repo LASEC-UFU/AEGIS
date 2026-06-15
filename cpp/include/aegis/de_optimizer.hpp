@@ -39,6 +39,12 @@ struct DEConfig {
     int    max_generations   = 5000;
     int    stagnation_limit  = 500;
 
+    // Anti-premature-convergence (random immigrants + triggered hypermutation)
+    double reinit_ratio          = 0.1;  // fraction of worst non-elite individuals reinitialized per wave
+    int    reinit_interval       = 25;   // island-stagnation generations between reinit waves
+    double hypermutation_boost   = 1.5;  // mu_f multiplier applied on sustained zero success
+    int    hypermutation_trigger = 20;   // consecutive zero-success generations to trigger hypermutation
+
     // Threading
     int    num_threads       = 0;     // 0 = auto (hardware_concurrency)
 };
@@ -68,8 +74,23 @@ struct GenerationReport {
     bool   pe_ok               = false;
     std::vector<double> residual_autocorr;
     std::vector<double> best_coefficients;
+    double              best_intercept     = 0.0;
     std::vector<double> best_exponents;
     std::string         alerts;
+
+    // ── AEGIS Curriculum indicators ──────────────────────────────────────
+    double free_run_rmse            = std::numeric_limits<double>::quiet_NaN();
+    double input_contribution_ratio = std::numeric_limits<double>::quiet_NaN();
+    double residual_input_corr      = std::numeric_limits<double>::quiet_NaN();
+    double structure_entropy        = 0.0; // Shannon entropy (bits) of structural hashes
+    int    phase                    = 0;
+    std::string phase_name;
+    FitnessBreakdown fitness_breakdown;
+
+    // ── Specialized islands / two-layer migration filter ─────────────────
+    int    best_contexts_survived   = 0;
+    double best_worst_fitness_seen  = std::numeric_limits<double>::quiet_NaN();
+    std::vector<std::string> island_roles;
 };
 
 /** One DE island with independent population and RNG. */
@@ -94,8 +115,29 @@ public:
     /** Accept immigrants replacing worst individuals. */
     void accept_migrants(const std::vector<Chromosome>& migrants);
 
+    /** Broad restart: reinitialize a large fraction of the population and
+     *  reset JADE adaptation (mu_f/mu_cr, success archives). Last-resort
+     *  anti-stagnation measure for when even local refinement stalls. */
+    void restart(double ratio);
+
     /** Update config at runtime (for agent tuning). */
     void update_config(const DEConfig& new_cfg);
+
+    /** Update fitness weights at runtime (for phase transitions). */
+    void update_weights(const FitnessWeights& w) { evaluator_.weights() = w; }
+    const FitnessWeights& weights() const noexcept { return evaluator_.weights(); }
+
+    /** Override the validation window used by this island ("regime"). The
+     *  pointer must remain valid for the island's lifetime. */
+    void set_validation_window(const double* val_data, int val_rows) {
+        val_data_ = val_data;
+        val_rows_ = val_rows;
+    }
+
+    /** Reevaluate a chromosome under this island's weights + validation
+     *  regime, in place. Tracks contexts_survived/worst_fitness_seen for
+     *  cross-context robustness analysis. */
+    void reevaluate(Chromosome& c) const;
 
     std::vector<Chromosome>&       population()       { return pop_; }
     const std::vector<Chromosome>& population() const { return pop_; }
@@ -125,6 +167,13 @@ private:
     std::vector<double> success_cr_;
     int    success_count_    = 0;
     int    trial_count_      = 0;
+
+    // Anti-premature-convergence bookkeeping
+    int    zero_success_streak_ = 0;
+
+    /** Replace the worst non-elite individuals with fresh random
+     *  chromosomes ("random immigrants"). */
+    void reinitialize_worst();
 
     Chromosome random_chromosome();
     Chromosome mutate_jade(int target_idx, double& f_i, double& cr_i);
@@ -186,11 +235,37 @@ public:
     /** Apply agent tuning at runtime (thread-safe). */
     void apply_tuning(const std::string& param, double value);
 
+    /** Update fitness weights across all islands at runtime (phase transitions). */
+    void update_weights(const FitnessWeights& w);
+
+    /** Current fitness weights (as seen by island 0). */
+    FitnessWeights current_weights() const;
+
+    /** Update search-space bounds (pmax, max_delay) across all islands at
+     *  runtime, preserving each island's current JADE-adapted mu_f/mu_cr. */
+    void update_search_space(double pmax, int max_delay);
+
+    /** Update fitness weights for a single island (specialized roles). */
+    void update_weights_for_island(int idx, const FitnessWeights& w);
+
+    /** Override the validation window ("regime") for a single island. The
+     *  pointer must remain valid for the optimizer's lifetime. */
+    void set_island_validation_window(int idx, const double* val_data, int val_rows);
+
+    /** Record the human-readable role name for a single island (for reports). */
+    void set_island_role(int idx, const std::string& name);
+
+    /** Force a broad restart across all islands: reinitialize a larger
+     *  fraction of each island's population and reset JADE mu_f/mu_cr to
+     *  their configured defaults. Last-resort anti-stagnation measure. */
+    void trigger_restart(double ratio);
+
     DEConfig& config_mut() { return cfg_; }
 
 private:
     DEConfig              cfg_;
     std::vector<std::unique_ptr<Island>> islands_;
+    std::vector<std::string> island_roles_;
     std::thread           worker_thread_;
     std::atomic<bool>     stop_flag_{false};
     mutable std::mutex    islands_mutex_;
@@ -211,6 +286,10 @@ private:
 
     void migrate();
     GenerationReport build_report(int generation) const;
+    /** Pick the best chromosome across islands, rescoring non-reference
+     *  islands' bests under island[0]'s weights+regime for a fair, common
+     *  scale ("canonical" champion selection). Assumes islands_mutex_ held. */
+    Chromosome canonical_best_locked() const;
 };
 
 } // namespace aegis

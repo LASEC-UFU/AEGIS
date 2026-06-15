@@ -93,14 +93,19 @@ double Metrics::composite_fitness(
     double complexity,
     double exp_penalty,
     double stability_penalty,
-    double alpha, double beta, double gamma, double delta, double eta
+    double no_input_penalty,
+    double free_run_rmse,
+    double alpha, double beta, double gamma, double delta, double eta, double zeta, double theta
 ) noexcept {
+    double free_run_term = std::isfinite(free_run_rmse) ? theta * free_run_rmse : 0.0;
     double f = rmse_val
         + alpha  * std::max(0.0, bic_val)
         + beta   * denom_penalty
         + gamma  * complexity
         + delta  * exp_penalty
-        + eta    * stability_penalty;
+        + eta    * stability_penalty
+        + zeta   * no_input_penalty
+        + free_run_term;
     return std::isfinite(f) ? f : std::numeric_limits<double>::max();
 }
 

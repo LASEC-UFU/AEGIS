@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cstring>
 #include <map>
+#include <chrono>
 
 namespace aegis {
 
@@ -25,6 +26,26 @@ static std::string json_arr(const std::vector<double>& v) {
     std::string s = "[";
     for (size_t i = 0; i < v.size(); ++i) { if(i) s+=","; s += json_dbl(v[i]); }
     return s + "]";
+}
+
+const char* phase_name(IdentificationPhase p) {
+    switch (p) {
+        case IdentificationPhase::StructuralExploration: return "structural_exploration";
+        case IdentificationPhase::NonlinearExpansion:    return "nonlinear_expansion";
+        case IdentificationPhase::ParsimonyValidation:   return "parsimony_validation";
+        case IdentificationPhase::LocalRefinement:       return "local_refinement";
+    }
+    return "unknown";
+}
+
+const char* island_role_name(IslandRole r) {
+    switch (r) {
+        case IslandRole::Balanced:        return "balanced";
+        case IslandRole::Parsimony:       return "parsimony";
+        case IslandRole::FreeRunFidelity: return "free_run_fidelity";
+        case IslandRole::Stability:       return "stability";
+    }
+    return "balanced";
 }
 
 const char* pipeline_state_str(PipelineState s) {
@@ -85,6 +106,7 @@ bool PipelineConfig::from_json(const std::string& json) {
     de.elitism_count    = geti("elitismCount",      2);
     de.migration_interval=geti("migrationInterval",20);
     de.migration_rate   = getd("migrationRate",  0.1);
+    de.reinit_ratio     = getd("reinitializationRatio", 0.1);
     de.max_regressors   = geti("maxRegressors",    8);
     de.max_terms_per_reg= geti("maxTermsPerReg",   3);
     de.pmin             = getd("pmin",            0.5);
@@ -97,6 +119,15 @@ bool PipelineConfig::from_json(const std::string& json) {
     weights.gamma = getd("complexityPenalty",0.01);
     weights.delta = getd("exponentPenalty",  0.01);
     weights.eta   = getd("stabilityPenalty",  1.0);
+    weights.zeta  = getd("noInputPenalty",    0.5);
+    weights.theta = getd("freeRunPenalty",    0.0);
+    weights.free_run_horizon = geti("freeRunHorizon", 50);
+
+    free_run_penalty       = getd("freeRunPenalty",       0.5);
+    input_contribution_min = getd("inputContributionMin", 0.3);
+    gamma_anneal_start     = getd("gammaAnnealStart",      weights.gamma);
+    gamma_anneal_end       = getd("gammaAnnealEnd",        std::max(weights.gamma, 0.1));
+    phase_stagnation_limit = geti("phaseStagnationLimit",  150);
     return true;
 }
 
@@ -187,12 +218,20 @@ bool IdentificationPipeline::handle_suggestion(
 
     // Validate
     static const std::map<std::string, std::pair<double,double>> limits = {
-        {"mutationFactor",   {0.0, 2.0}},
-        {"crossoverRate",    {0.0, 1.0}},
-        {"migrationRate",    {0.0, 0.5}},
-        {"migrationInterval",{5,   200}},
-        {"stagnationLimit",  {50,  5000}},
-        {"complexityPenalty",{0.0, 10.0}},
+        {"mutationFactor",     {0.0, 2.0}},
+        {"crossoverRate",      {0.0, 1.0}},
+        {"migrationRate",      {0.0, 0.5}},
+        {"migrationInterval",  {5,   200}},
+        {"stagnationLimit",    {50,  5000}},
+        {"reinitializationRatio", {0.0, 0.5}},
+        {"complexityPenalty",  {0.0, 1.0}},
+        {"noInputPenalty",     {0.0, 2.0}},
+        {"freeRunPenalty",     {0.0, 2.0}},
+        {"denominatorPenalty", {0.0, 1.0}},
+        {"stabilityPenalty",   {0.0, 2.0}},
+        {"exponentPenalty",    {0.0, 1.0}},
+        {"alpha",              {0.0, 2.0}},
+        {"freeRunHorizon",     {10,  500}},
     };
     auto it = limits.find(s.param_name);
     if (it == limits.end()) {
@@ -212,6 +251,170 @@ bool IdentificationPipeline::handle_suggestion(
     if (de_) de_->apply_tuning(s.param_name, s.proposed_value);
     entry.accepted = true;
     return true;
+}
+
+// ── AEGIS Curriculum: phase manager (deterministic reflex layer) ──────────
+
+FitnessWeights IdentificationPipeline::phase_weights(
+    IdentificationPhase phase, double gamma
+) const {
+    FitnessWeights w = cfg_.weights;
+    w.gamma = gamma;
+    switch (phase) {
+        case IdentificationPhase::StructuralExploration:
+            // Strongly discourage purely-autoregressive models so the
+            // population is forced to explore input-dependent structures
+            // before any nonlinear / free-run penalties kick in.
+            w.zeta  = std::max(cfg_.weights.zeta, 1.0);
+            w.theta = 0.0;
+            break;
+        case IdentificationPhase::NonlinearExpansion:
+            // Relax the input-usage pressure and start ramping in the
+            // free-run penalty as candidate structures gain nonlinear terms.
+            w.zeta  = cfg_.weights.zeta * 0.6;
+            w.theta = cfg_.free_run_penalty * 0.3;
+            break;
+        case IdentificationPhase::ParsimonyValidation:
+            // Full free-run penalty: candidates must remain accurate under
+            // simulation, not just one-step-ahead prediction.
+            w.zeta  = cfg_.weights.zeta;
+            w.theta = cfg_.free_run_penalty;
+            break;
+        case IdentificationPhase::LocalRefinement:
+            // Final polishing: maximum pressure for parsimony and
+            // simulation accuracy.
+            w.zeta  = cfg_.weights.zeta;
+            w.theta = cfg_.free_run_penalty * 1.5;
+            break;
+    }
+    return w;
+}
+
+FitnessWeights IdentificationPipeline::apply_role_profile(
+    FitnessWeights w, IslandRole role
+) const {
+    switch (role) {
+        case IslandRole::Parsimony:
+            // Stronger pressure for compact, input-driven models.
+            w.gamma *= 2.0;
+            w.zeta  *= 1.5;
+            break;
+        case IslandRole::FreeRunFidelity:
+            // Prioritize long-horizon simulation accuracy over parsimony.
+            w.theta = std::max(w.theta, 0.15);
+            w.gamma *= 0.7;
+            break;
+        case IslandRole::Stability:
+            // Prioritize a well-conditioned, stable rational model.
+            w.eta  *= 1.6;
+            w.beta *= 1.4;
+            break;
+        case IslandRole::Balanced:
+        default:
+            break; // reference profile, unchanged
+    }
+    return w;
+}
+
+void IdentificationPipeline::update_phase(GenerationReport& rpt) {
+    if (!de_) return;
+
+    auto cur = static_cast<IdentificationPhase>(phase_.load());
+
+    // Gamma annealing: linearly ramps the complexity penalty from
+    // gamma_anneal_start to gamma_anneal_end over the run, regardless of
+    // phase, so models are gently pushed toward parsimony as time passes.
+    double progress = cfg_.de.max_generations > 0
+        ? std::clamp(static_cast<double>(rpt.generation) / cfg_.de.max_generations, 0.0, 1.0)
+        : 0.0;
+    double gamma = cfg_.gamma_anneal_start +
+                    (cfg_.gamma_anneal_end - cfg_.gamma_anneal_start) * progress;
+
+    IdentificationPhase next = cur;
+    std::string reason;
+
+    switch (cur) {
+        case IdentificationPhase::StructuralExploration:
+            if (std::isfinite(rpt.input_contribution_ratio) &&
+                rpt.input_contribution_ratio >= cfg_.input_contribution_min &&
+                rpt.r2_train > 0.3) {
+                next = IdentificationPhase::NonlinearExpansion;
+                reason = "input_contribution_ratio and r2_train thresholds reached";
+            } else if (rpt.stagnation >= cfg_.phase_stagnation_limit) {
+                next = IdentificationPhase::NonlinearExpansion;
+                reason = "stagnation limit reached (forced advance)";
+            }
+            break;
+        case IdentificationPhase::NonlinearExpansion:
+            if (rpt.stagnation >= cfg_.phase_stagnation_limit / 2) {
+                next = IdentificationPhase::ParsimonyValidation;
+                reason = "nonlinear search stagnated";
+            }
+            break;
+        case IdentificationPhase::ParsimonyValidation:
+            if (rpt.stagnation >= cfg_.phase_stagnation_limit) {
+                next = IdentificationPhase::LocalRefinement;
+                reason = "parsimony search stagnated";
+            }
+            break;
+        case IdentificationPhase::LocalRefinement:
+            // Terminal phase, but not passive: if the search is still
+            // stagnant after reaching maximal refinement pressure, fall
+            // back to a broad restart (large-fraction random immigrants +
+            // JADE reset) every phase_stagnation_limit generations, instead
+            // of just idling until the global stagnation limit halts the
+            // run.
+            if (rpt.stagnation > 0 && rpt.stagnation % cfg_.phase_stagnation_limit == 0) {
+                de_->trigger_restart(0.3);
+                TuningLogEntry entry;
+                entry.accepted   = true;
+                entry.param_name = "restart";
+                entry.new_value  = 0.3;
+                entry.reason     = "AEGIS reflex: LocalRefinement stagnated again "
+                                    "-> broad restart (random immigrants + JADE reset)";
+                entry.generation = rpt.generation;
+                std::lock_guard<std::mutex> lk(results_mutex_);
+                tuning_log_.push_back(entry);
+            }
+            break;
+    }
+
+    bool phase_changed = next != cur;
+    bool gamma_changed = std::abs(gamma - last_gamma_applied_) > 1e-4;
+
+    if (phase_changed || gamma_changed) {
+        FitnessWeights base = phase_weights(next, gamma);
+        for (int i = 0; i < (int)island_roles_.size(); ++i)
+            de_->update_weights_for_island(i, apply_role_profile(base, island_roles_[i]));
+        last_gamma_applied_ = gamma;
+
+        if (phase_changed) {
+            phase_.store(static_cast<int>(next));
+
+            if (next == IdentificationPhase::NonlinearExpansion) {
+                // Open up the search space to its full configured bounds.
+                de_->update_search_space(cfg_.de.pmax, cfg_.de.max_delay);
+            } else if (next == IdentificationPhase::LocalRefinement) {
+                // Reduce mutation strength for fine-tuning around good optima.
+                de_->apply_tuning("mutationFactor", std::max(0.1, cfg_.de.mu_f * 0.5));
+            }
+
+            TuningLogEntry entry;
+            entry.accepted   = true;
+            entry.param_name = "phase";
+            entry.new_value  = static_cast<double>(next);
+            entry.reason     = std::string("AEGIS reflex: ") + reason +
+                               " -> " + phase_name(next);
+            entry.generation = rpt.generation;
+            {
+                std::lock_guard<std::mutex> lk(results_mutex_);
+                tuning_log_.push_back(entry);
+            }
+        }
+    }
+
+    rpt.phase      = phase_.load();
+    rpt.phase_name = phase_name(static_cast<IdentificationPhase>(rpt.phase));
 }
 
 bool IdentificationPipeline::start() {
@@ -246,11 +449,68 @@ bool IdentificationPipeline::start() {
         raw_cols_, cfg_.output_col, cfg_.weights
     );
 
+    // ── Merged disruptive idea: specialized islands (objective x regime) ──
+    // Each island gets a FitnessWeights role profile on top of the
+    // curriculum phase, plus (when enough validation data exists) a
+    // non-contiguous validation fold ("regime"). Migration later acts as a
+    // two-layer filter between these specialized islands.
+    {
+        const int n_islands = cfg_.de.num_islands;
+        static const IslandRole role_cycle[4] = {
+            IslandRole::Balanced, IslandRole::Parsimony,
+            IslandRole::FreeRunFidelity, IslandRole::Stability
+        };
+        island_roles_.assign(n_islands, IslandRole::Balanced);
+        for (int i = 0; i < n_islands; ++i) {
+            IslandRole role = role_cycle[i % 4];
+            island_roles_[i] = role;
+            de_->set_island_role(i, island_role_name(role));
+        }
+
+        // Non-contiguous validation folds: split val_data_ into n_islands
+        // chunks, each becomes one island's validation regime, with a
+        // max_delay warm-up prefix so free-run simulation starts correctly.
+        if (val_rows_ > 0 && n_islands > 0) {
+            int chunk  = val_rows_ / n_islands;
+            int warmup = cfg_.de.max_delay;
+            if (chunk > warmup + 5) {
+                for (int i = 0; i < n_islands; ++i) {
+                    int start_row  = i * chunk;
+                    int end_row    = (i == n_islands - 1) ? val_rows_ : (i + 1) * chunk;
+                    int data_start = std::max(0, start_row - warmup);
+                    int rows       = end_row - data_start;
+                    const double* ptr = val_data_.data() +
+                        static_cast<size_t>(data_start) * raw_cols_;
+                    de_->set_island_validation_window(i, ptr, rows);
+                }
+            }
+        }
+    }
+
+    // ── AEGIS Curriculum: Phase 1 (Structural Exploration) ──────────────
+    // Start with a narrow search space (near-linear, short delays) and
+    // strong pressure against pure-autoregressive structures.
+    phase_.store(static_cast<int>(IdentificationPhase::StructuralExploration));
+    last_gamma_applied_ = cfg_.gamma_anneal_start;
+    {
+        FitnessWeights base = phase_weights(IdentificationPhase::StructuralExploration, cfg_.gamma_anneal_start);
+        for (int i = 0; i < (int)island_roles_.size(); ++i)
+            de_->update_weights_for_island(i, apply_role_profile(base, island_roles_[i]));
+    }
+    {
+        double pmax1  = std::min(cfg_.de.pmax, 1.5);
+        int    delay1 = std::max(1, std::min(cfg_.de.max_delay, std::max(5, cfg_.de.max_delay / 2)));
+        de_->update_search_space(pmax1, delay1);
+    }
+
 #ifndef __EMSCRIPTEN__
     setup_agent();
 
     de_->run_async(
-        [this](const GenerationReport& rpt) {
+        [this](const GenerationReport& report) {
+            GenerationReport rpt = report;
+            update_phase(rpt);
+
             generation_.store(rpt.generation);
             best_fitness_.store(rpt.best_fitness);
             {
@@ -258,18 +518,7 @@ bool IdentificationPipeline::start() {
                 latest_report_ = rpt;
             }
             if (agent_) {
-                std::string json = build_broadcast_json(
-                    rpt.generation, rpt.best_fitness,
-                    rpt.rmse_train, rpt.rmse_val, rpt.rmse_test,
-                    rpt.bic, rpt.aic, rpt.r2_train, rpt.r2_val,
-                    rpt.population_diversity, rpt.population_variance,
-                    rpt.unique_structures, rpt.success_rate,
-                    rpt.stagnation, rpt.mu_f, rpt.mu_cr, rpt.num_terms,
-                    rpt.is_stable, rpt.overfitting, rpt.underfitting, rpt.pe_ok,
-                    rpt.residual_autocorr, rpt.best_coefficients,
-                    rpt.best_exponents, rpt.alerts
-                );
-                agent_->broadcast(json);
+                agent_->broadcast(build_broadcast_json(rpt));
             }
         },
         [this]() -> bool {
@@ -289,6 +538,29 @@ bool IdentificationPipeline::start() {
         }
         compute_test_metrics();
     });
+
+    // Periodically refresh best_chromosome_ while running, so the Results
+    // tab can display the currently converging model/equation, not just the
+    // final one once the run completes.
+    results_refresh_thread_ = std::thread([this] {
+        using namespace std::chrono_literals;
+        while (true) {
+            std::this_thread::sleep_for(2s);
+            auto st = state_.load();
+            if (st == PipelineState::Stopped || st == PipelineState::Completed ||
+                st == PipelineState::Error)
+                break;
+            if (st != PipelineState::Running) continue; // paused — wait it out
+
+            Chromosome live = de_->best_chromosome();
+            if (!live.evaluated) continue;
+            {
+                std::lock_guard<std::mutex> lk(results_mutex_);
+                best_chromosome_ = live;
+            }
+            compute_test_metrics();
+        }
+    });
 #endif // !__EMSCRIPTEN__
 
     return true;
@@ -299,7 +571,10 @@ int IdentificationPipeline::step(int n) {
     if (!de_) return 0;
 
     int ran = de_->run_steps(n,
-        [this](const GenerationReport& rpt) {
+        [this](const GenerationReport& report) {
+            GenerationReport rpt = report;
+            update_phase(rpt);
+
             generation_.store(rpt.generation);
             best_fitness_.store(rpt.best_fitness);
             std::lock_guard<std::mutex> lk(results_mutex_);
@@ -337,6 +612,7 @@ void IdentificationPipeline::stop() {
     state_.store(PipelineState::Stopped);
     if (de_) de_->stop();
     if (worker_thread_.joinable()) worker_thread_.join();
+    if (results_refresh_thread_.joinable()) results_refresh_thread_.join();
 }
 
 // ── Status JSON ───────────────────────────────────────────────────────────
@@ -356,7 +632,9 @@ std::string IdentificationPipeline::status_json() const {
       << "\"bic\":"          << json_dbl(rpt.bic)               << ","
       << "\"aic\":"          << json_dbl(rpt.aic)               << ","
       << "\"diversity\":"    << json_dbl(rpt.population_diversity) << ","
-      << "\"stagnation\":"   << rpt.stagnation
+      << "\"stagnation\":"   << rpt.stagnation          << ","
+      << "\"phase\":"        << phase_.load()           << ","
+      << "\"phaseName\":\""  << phase_name(static_cast<IdentificationPhase>(phase_.load())) << "\""
       << "}";
     return j.str();
 }
@@ -388,6 +666,7 @@ std::string IdentificationPipeline::best_model_json() const {
 
     std::ostringstream j;
     j << "{"
+      << "\"outputCol\":"       << cfg_.output_col << ","
       << "\"numRegressors\":"   << c.num_regressors() << ","
       << "\"isRational\":"      << json_bool(c.is_rational()) << ","
       << "\"maxDelay\":"        << c.max_delay() << ","
@@ -402,6 +681,12 @@ std::string IdentificationPipeline::best_model_json() const {
       << "\"r2Test\":"          << json_dbl(c.metrics.r2_test) << ","
       << "\"bic\":"             << json_dbl(c.metrics.bic) << ","
       << "\"aic\":"             << json_dbl(c.metrics.aic) << ","
+      << "\"freeRunRmse\":"     << json_dbl(c.metrics.rmse_free_run) << ","
+      << "\"inputContributionRatio\":" << json_dbl(c.metrics.input_contribution_ratio) << ","
+      << "\"residualInputCorr\":" << json_dbl(c.metrics.residual_input_corr) << ","
+      << "\"contextsSurvived\":" << c.contexts_survived << ","
+      << "\"worstFitnessSeen\":" << json_dbl(c.worst_fitness_seen) << ","
+      << "\"intercept\":"       << json_dbl(c.intercept) << ","
       << "\"coefficients\":"    << json_arr(c.coefficients) << ","
       << "\"err\":"             << json_arr(c.err) << ","
       << "\"regressors\":[";
@@ -427,16 +712,7 @@ std::string IdentificationPipeline::best_model_json() const {
 
 std::string IdentificationPipeline::snapshot_json() const {
     std::lock_guard<std::mutex> lk(results_mutex_);
-    const auto& r = latest_report_;
-    return build_broadcast_json(
-        r.generation, r.best_fitness, r.rmse_train, r.rmse_val, r.rmse_test,
-        r.bic, r.aic, r.r2_train, r.r2_val,
-        r.population_diversity, r.population_variance,
-        r.unique_structures, r.success_rate,
-        r.stagnation, r.mu_f, r.mu_cr,
-        r.num_terms, r.is_stable, r.overfitting, r.underfitting, r.pe_ok,
-        r.residual_autocorr, r.best_coefficients, r.best_exponents, r.alerts
-    );
+    return build_broadcast_json(latest_report_);
 }
 
 int IdentificationPipeline::apply_tuning(

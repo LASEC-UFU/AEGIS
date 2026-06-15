@@ -48,6 +48,19 @@ class GenerationSnapshot {
   final List<IslandSnapshot> islandSnapshots;
   final double? migrationImpact;
 
+  // ── AEGIS Curriculum (phased identification) ──
+  final int phase;
+  final String phaseName;
+  final double? freeRunRmse;
+  final double? inputContributionRatio;
+  final double? residualInputCorr;
+  final Map<String, double> fitnessBreakdown;
+
+  // ── Specialized islands / two-layer migration filter ──
+  final int bestContextsSurvived;
+  final double? bestWorstFitnessSeen;
+  final List<String> islandRoles;
+
   const GenerationSnapshot({
     required this.generation,
     required this.elapsed,
@@ -80,6 +93,15 @@ class GenerationSnapshot {
     this.residualAutocorrelation,
     required this.islandSnapshots,
     this.migrationImpact,
+    this.phase = 0,
+    this.phaseName = '',
+    this.freeRunRmse,
+    this.inputContributionRatio,
+    this.residualInputCorr,
+    this.fitnessBreakdown = const {},
+    this.bestContextsSurvived = 0,
+    this.bestWorstFitnessSeen,
+    this.islandRoles = const [],
   });
 
   /// Serializes to a map for JSON/message passing.
@@ -100,6 +122,15 @@ class GenerationSnapshot {
     'bestModelComplexity': bestModelComplexity,
     'bestModelRMSE': bestModelRMSE,
     'bestModelR2': bestModelR2,
+    'phase': phase,
+    'phaseName': phaseName,
+    'freeRunRmse': freeRunRmse,
+    'inputContributionRatio': inputContributionRatio,
+    'residualInputCorr': residualInputCorr,
+    'fitnessBreakdown': fitnessBreakdown,
+    'bestContextsSurvived': bestContextsSurvived,
+    'bestWorstFitnessSeen': bestWorstFitnessSeen,
+    'islandRoles': islandRoles,
     'islands': islandSnapshots
         .map(
           (s) => {

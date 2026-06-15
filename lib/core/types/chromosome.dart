@@ -11,6 +11,9 @@ class Chromosome {
   /// Computed coefficients (one per regressor). Null before evaluation.
   final List<double>? coefficients;
 
+  /// Constant (bias) term fitted alongside the regressor coefficients.
+  final double intercept;
+
   /// ERR (Error Reduction Ratio) per regressor. Null before evaluation.
   final List<double>? err;
 
@@ -29,6 +32,7 @@ class Chromosome {
   const Chromosome({
     required this.regressors,
     this.coefficients,
+    this.intercept = 0.0,
     this.err,
     this.fitness = double.nan,
     this.sse = double.nan,
@@ -94,6 +98,7 @@ class Chromosome {
   Chromosome copyWith({
     List<Regressor>? regressors,
     List<double>? coefficients,
+    double? intercept,
     List<double>? err,
     double? fitness,
     double? sse,
@@ -103,6 +108,7 @@ class Chromosome {
     return Chromosome(
       regressors: regressors ?? this.regressors,
       coefficients: coefficients ?? this.coefficients,
+      intercept: intercept ?? this.intercept,
       err: err ?? this.err,
       fitness: fitness ?? this.fitness,
       sse: sse ?? this.sse,

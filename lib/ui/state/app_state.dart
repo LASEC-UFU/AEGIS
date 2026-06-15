@@ -90,6 +90,9 @@ class EngineNotifier extends StateNotifier<EngineUiState> {
   /// Returns null if unavailable or not using the C++ backend.
   Map<String, dynamic>? getBestModelJson() => _ffiService?.getBestModel();
 
+  /// Log of tuning actions applied by the agent (C++ backend only).
+  List<Map<String, dynamic>> getTuningLog() => _ffiService?.getTuningLog() ?? [];
+
   GenerationHistory? get history =>
       _usingCpp ? _ffiService!.history : _engine?.history;
 

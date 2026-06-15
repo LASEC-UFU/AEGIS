@@ -225,6 +225,7 @@ class AegisFfiService {
       'pmax':              p('maxExponent'),
       'stagnationLimit':   i('stagnationLimit'),
       'complexityPenalty': p('complexityPenalty'),
+      'reinitializationRatio': p('reinitializationRatio'),
     });
   }
 

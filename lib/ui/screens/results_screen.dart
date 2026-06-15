@@ -62,6 +62,12 @@ class ResultsScreen extends ConsumerWidget {
 
     final model = best;
 
+    // Output column index — used to tell apart input regressors (u) from
+    // autoregressive output-feedback regressors (y) in the equation display.
+    final outputCol = notifier.usingCpp
+        ? (bestModelJson?['outputCol'] as num?)?.toInt() ?? 0
+        : ref.read(outputIndexProvider);
+
     // R²/RMSE for train/val come from the live snapshot for the Dart engine,
     // or from the final best-model JSON for the C++ engine.
     final r2Train = notifier.usingCpp
@@ -103,7 +109,7 @@ class ResultsScreen extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
                 // Model equation
-                _ModelEquationCard(best: model),
+                _ModelEquationCard(best: model, outputCol: outputCol),
                 const SizedBox(height: 20),
                 // Quality metrics
                 LayoutBuilder(
@@ -206,6 +212,7 @@ Chromosome _chromosomeFromJson(Map<String, dynamic> j) {
   return Chromosome(
     regressors: regressors,
     coefficients: coeffs,
+    intercept: (j['intercept'] as num?)?.toDouble() ?? 0.0,
     err: err,
     fitness: (j['fitness'] as num?)?.toDouble() ?? double.nan,
     sse: (j['sse'] as num?)?.toDouble() ?? double.nan,
@@ -275,8 +282,9 @@ class _TestValidationCard extends StatelessWidget {
 
 class _ModelEquationCard extends StatelessWidget {
   final Chromosome best;
+  final int outputCol;
 
-  const _ModelEquationCard({required this.best});
+  const _ModelEquationCard({required this.best, required this.outputCol});
 
   @override
   Widget build(BuildContext context) {
@@ -353,6 +361,17 @@ class _ModelEquationCard extends StatelessWidget {
       }
     }
 
+    final intercept = best.intercept;
+    if (intercept.abs() > 1e-12) {
+      final wroteTerm = regressors.isNotEmpty && coeffs.isNotEmpty;
+      if (wroteTerm) {
+        buf.write(intercept >= 0 ? ' + ' : ' - ');
+      } else if (intercept < 0) {
+        buf.write('-');
+      }
+      buf.write(intercept.abs().toStringAsFixed(6));
+    }
+
     return buf.toString();
   }
 
@@ -360,7 +379,12 @@ class _ModelEquationCard extends StatelessWidget {
     final parts = <String>[];
     for (final ct in reg.components) {
       final t = ct.term;
-      final name = t.isDenominator ? 'y' : 'u${t.variable}';
+      // A term referencing the output column is an autoregressive
+      // (feedback) term — y(k-d) — regardless of whether it sits in the
+      // numerator or the denominator of a rational model.
+      final name = (t.isDenominator || t.variable == outputCol)
+          ? 'y'
+          : 'u${t.variable}';
       final delay = t.delay;
       final exp = ct.exponent;
       var s = '$name(k-$delay)';

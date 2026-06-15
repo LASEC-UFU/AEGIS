@@ -19,6 +19,7 @@ class DataScreen extends ConsumerStatefulWidget {
 class _DataScreenState extends ConsumerState<DataScreen> {
   bool _hasHeader = false;
   String _separator = 'auto';
+  int _decimationFactor = 1;
   final Set<int> _selectedInputs = {};
   int? _selectedOutput;
   String? _fileName;
@@ -137,42 +138,86 @@ class _DataScreenState extends ConsumerState<DataScreen> {
     return _SectionCard(
       icon: Icons.settings,
       title: 'Import Options',
-      child: Row(
+      child: Column(
         children: [
-          Expanded(
-            child: SwitchListTile(
-              title: const Text('Header row', style: TextStyle(fontSize: 14)),
-              value: _hasHeader,
-              onChanged: (v) {
-                setState(() => _hasHeader = v);
-                _reparse();
-              },
-              contentPadding: EdgeInsets.zero,
-            ),
-          ),
-          const SizedBox(width: 24),
-          Expanded(
-            child: DropdownButtonFormField<String>(
-              initialValue: _separator,
-              decoration: const InputDecoration(
-                labelText: 'Separator',
-                contentPadding: EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
+          Row(
+            children: [
+              Expanded(
+                child: SwitchListTile(
+                  title: const Text('Header row', style: TextStyle(fontSize: 14)),
+                  value: _hasHeader,
+                  onChanged: (v) {
+                    setState(() => _hasHeader = v);
+                    _reparse();
+                  },
+                  contentPadding: EdgeInsets.zero,
                 ),
               ),
-              items: const [
-                DropdownMenuItem(value: 'auto', child: Text('Auto-detect')),
-                DropdownMenuItem(value: ',', child: Text('Comma (,)')),
-                DropdownMenuItem(value: '\t', child: Text('Tab')),
-                DropdownMenuItem(value: ';', child: Text('Semicolon (;)')),
-                DropdownMenuItem(value: ' ', child: Text('Space')),
-              ],
-              onChanged: (v) {
-                setState(() => _separator = v ?? 'auto');
-                _reparse();
-              },
-            ),
+              const SizedBox(width: 24),
+              Expanded(
+                child: DropdownButtonFormField<String>(
+                  initialValue: _separator,
+                  decoration: const InputDecoration(
+                    labelText: 'Separator',
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'auto', child: Text('Auto-detect')),
+                    DropdownMenuItem(value: ',', child: Text('Comma (,)')),
+                    DropdownMenuItem(value: '\t', child: Text('Tab')),
+                    DropdownMenuItem(value: ';', child: Text('Semicolon (;)')),
+                    DropdownMenuItem(value: ' ', child: Text('Space')),
+                  ],
+                  onChanged: (v) {
+                    setState(() => _separator = v ?? 'auto');
+                    _reparse();
+                  },
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: DropdownButtonFormField<int>(
+                  initialValue: _decimationFactor,
+                  decoration: const InputDecoration(
+                    labelText: 'Decimation (keep every Nth sample)',
+                    contentPadding: EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 10,
+                    ),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 1, child: Text('1 (no decimation)')),
+                    DropdownMenuItem(value: 2, child: Text('2')),
+                    DropdownMenuItem(value: 5, child: Text('5')),
+                    DropdownMenuItem(value: 10, child: Text('10')),
+                    DropdownMenuItem(value: 20, child: Text('20')),
+                    DropdownMenuItem(value: 50, child: Text('50')),
+                    DropdownMenuItem(value: 100, child: Text('100')),
+                  ],
+                  onChanged: (v) {
+                    setState(() => _decimationFactor = v ?? 1);
+                    _reparse();
+                  },
+                ),
+              ),
+              const SizedBox(width: 24),
+              const Expanded(
+                child: Text(
+                  'Use this for oversampled datasets (high sampling rate '
+                  'relative to system dynamics), where consecutive samples '
+                  'are nearly identical and bias identification toward '
+                  'trivial y(k) ≈ y(k-1) models.',
+                  style: TextStyle(fontSize: 11, color: AppColors.textTertiary),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -343,6 +388,7 @@ class _DataScreenState extends ConsumerState<DataScreen> {
         _rawContent!,
         separator: _separator == 'auto' ? null : _separator,
         hasHeader: _hasHeader,
+        decimationFactor: _decimationFactor,
       );
       // Auto-select: all but last as inputs, last as output
       if (_selectedInputs.isEmpty &&

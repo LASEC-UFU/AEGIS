@@ -27,9 +27,21 @@ bool RationalModel::fit(const double* data, int rows, int cols, int output_col) 
         pseudo_linearize(chrom_, y_col.data(), psi.data(), usable, nr);
     }
 
+    // Augment Ψ with a constant (intercept/bias) column. Without it, models
+    // built from positively-normalized regressors cannot reproduce a
+    // bipolar output with a nonzero mean, which forces R² < 0 even for the
+    // OLS-optimal fit (NARMAX/SINDi-style libraries always include c0).
+    const int ncols = nr + 1;
+    std::vector<double> psi_aug(static_cast<size_t>(usable) * ncols);
+    for (int i = 0; i < usable; ++i) {
+        for (int j = 0; j < nr; ++j)
+            psi_aug[static_cast<size_t>(i) * ncols + j] = psi[static_cast<size_t>(i) * nr + j];
+        psi_aug[static_cast<size_t>(i) * ncols + nr] = 1.0;
+    }
+
     // Solve Ψ·θ = y  via Householder QR
-    std::vector<double> theta(nr, 0.0);
-    if (!qr_solve(psi.data(), usable, nr, y_col.data(), theta.data()))
+    std::vector<double> theta(ncols, 0.0);
+    if (!qr_solve(psi_aug.data(), usable, ncols, y_col.data(), theta.data()))
         return false;
 
     // Validate result
@@ -37,7 +49,8 @@ bool RationalModel::fit(const double* data, int rows, int cols, int output_col) 
         if (!aegis::is_valid(v)) return false;
     }
 
-    chrom_.coefficients = theta;
+    chrom_.coefficients.assign(theta.begin(), theta.begin() + nr);
+    chrom_.intercept    = theta[nr];
     chrom_.evaluated    = true;
     return true;
 }
@@ -48,7 +61,7 @@ double RationalModel::eval_numerator(
     const double* data, int k, int rows, int cols,
     const double* y_buf, int output_col
 ) const noexcept {
-    double num = 0.0;
+    double num = chrom_.intercept;
     for (size_t j = 0; j < chrom_.regressors.size(); ++j) {
         const auto& reg = chrom_.regressors[j];
         if (reg.is_denominator()) continue;
@@ -151,6 +164,16 @@ std::string RationalModel::equation_string() const {
             num_ss << term_ss.str();
             first_num = false;
         }
+    }
+
+    if (std::abs(chrom_.intercept) > 1e-12) {
+        std::ostringstream ic_ss;
+        ic_ss << std::fixed << std::setprecision(4) << std::abs(chrom_.intercept);
+        if (!num_ss.str().empty())
+            num_ss << (chrom_.intercept >= 0 ? " + " : " - ");
+        else if (chrom_.intercept < 0)
+            num_ss << "-";
+        num_ss << ic_ss.str();
     }
 
     std::string num = num_ss.str().empty() ? "0" : num_ss.str();

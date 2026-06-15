@@ -66,11 +66,17 @@ struct Regressor {
 struct Chromosome {
     std::vector<Regressor> regressors;
     std::vector<double>    coefficients; // empty → not yet fitted
+    double                 intercept  = 0.0; // constant (bias) term, fitted alongside coefficients
     std::vector<double>    err;          // ERR per regressor (empty → not computed)
     double                 fitness    = std::numeric_limits<double>::infinity();
     double                 sse        = std::numeric_limits<double>::infinity();
     bool                   evaluated  = false;
     ModelMetrics           metrics;      // RMSE/R²/BIC/AIC, populated on evaluate()
+    FitnessBreakdown       fitness_breakdown; // decomposed fitness terms, populated on evaluate()
+
+    // ── Cross-context robustness tracking (specialized islands / migration) ──
+    int    contexts_survived  = 0; // number of reevaluations under foreign weights/regimes
+    double worst_fitness_seen = std::numeric_limits<double>::quiet_NaN();
 
     int  num_regressors() const noexcept { return static_cast<int>(regressors.size()); }
     bool is_rational()    const noexcept;

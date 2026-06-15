@@ -29,6 +29,8 @@
   #define SOCK_ERR     (-1)
 #endif
 
+#include "de_optimizer.hpp"
+
 namespace aegis {
 
 /** JSON payload broadcast to connected agent clients each generation. */
@@ -125,33 +127,7 @@ private:
     static bool parse_suggestion(const std::string& json, AgentSuggestion& out);
 };
 
-/** Build the broadcast JSON payload from individual fields. */
-std::string build_broadcast_json(
-    int    generation,
-    double best_fitness,
-    double rmse_train,
-    double rmse_val,
-    double rmse_test,
-    double bic,
-    double aic,
-    double r2_train,
-    double r2_val,
-    double population_diversity,
-    double population_variance,
-    int    unique_structures,
-    double success_rate,
-    int    stagnation,
-    double mu_f,
-    double mu_cr,
-    int    num_terms,
-    bool   is_stable,
-    bool   overfitting,
-    bool   underfitting,
-    bool   pe_ok,
-    const std::vector<double>& residual_autocorr,
-    const std::vector<double>& best_coefficients,
-    const std::vector<double>& best_exponents,
-    const std::string& alerts
-);
+/** Build the broadcast JSON payload from a generation report. */
+std::string build_broadcast_json(const GenerationReport& r);
 
 } // namespace aegis

@@ -142,6 +142,19 @@ class AegisFfiService {
     }
   }
 
+  /// Poll the agent's tuning action log (parameter changes applied so far).
+  List<Map<String, dynamic>> getTuningLog() {
+    if (_pipeline == null) return [];
+    final s = _lib.callStringFn(() => _lib.getTuningLog(_pipeline!));
+    if (s.isEmpty) return [];
+    try {
+      final list = jsonDecode(s) as List;
+      return list.cast<Map<String, dynamic>>();
+    } catch (_) {
+      return [];
+    }
+  }
+
   Map<String, dynamic>? getBestModel() {
     if (_pipeline == null) return null;
     final s = _lib.callStringFn(() => _lib.getBestModel(_pipeline!));
@@ -186,6 +199,14 @@ class AegisFfiService {
       'pmax':              p('maxExponent'),
       'stagnationLimit':   i('stagnationLimit'),
       'complexityPenalty': p('complexityPenalty'),
+      'noInputPenalty':    p('noInputPenalty'),
+      'freeRunPenalty':    p('freeRunPenalty'),
+      'freeRunHorizon':    i('freeRunHorizon'),
+      'inputContributionMin': p('inputContributionMin'),
+      'gammaAnnealStart':  p('gammaAnnealStart'),
+      'gammaAnnealEnd':    p('gammaAnnealEnd'),
+      'phaseStagnationLimit': i('phaseStagnationLimit'),
+      'reinitializationRatio': p('reinitializationRatio'),
       'webSocketPort':     8765,
     });
   }
@@ -200,6 +221,29 @@ class AegisFfiService {
     List<double> arr(String k) {
       final raw = j[k];
       if (raw is List) return raw.map((e) => (e as num).toDouble()).toList();
+      return [];
+    }
+
+    Map<String, double> fitnessBreakdown() {
+      final raw = j['fitness_breakdown'];
+      if (raw is Map) {
+        return raw.map(
+          (k, v) => MapEntry(k.toString(), (v as num?)?.toDouble() ?? 0.0),
+        );
+      }
+      return {};
+    }
+
+    double? optd(String k) {
+      final v = j[k];
+      if (v == null) return null;
+      final dv = (v as num).toDouble();
+      return dv.isFinite ? dv : null;
+    }
+
+    List<String> islandRoles() {
+      final raw = j['island_roles'];
+      if (raw is List) return raw.map((e) => e.toString()).toList();
       return [];
     }
 
@@ -237,7 +281,7 @@ class AegisFfiService {
       improvementRate20:     improvementRate(20),
       stagnationCounter:     n('stagnation'),
       uniqueStructures:      n('unique_structures'),
-      structureEntropy:      0,
+      structureEntropy:      d('structure_entropy'),
       phenotypicDiversity:   d('population_diversity'),
       regressorFrequency:    {},
       populationVariance:    d('population_variance'),
@@ -255,6 +299,15 @@ class AegisFfiService {
           ? null : arr('residual_autocorr'),
       islandSnapshots:       [],
       migrationImpact:       null,
+      phase:                 n('phase'),
+      phaseName:             (j['phase_name'] as String?) ?? '',
+      freeRunRmse:           optd('free_run_rmse'),
+      inputContributionRatio: optd('input_contribution_ratio'),
+      residualInputCorr:     optd('residual_input_corr'),
+      fitnessBreakdown:      fitnessBreakdown(),
+      bestContextsSurvived:  n('best_contexts_survived'),
+      bestWorstFitnessSeen:  optd('best_worst_fitness_seen'),
+      islandRoles:           islandRoles(),
     );
   }
 }

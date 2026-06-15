@@ -20,6 +20,24 @@ struct ModelMetrics {
     double mdl           = std::numeric_limits<double>::quiet_NaN();
     int    n_train       = 0;
     int    n_params      = 0;
+
+    // ── AEGIS Curriculum indicators ──────────────────────────────────────
+    double rmse_free_run            = std::numeric_limits<double>::quiet_NaN();
+    double input_contribution_ratio = std::numeric_limits<double>::quiet_NaN();
+    double residual_input_corr      = std::numeric_limits<double>::quiet_NaN();
+};
+
+/** Decomposed fitness terms (before/after weighting), for diagnostics shown
+ *  to the hierarchical agent and the UI ("fitness_breakdown"). */
+struct FitnessBreakdown {
+    double rmse            = 0.0; // base RMSE term (validation or train)
+    double bic_term        = 0.0; // alpha * max(0, bic)
+    double denom_term      = 0.0; // beta  * denom_penalty
+    double complexity_term = 0.0; // gamma * complexity
+    double exponent_term   = 0.0; // delta * exp_penalty
+    double stability_term  = 0.0; // eta   * stability_penalty
+    double no_input_term   = 0.0; // zeta  * no_input_penalty
+    double free_run_term   = 0.0; // theta * free_run_rmse
 };
 
 class Metrics {
@@ -65,7 +83,9 @@ public:
 
     /**
      * Composite fitness used by DE:
-     *   fitness = RMSE_val + alpha*BIC + beta*denom_penalty + gamma*complexity + delta*exp_penalty + eta*stability_penalty
+     *   fitness = RMSE_val + alpha*BIC + beta*denom_penalty + gamma*complexity
+     *           + delta*exp_penalty + eta*stability_penalty + zeta*no_input_penalty
+     *           + theta*free_run_rmse
      */
     static double composite_fitness(
         double rmse_val,
@@ -74,7 +94,9 @@ public:
         double complexity,
         double exp_penalty,
         double stability_penalty,
-        double alpha, double beta, double gamma, double delta, double eta
+        double no_input_penalty,
+        double free_run_rmse,
+        double alpha, double beta, double gamma, double delta, double eta, double zeta, double theta
     ) noexcept;
 };
 

@@ -11,12 +11,17 @@ class DataLoader {
   /// [separator]: column separator (auto-detected if null).
   /// [hasHeader]: whether the first line is a header.
   /// [skipRows]: number of initial rows to skip (after header).
+  /// [decimationFactor]: keep only every Nth data row (N >= 1). Useful for
+  /// oversampled datasets where consecutive samples are nearly identical
+  /// (e.g. high-fs benchmarks), which otherwise bias identification toward
+  /// trivial near-unit-root autoregressive models.
   static DataLoadResult parse(
     String content, {
     String? separator,
     bool hasHeader = false,
     int skipRows = 0,
     List<int>? selectedColumns,
+    int decimationFactor = 1,
   }) {
     final lines = content
         .split(RegExp(r'\r?\n'))
@@ -53,8 +58,14 @@ class DataLoader {
       );
     }
 
-    // Parse data lines
-    final dataLines = lines.sublist(dataStart);
+    // Parse data lines, optionally decimating (keep every Nth row)
+    var dataLines = lines.sublist(dataStart);
+    if (decimationFactor > 1) {
+      dataLines = [
+        for (var i = 0; i < dataLines.length; i += decimationFactor)
+          dataLines[i],
+      ];
+    }
     final numRows = dataLines.length;
     final allCols = dataLines[0].split(sep).length;
     final cols = selectedColumns ?? List.generate(allCols, (i) => i);
