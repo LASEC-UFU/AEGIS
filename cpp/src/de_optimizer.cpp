@@ -16,6 +16,47 @@
 namespace aegis {
 
 // ─────────────────────────────────────────────────────────────────────────
+//  Regressor label helpers
+// ─────────────────────────────────────────────────────────────────────────
+
+static std::string make_term_label(const Term& t, int num_variables, int output_col) {
+    std::string label;
+    if (t.variable == output_col) {
+        label = "y";
+    } else {
+        label = (num_variables <= 2) ? "u" : "u" + std::to_string(t.variable + 1);
+    }
+    label += "(k-" + std::to_string(t.delay) + ")";
+    double ex = t.exponent;
+    double ex_round = std::round(ex);
+    if (std::abs(ex - 1.0) > 0.05) {
+        if (std::abs(ex - ex_round) < 0.05) {
+            int ei = static_cast<int>(ex_round);
+            if      (ei == 2) label += "\xC2\xB2";  // ²
+            else if (ei == 3) label += "\xC2\xB3";  // ³
+            else              label += "^" + std::to_string(ei);
+        } else {
+            std::ostringstream ss;
+            ss << std::fixed; ss.precision(2);
+            ss << "^" << ex;
+            label += ss.str();
+        }
+    }
+    return label;
+}
+
+static std::string make_regressor_label(const Regressor& reg, int num_variables, int output_col) {
+    if (reg.terms.empty()) return "const";
+    std::string label;
+    for (const auto& t : reg.terms) {
+        if (!label.empty()) label += "\xC2\xB7";  // ·
+        label += make_term_label(t, num_variables, output_col);
+    }
+    if (reg.is_denominator()) label += "[D]";
+    return label;
+}
+
+// ─────────────────────────────────────────────────────────────────────────
 //  Island implementation
 // ─────────────────────────────────────────────────────────────────────────
 
@@ -527,6 +568,7 @@ GenerationReport DifferentialEvolutionOptimizer::build_report(int generation) co
     Chromosome best = canonical_best_locked();
     r.best_fitness  = best.fitness;
     r.num_terms     = best.num_regressors();
+    r.best_max_delay = best.max_delay();
     r.best_contexts_survived  = best.contexts_survived;
     r.best_worst_fitness_seen = best.worst_fitness_seen;
     r.island_roles  = island_roles_;
@@ -543,9 +585,12 @@ GenerationReport DifferentialEvolutionOptimizer::build_report(int generation) co
         r.best_coefficients = best.coefficients;
         r.best_intercept    = best.intercept;
     }
-    for (const auto& reg : best.regressors)
+    for (const auto& reg : best.regressors) {
         for (const auto& t : reg.terms)
             r.best_exponents.push_back(t.exponent);
+        r.best_term_labels.push_back(
+            make_regressor_label(reg, cfg_.num_variables, output_col_));
+    }
 
     // AEGIS Curriculum indicators from the best chromosome
     r.free_run_rmse            = best.metrics.rmse_free_run;

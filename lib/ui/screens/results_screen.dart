@@ -1,11 +1,15 @@
-﻿import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-
+﻿import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as math;
+
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../theme/app_theme.dart';
 import '../state/app_state.dart';
 import '../widgets/stat_card.dart';
+import '../../agent/generation_snapshot.dart';
 import '../../engine/de/de_engine.dart';
 import '../../core/types/chromosome.dart';
 import '../../core/types/regressor.dart';
@@ -28,22 +32,30 @@ class ResultsScreen extends ConsumerWidget {
       if (bestModelJson != null && bestModelJson['status'] != 'not_available') {
         best = _chromosomeFromJson(bestModelJson);
       }
+    } else if (notifier.loadedChromosome != null) {
+      best = notifier.loadedChromosome;
     } else {
       best = notifier.engine?.bestChromosome;
     }
 
     if (snap == null || best == null || !best.isEvaluated) {
       return Scaffold(
-        appBar: AppBar(title: const Text('Results')),
+        appBar: AppBar(
+          title: const Text('Results'),
+          actions: [
+            IconButton(
+              icon: const Icon(Icons.upload_file),
+              tooltip: 'Carregar JSON exportado',
+              onPressed: () => _importJson(context, ref),
+            ),
+            const SizedBox(width: 8),
+          ],
+        ),
         body: Center(
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                Icons.bar_chart,
-                size: 64,
-                color: AppColors.gray700,
-              ),
+              Icon(Icons.bar_chart, size: 64, color: AppColors.gray700),
               const SizedBox(height: 16),
               Text(
                 eState.state == EngineState.completed
@@ -53,6 +65,12 @@ class ResultsScreen extends ConsumerWidget {
                   color: AppColors.textSecondary,
                   fontSize: 15,
                 ),
+              ),
+              const SizedBox(height: 24),
+              OutlinedButton.icon(
+                icon: const Icon(Icons.upload_file),
+                label: const Text('Carregar resultado JSON'),
+                onPressed: () => _importJson(context, ref),
               ),
             ],
           ),
@@ -66,7 +84,9 @@ class ResultsScreen extends ConsumerWidget {
     // autoregressive output-feedback regressors (y) in the equation display.
     final outputCol = notifier.usingCpp
         ? (bestModelJson?['outputCol'] as num?)?.toInt() ?? 0
-        : ref.read(outputIndexProvider);
+        : notifier.loadedChromosome != null
+            ? notifier.loadedChromosome!.outputIndex
+            : ref.read(outputIndexProvider);
 
     // R²/RMSE for train/val come from the live snapshot for the Dart engine,
     // or from the final best-model JSON for the C++ engine.
@@ -76,13 +96,36 @@ class ResultsScreen extends ConsumerWidget {
     final rmseTrain = notifier.usingCpp
         ? (bestModelJson?['rmseTrain'] as num?)?.toDouble() ?? double.nan
         : snap.bestModelRMSE;
-    final r2Test = (bestModelJson?['r2Test'] as num?)?.toDouble();
-    final rmseTest = (bestModelJson?['rmseTest'] as num?)?.toDouble();
+    final r2Test = notifier.usingCpp
+        ? (bestModelJson?['r2Test'] as num?)?.toDouble()
+        : notifier.loadedR2Test;
+    final rmseTest = notifier.usingCpp
+        ? (bestModelJson?['rmseTest'] as num?)?.toDouble()
+        : notifier.loadedRmseTest;
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Identified Model'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.upload_file),
+            tooltip: 'Carregar JSON exportado',
+            onPressed: () => _importJson(context, ref),
+          ),
+          IconButton(
+            icon: const Icon(Icons.download),
+            tooltip: 'Exportar JSON',
+            onPressed: () => _exportJson(
+              context,
+              best: model,
+              snap: snap,
+              r2Train: r2Train,
+              rmseTrain: rmseTrain,
+              r2Test: r2Test,
+              rmseTest: rmseTest,
+              outputCol: outputCol,
+            ),
+          ),
           if (eState.state == EngineState.completed)
             const Padding(
               padding: EdgeInsets.only(right: 16),
@@ -163,6 +206,7 @@ class ResultsScreen extends ConsumerWidget {
                 _ERRTable(
                   err: model.err ?? [],
                   coefficients: model.coefficients ?? [],
+                  labels: snap.bestModelTermLabels,
                 ),
                 const SizedBox(height: 20),
                 // Residual analysis
@@ -182,6 +226,259 @@ class ResultsScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+// ─── Export JSON ─────────────────────────────────────────────
+
+Future<void> _exportJson(
+  BuildContext context, {
+  required Chromosome best,
+  required GenerationSnapshot snap,
+  required double r2Train,
+  required double rmseTrain,
+  double? r2Test,
+  double? rmseTest,
+  required int outputCol,
+}) async {
+  final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-').substring(0, 19);
+
+  final regressors = best.regressors.map((reg) {
+    return {
+      'terms': reg.components.map((ct) => {
+        'variable': ct.term.variable,
+        'delay': ct.term.delay,
+        'exponent': ct.exponent,
+        'isDenominator': ct.term.isDenominator,
+        'role': (ct.term.isDenominator || ct.term.variable == outputCol) ? 'y' : 'u',
+      }).toList(),
+    };
+  }).toList();
+
+  // Gerar labels de cada regressor para o JSON exportado
+  final termLabels = regressors.map<String>((r) {
+    return _regressorLabel(r as Map<String, dynamic>);
+  }).toList();
+
+  final payload = {
+    'aegis_version': '2.1',
+    'exported_at': timestamp,
+    'output_col': outputCol,
+    'term_labels': termLabels,
+    'model': {
+      'num_regressors': best.numRegressors,
+      'max_delay': best.maxDelay,
+      'max_degree': best.maxDegree,
+      'intercept': best.intercept,
+      'coefficients': best.coefficients ?? [],
+      'err': best.err ?? [],
+      'regressors': regressors,
+      'fitness': best.fitness,
+    },
+    'metrics': {
+      'r2_train': r2Train,
+      'rmse_train': rmseTrain,
+      'r2_test': r2Test,
+      'rmse_test': rmseTest,
+    },
+    'run': {
+      'generations': snap.generation,
+      'elapsed_ms': snap.elapsed.inMilliseconds,
+      'stagnation': snap.stagnationCounter,
+      'phase': snap.phase,
+      'phase_name': snap.phaseName,
+      'success_rate': snap.successRate,
+      'unique_structures': snap.uniqueStructures,
+      'population_variance': snap.populationVariance,
+      'input_contribution_ratio': snap.inputContributionRatio,
+    },
+    'fitness_breakdown': snap.fitnessBreakdown,
+  };
+
+  final jsonString = const JsonEncoder.withIndent('  ').convert(payload);
+  final defaultName = 'aegis_model_$timestamp.json';
+
+  try {
+    final path = await FilePicker.platform.saveFile(
+      dialogTitle: 'Salvar modelo identificado',
+      fileName: defaultName,
+      type: FileType.custom,
+      allowedExtensions: ['json'],
+    );
+    if (path == null) return; // cancelled
+    await File(path).writeAsString(jsonString, encoding: utf8);
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Exportado: $path'),
+          backgroundColor: AppColors.success,
+          duration: const Duration(seconds: 4),
+        ),
+      );
+    }
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erro ao exportar: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+}
+
+// ─── Geração de label de regressor (espelho do C++ make_regressor_label) ──
+
+String _regressorLabel(Map<String, dynamic> regMap) {
+  final terms = regMap['terms'] as List? ?? [];
+  if (terms.isEmpty) return 'const';
+  final parts = terms.map<String>((t) {
+    final tm = t as Map<String, dynamic>;
+    final role = tm['role'] as String? ?? 'u';
+    final delay = (tm['delay'] as num).toInt();
+    final exponent = (tm['exponent'] as num?)?.toDouble() ?? 1.0;
+    var label = '${role == 'y' ? 'y' : 'u'}(k-$delay)';
+    if ((exponent - 1.0).abs() > 0.05) {
+      final rounded = exponent.roundToDouble().toInt();
+      if ((exponent - rounded.toDouble()).abs() < 0.05) {
+        label += rounded == 2 ? '²' : rounded == 3 ? '³' : '^$rounded';
+      } else {
+        label += '^${exponent.toStringAsFixed(2)}';
+      }
+    }
+    return label;
+  }).join('·');
+  final isDenom = terms.any((t) => (t as Map)['isDenominator'] as bool? ?? false);
+  return isDenom ? '$parts[D]' : parts;
+}
+
+List<String> _labelsFromPayload(Map<String, dynamic> payload) {
+  // Se o JSON já traz term_labels (v2.1+), usa diretamente
+  final stored = payload['term_labels'];
+  if (stored is List && stored.isNotEmpty) {
+    return stored.map((e) => e.toString()).toList();
+  }
+  // Compatibilidade retroativa: gera a partir da estrutura de regressores
+  final regs = (payload['model']?['regressors'] as List?) ?? [];
+  return regs.map<String>((r) => _regressorLabel(r as Map<String, dynamic>)).toList();
+}
+
+// ─── Import JSON ────────────────────────────────────────────────
+
+Future<void> _importJson(BuildContext context, WidgetRef ref) async {
+  FilePickerResult? result;
+  try {
+    result = await FilePicker.platform.pickFiles(
+      dialogTitle: 'Abrir modelo AEGIS exportado',
+      type: FileType.custom,
+      allowedExtensions: ['json'],
+    );
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro ao abrir arquivo: $e'),
+            backgroundColor: AppColors.error),
+      );
+    }
+    return;
+  }
+  if (result == null || result.files.isEmpty) return;
+
+  try {
+    final path = result.files.single.path!;
+    final content = await File(path).readAsString();
+    final payload = jsonDecode(content) as Map<String, dynamic>;
+
+    // Valida formato básico
+    if (payload['model'] == null) {
+      throw const FormatException('JSON inválido: campo "model" ausente.');
+    }
+
+    final modelMap = payload['model'] as Map<String, dynamic>;
+    final metricsMap = (payload['metrics'] as Map<String, dynamic>?) ?? {};
+    final runMap = (payload['run'] as Map<String, dynamic>?) ?? {};
+
+    // Reconstrói cromossomo
+    final chromosome = _chromosomeFromJson(modelMap)
+        .copyWith(outputIndex: (payload['output_col'] as num?)?.toInt() ?? 0);
+
+    // Labels: do JSON (v2.1+) ou gerados dos regressores
+    final labels = _labelsFromPayload(payload);
+
+    // Métricas de treino
+    final r2Train   = (metricsMap['r2_train']   as num?)?.toDouble() ?? double.nan;
+    final rmseTrain = (metricsMap['rmse_train']  as num?)?.toDouble() ?? double.nan;
+    final r2Test    = (metricsMap['r2_test']     as num?)?.toDouble();
+    final rmseTest  = (metricsMap['rmse_test']   as num?)?.toDouble();
+
+    // Snapshot sintético com os dados do arquivo
+    final snap = GenerationSnapshot(
+      generation:            (runMap['generations'] as num?)?.toInt() ?? 0,
+      elapsed:               Duration(milliseconds: (runMap['elapsed_ms'] as num?)?.toInt() ?? 0),
+      bestFitness:           chromosome.fitness.isFinite ? chromosome.fitness : 0.0,
+      worstFitness:          double.infinity,
+      meanFitness:           chromosome.fitness.isFinite ? chromosome.fitness : 0.0,
+      medianFitness:         chromosome.fitness.isFinite ? chromosome.fitness : 0.0,
+      stdDevFitness:         0.0,
+      q1Fitness:             double.infinity,
+      q3Fitness:             double.infinity,
+      improvementAbsolute:   0.0,
+      improvementRelative:   0.0,
+      improvementRate5:      0.0,
+      improvementRate20:     0.0,
+      stagnationCounter:     (runMap['stagnation'] as num?)?.toInt() ?? 0,
+      uniqueStructures:      (runMap['unique_structures'] as num?)?.toInt() ?? 0,
+      structureEntropy:      0.0,
+      phenotypicDiversity:   0.0,
+      regressorFrequency:    {},
+      populationVariance:    (runMap['population_variance'] as num?)?.toDouble() ?? 0.0,
+      successRate:           (runMap['success_rate'] as num?)?.toDouble() ?? 0.0,
+      successRateHistory:    [],
+      bestModelComplexity:   chromosome.numRegressors,
+      bestModelMaxDegree:    chromosome.maxDegree,
+      bestModelMaxDelay:     chromosome.maxDelay,
+      bestModelERR:          chromosome.err ?? [],
+      bestModelTermLabels:   labels,
+      bestModelRMSE:         rmseTrain,
+      bestModelR2:           r2Train,
+      islandSnapshots:       [],
+      phase:                 (runMap['phase'] as num?)?.toInt() ?? 0,
+      phaseName:             (runMap['phase_name'] as String?) ?? '',
+      inputContributionRatio: (runMap['input_contribution_ratio'] as num?)?.toDouble(),
+      fitnessBreakdown:      _mapToDoubleMap(payload['fitness_breakdown']),
+    );
+
+    ref.read(engineProvider.notifier).loadFromJson(
+      chromosome: chromosome,
+      snapshot:   snap,
+      r2Test:     r2Test,
+      rmseTest:   rmseTest,
+    );
+
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Modelo carregado: ${result.files.single.name}'),
+          backgroundColor: AppColors.success,
+          duration: const Duration(seconds: 3),
+        ),
+      );
+    }
+  } catch (e) {
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erro ao importar JSON: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+}
+
+Map<String, double> _mapToDoubleMap(dynamic raw) {
+  if (raw is! Map) return {};
+  return raw.map((k, v) => MapEntry(k.toString(), (v as num?)?.toDouble() ?? 0.0));
 }
 
 // ─── JSON → Chromosome (C++ engine best-model result) ─────────
@@ -216,7 +513,9 @@ Chromosome _chromosomeFromJson(Map<String, dynamic> j) {
     err: err,
     fitness: (j['fitness'] as num?)?.toDouble() ?? double.nan,
     sse: (j['sse'] as num?)?.toDouble() ?? double.nan,
-    maxDelay: (j['maxDelay'] as num?)?.toInt() ?? 0,
+    maxDelay: (j['maxDelay'] as num?)?.toInt()
+        ?? (j['max_delay'] as num?)?.toInt()
+        ?? 0,
   );
 }
 
@@ -400,8 +699,13 @@ class _ModelEquationCard extends StatelessWidget {
 class _ERRTable extends StatelessWidget {
   final List<double> err;
   final List<double> coefficients;
+  final List<String> labels;
 
-  const _ERRTable({required this.err, required this.coefficients});
+  const _ERRTable({
+    required this.err,
+    required this.coefficients,
+    this.labels = const [],
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -440,7 +744,7 @@ class _ERRTable extends StatelessWidget {
                   color: AppColors.textPrimary,
                 ),
                 columns: const [
-                  DataColumn(label: Text('#')),
+                  DataColumn(label: Text('Regressor')),
                   DataColumn(label: Text('ERR (%)')),
                   DataColumn(label: Text('Cumulative (%)')),
                   DataColumn(label: Text('Coefficient')),
@@ -449,9 +753,12 @@ class _ERRTable extends StatelessWidget {
                   final cumulative = err
                       .sublist(0, i + 1)
                       .fold(0.0, (s, e) => s + e);
+                  final label = (labels.isNotEmpty && i < labels.length)
+                      ? labels[i]
+                      : 'R${i + 1}';
                   return DataRow(
                     cells: [
-                      DataCell(Text('${i + 1}')),
+                      DataCell(Text(label)),
                       DataCell(Text((err[i] * 100).toStringAsFixed(4))),
                       DataCell(
                         Text((cumulative * 100).toStringAsFixed(4)),

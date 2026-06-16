@@ -822,7 +822,7 @@ class _AgentDashboardScreenState extends ConsumerState<AgentDashboardScreen> {
             ),
             const SizedBox(height: 16),
             SizedBox(
-              height: 140,
+              height: 180,
               child: BarChart(
                 BarChartData(
                   alignment: BarChartAlignment.spaceAround,
@@ -833,13 +833,27 @@ class _AgentDashboardScreenState extends ConsumerState<AgentDashboardScreen> {
                     bottomTitles: AxisTitles(
                       sideTitles: SideTitles(
                         showTitles: true,
-                        getTitlesWidget: (v, m) => Text(
-                          'R${v.toInt() + 1}',
-                          style: const TextStyle(
-                            fontSize: 9,
-                            color: AppColors.textTertiary,
-                          ),
-                        ),
+                        reservedSize: 56,
+                        getTitlesWidget: (v, m) {
+                          final i = v.toInt();
+                          final labels = snap.bestModelTermLabels;
+                          final label = (labels.isNotEmpty && i < labels.length)
+                              ? labels[i]
+                              : 'R${i + 1}';
+                          return Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: RotatedBox(
+                              quarterTurns: 3,
+                              child: Text(
+                                label,
+                                style: const TextStyle(
+                                  fontSize: 8,
+                                  color: AppColors.textTertiary,
+                                ),
+                              ),
+                            ),
+                          );
+                        },
                       ),
                     ),
                     topTitles: const AxisTitles(

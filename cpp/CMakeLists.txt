@@ -71,6 +71,19 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   add_executable(diag_harness diag_harness.cpp)
   target_link_libraries(diag_harness PRIVATE aegis_core)
 
+  # ── Batch CLI runner ────────────────────────────────────────────
+  add_executable(aegis_batch src/aegis_batch.cpp)
+  target_include_directories(aegis_batch PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_link_libraries(aegis_batch PRIVATE aegis_core)
+  if(WIN32)
+    target_compile_definitions(aegis_batch PRIVATE _CRT_SECURE_NO_WARNINGS)
+    target_link_libraries(aegis_batch PRIVATE ws2_32)
+  endif()
+  if(MSVC)
+    target_compile_options(aegis_batch PRIVATE /W3)
+  endif()
+  install(TARGETS aegis_batch DESTINATION bin)
+
   enable_testing()
   add_executable(core_tests
     core_tests.cpp

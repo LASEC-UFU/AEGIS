@@ -517,6 +517,7 @@ std::string build_broadcast_json(const GenerationReport& r) {
       << "\"mu_f\":"                << fmt(r.mu_f)             << ","
       << "\"mu_cr\":"               << fmt(r.mu_cr)            << ","
       << "\"num_terms\":"           << r.num_terms             << ","
+      << "\"max_delay\":"           << r.best_max_delay        << ","
       << "\"is_stable\":"           << (r.is_stable?"true":"false") << ","
       << "\"overfitting\":"         << (r.overfitting?"true":"false") << ","
       << "\"underfitting\":"        << (r.underfitting?"true":"false") << ","
@@ -543,7 +544,8 @@ std::string build_broadcast_json(const GenerationReport& r) {
       << "},"
       << "\"best_contexts_survived\":"  << r.best_contexts_survived << ","
       << "\"best_worst_fitness_seen\":" << fmt(r.best_worst_fitness_seen) << ","
-      << "\"island_roles\":"            << str_arr(r.island_roles)
+      << "\"island_roles\":"            << str_arr(r.island_roles)          << ","
+      << "\"term_labels\":"             << str_arr(r.best_term_labels)
       << "}";
     return j.str();
 }

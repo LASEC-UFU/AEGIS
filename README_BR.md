@@ -1,8 +1,8 @@
 # AEGIS — Adaptive Evolutionary Guided Identification System
 
-> **Identificação de sistemas dinâmicos não-lineares via Evolução Diferencial com modelo de ilhas, mutação adaptativa JADE, núcleo computacional em C++ e interface de agente LLM.**
+> **Identificação de sistemas dinâmicos não-lineares via Evolução Diferencial com modelo de ilhas, mutação adaptativa JADE, currículo de identificação em 4 fases, agente local adaptativo UCB1, núcleo computacional em C++ e interface de agente LLM remoto.**
 
-AEGIS identifica automaticamente modelos NARX (*Nonlinear AutoRegressive with eXogenous inputs*) polinomiais e racionais a partir de dados experimentais. O núcleo computacional é uma biblioteca compartilhada C++ (`aegis_core`) compilada como DLL nativa no Windows e como WebAssembly na web, integrada a uma UI Flutter/Dart por uma camada FFI condicional. Um agente LLM alimentado pelo Claude monitora o motor evolutivo em tempo real e sugere ajustes de parâmetros via Anthropic API.
+AEGIS identifica automaticamente modelos NARX (*Nonlinear AutoRegressive with eXogenous inputs*) polinomiais e racionais a partir de dados experimentais. O núcleo computacional é uma biblioteca compartilhada C++ (`aegis_core`) compilada como DLL nativa no Windows e como WebAssembly na web, integrada a uma UI Flutter/Dart por uma camada FFI condicional. Um **agente local UCB1 multi-armed bandit** monitora o motor evolutivo em tempo real e ajusta autonomamente os parâmetros do DE com base em sinais de recompensa empírica; alternativamente, um **agente LLM remoto alimentado pelo Claude** pode ser selecionado via um seletor in-app para chamar a Anthropic API. Ambos os agentes operam dentro de um **currículo de identificação estruturado em 4 fases** que expande progressivamente o espaço de busca e aumenta as restrições de qualidade.
 
 ---
 
@@ -50,18 +50,19 @@ O processo é inteiramente automatizado: o usuário carrega dados, atribui vari�
 | **Núcleo C++** | Windows (DLL) / Web (WASM) | `IdentificationPipeline` · `DEOptimizer` · `RationalModel` · `LocalRefiner` · `AgentController` | Motor completo de identificação — DE, QR, diagnósticos, WebSocket |
 | **Ponte FFI** | Dart | `AegisFfiService` (nativo) · `AegisWasmService` (web) | Traduz chamadas Dart ↔ ABI C (`aegis_api.h`) |
 | **Motor Dart** | Todas as plataformas | `DEEngine` · `Island` · `Migration` | Fallback Dart puro quando C++ indisponível |
-| **Agente LLM** | Windows (apenas nativo) | `LlmAgent` | Chama Claude API a cada 50 gerações para sugerir ajustes |
+| **Agente Local** | Todas as plataformas | `LocalAdaptiveAgent` | Bandit UCB1 — ajuste autônomo do DE por sinais de recompensa |
+| **Agente Remoto** | Windows (apenas nativo) | `LlmAgent` | Chama Claude API a cada 50 gerações para sugerir ajustes |
 | **Camada de Agente** | Todas as plataformas | `GenerationSnapshot` · `ParameterRegistry` · `GenerationHistory` | Estruturas de dados de monitoramento em tempo real |
 | **Camada de Dados** | Todas as plataformas | `DataLoader` · `DataNormalizer` · `DataSplitter` | Parsing, normalização, particionamento |
 | **Camada UI** | Todas as plataformas | Screens · Charts · estado Riverpod | Interação e visualização |
 
 **Seleção de backend em tempo de execução:**
 
-| Plataforma | Motor de identificação | Agente LLM |
-|------------|-----------------------|------------|
-| Windows + `aegis_core.dll` | C++ via `dart:ffi` | Ativo (lê chave do env ou arquivo) |
-| Windows sem DLL | Dart `DEEngine` (fallback) | Ativo |
-| Web (GitHub Pages) | Dart `DEEngine` | Inativo (`dart:io` indisponível) |
+| Plataforma | Motor de identificação | Agente Local UCB1 | Agente Remoto LLM |
+|------------|-----------------------|-------------------|-------------------|
+| Windows + `aegis_core.dll` | C++ via `dart:ffi` | Ativo | Ativo (lê chave do env ou arquivo) |
+| Windows sem DLL | Dart `DEEngine` (fallback) | Ativo | Ativo |
+| Web (GitHub Pages) | Dart `DEEngine` | Ativo | Inativo (`dart:io` indisponível) |
 
 `AegisLibrary.tryLoad()` é chamado em `main()`. Se o carregamento da DLL falhar, `EngineNotifier` usa silenciosamente o motor Dart. Na web, exports condicionais garantem que `dart:ffi`, `dart:io` e `package:ffi` **nunca são compilados**.
 
@@ -70,8 +71,9 @@ O processo é inteiramente automatizado: o usuário carrega dados, atribui vari�
 ```
 Camada de Dados → Núcleo C++ (ou Motor Dart) → Ponte FFI → EngineNotifier
        ↓                                                           ↓
-  Snapshot (JSON via FFI / callback)                  LlmAgent (Claude API)
-       ↓                                                           ↓
+  Snapshot (JSON via FFI / callback)       LocalAdaptiveAgent (UCB1)
+                                              ou LlmAgent (Claude API)
+                                                           ↓
  Camada UI ← ← ← ← Riverpod ← ← ← ← ← applyTuning() ← ← ← ← ← ┘
 ```
 
@@ -314,7 +316,8 @@ $$f = \text{RMSE}_{\text{val}} + \alpha \cdot \frac{\text{BIC}}{n} + \beta P_D +
 | $P_C$ | `complexityPenalty` | Penaliza número de termos |
 | $P_E$ | `exponentPenalty` | Penaliza expoentes distantes de 1.0 |
 | $P_S$ | `stabilityPenalty` | Penaliza raízes do denominador fora do círculo unitário |
-| $P_I$ | `noInputPenalty` | Penaliza déficit em relação à contribuição-alvo da entrada |
+| $P_I$ | `noInputPenalty` ($\zeta$) | Penaliza déficit em relação à contribuição-alvo da entrada — impede soluções puramente autorregressivas quando $u$ está presente |
+| $\text{RMSE}_{\text{free}}$ | `freeRunPenalty` ($\theta$) | Penaliza divergência em malha fechada: RMSE de simulação livre em `freeRunHorizon` passos usando saídas previstas como retroalimentação |
 
 ### 9.5 Critérios de Informação
 
@@ -392,6 +395,16 @@ Cinco critérios independentes combinados (qualquer um dispara a parada):
 
 ## 13. Sistema de Agente
 
+AEGIS oferece três modos de agente selecionáveis em tempo de execução pelo **seletor de modo** (botão segmentado na aba Agent):
+
+| Modo | Classe Dart | Disponibilidade | Descrição |
+|------|------------|-----------------|-----------|
+| **Desligado** | — | Sempre | Sem ajuste autônomo |
+| **Local (UCB1)** | `LocalAdaptiveAgent` | Todas as plataformas | Bandit UCB1 — ajuste autônomo por sinais de recompensa |
+| **Remoto (Claude API)** | `LlmAgent` | Somente Windows | Chama Claude API para sugestões em linguagem natural |
+
+O modo ativo é armazenado em `agentModeProvider` (`StateProvider<AgentMode>`) e tem efeito imediato sem reiniciar o motor.
+
 ### 13.1 GenerationSnapshot — Indicadores
 
 Cada geração produz um snapshot com campos incluindo:
@@ -402,7 +415,7 @@ Cada geração produz um snapshot com campos incluindo:
 | **Fitness Global** | `bestFitness`, `meanFitness`, `stdDevFitness` | Estatísticas da população |
 | **Convergência** | `stagnationCounter`, `successRate`, `uniqueStructures` | Saúde da evolução |
 | **Diversidade** | `structureEntropy`, `phenotypicDiversity` | Dispersão da população |
-| **Melhor Modelo** | `bestModelComplexity`, `bestModelRMSE`, `bestModelValidationRMSE`, `bestModelR2` | Qualidade |
+| **Melhor Modelo** | `bestModelComplexity`, `bestModelRMSE`, `bestModelValidationRMSE`, `bestModelR2`, `bestModelMaxDelay` | Qualidade e estrutura |
 | **Topologia** | `islandSnapshots[]` | `muF`, `muCR`, estagnação e successRate por ilha |
 
 ### 13.2 Parâmetros Ajustáveis em Tempo Real
@@ -418,15 +431,60 @@ Cada geração produz um snapshot com campos incluindo:
 | 7 | `maxRegressors` | 2 | **8** | 20 |
 | 8 | `maxExponent` ($p_{\max}$) | 1 | **3** | 5 |
 | 9 | `maxDelay` ($\tau_{\max}$) | 1 | **40** | 50 |
-| 10 | `complexityPenalty` | 0.0 | **0.01** | 1.0 |
+| 10 | `complexityPenalty` ($\gamma$) | 0.0 | **0.01** | 1.0 |
 | 11 | `stagnationLimit` | 50 | **500** | 5000 |
 | 12 | `reinitializationRatio` | 0.0 | **0.1** | 0.5 |
+| 13 | `noInputPenalty` ($\zeta$) | 0.0 | **1.5** | 10.0 |
+| 14 | `freeRunPenalty` ($\theta$) | 0.0 | **0.5** | 5.0 |
+| 15 | `freeRunHorizon` | 10 | **50** | 500 |
+| 16 | `phaseStagnationLimit` | 20 | **100** | 2000 |
 
-### 13.3 Agente LLM (Claude API)
+### 13.3 Agente Local Adaptativo — UCB1 Multi-Armed Bandit
+
+`LocalAdaptiveAgent` (`lib/services/local_adaptive_agent.dart`) implementa um **bandit UCB1 (Upper Confidence Bound 1)** que seleciona e aplica autonomamente ajustes de parâmetros do DE com base em sinais de recompensa empírica — sem necessidade de chave de API.
+
+**Loop principal** (disparado a cada 10 gerações):
+
+1. **Coletar recompensas** — para cada `_PendingObservation` liquidada após um delay, compara a variação real de fitness com a deriva de referência (baseline). Recompensa $r = \text{clip}\bigl((\Delta f_{\text{baseline}} - \Delta f_{\text{atual}}) \times \text{escala},\; -1,\; +1\bigr)$.
+2. **Construir pool de candidatos** — `_buildCandidates()` gera candidatos de ajuste sensíveis ao contexto atual (nível de estagnação, fase, diversidade, sinais de RMSE).
+3. **Selecionar braço via UCB1** — braços não experimentados recebem prioridade infinita; caso contrário:
+
+$$\text{UCB1}(a) = \bar{r}_a + c\,\sqrt{\frac{\ln N}{n_a}}$$
+
+onde $\bar{r}_a$ é a recompensa média, $N$ é o total de pulls, $n_a$ é o número de pulls do braço $a$, e $c = 1{,}2$ (coeficiente de exploração).
+
+4. **Aplicar ajuste** — chama `applyTuning(param, value)` e registra um `_PendingObservation` para coletar a recompensa após uma janela de estabilização.
+
+**Sinais observados:**
+
+| Sinal | Campo em `GenerationSnapshot` | Dispara |
+|-------|------------------------------|---------|
+| Nível de estagnação | `stagnationCounter` | Aumento da taxa de mutação; reinicialização |
+| Delta de fitness | tendência de `bestFitness` | Ajuste de CR |
+| Diversidade fenotípica | `phenotypicDiversity` | Candidatos de restauração de diversidade |
+| Fase atual | `currentPhase` | Somente candidatos adequados à fase |
+| Estado JADE por ilha | `islandSnapshots[].muF`, `.muCR` | Ajustes específicos por ilha |
+| RMSE free-run | `bestModelFreeRunRmse` | Ajuste de `freeRunPenalty` ($\theta$) |
+| RMSE de treino | `bestModelRMSE` | Avaliação da qualidade do modelo |
+
+### 13.4 Currículo de Identificação em 4 Fases
+
+O motor C++ progride por quatro fases evolutivas que moldam o espaço de busca e a pressão de fitness:
+
+| Fase | Nome | Foco | Características principais |
+|------|------|------|---------------------------|
+| 0 | **StructuralExploration** | Diversidade estrutural | Baixa pressão de parcimônia; piso $\zeta \geq 1{,}5$ para forçar inclusão da entrada; taxa de mutação estrutural alta (0,3) |
+| 1 | **NonlinearExpansion** | Ampliar não-linearidade | Faixa de expoentes relaxada; busca maior de `maxDelay`; pressão de complexidade moderada |
+| 2 | **ParsimonyValidation** | Podar e validar | `complexityPenalty` ($\gamma$) aumentado gradualmente (annealing); restrições estruturais mais rígidas; avaliação free-run ativa |
+| 3 | **LocalRefinement** | Precisão dos coeficientes | $F$ e $CR$ reduzidos; `LocalRefiner` (TRF/LM) aplicado aos candidatos finais |
+
+Transições de fase são disparadas por `phaseStagnationLimit` gerações consecutivas estagnadas na fase atual. O `LocalAdaptiveAgent` lê `currentPhase` do snapshot e gera apenas candidatos adequados à fase.
+
+### 13.5 Agente LLM Remoto (Claude API)
 
 A classe `LlmAgent` monitora o motor e propõe ajustes de parâmetros:
 
-- **Modelo:** `claude-opus-4-7`
+- **Modelo:** `claude-opus-4-8`
 - **Gatilho:** a cada 50 gerações (configurável `_cooldown`)
 - **Entrada:** snapshot JSON com fitness, estagnação, diversidade, estado JADE por ilha
 - **Saída:** `{"proposed_changes": {"param": value}, "reason": "..."}` ou `null`
@@ -434,7 +492,7 @@ A classe `LlmAgent` monitora o motor e propõe ajustes de parâmetros:
 
 **Ativo somente no Windows.** A build web usa stubs condicionais que excluem `dart:io`.
 
-### 13.4 Servidor WebSocket (C++)
+### 13.6 Servidor WebSocket (C++)
 
 `cpp/src/agent_controller.cpp` implementa um servidor WebSocket RFC 6455 na porta 8765 para ferramentas de monitoramento externas. Aceita sugestões de ajuste no mesmo formato JSON do agente LLM.
 
@@ -456,8 +514,8 @@ A classe `LlmAgent` monitora o motor e propõe ajustes de parâmetros:
 |------|--------|----------------------|
 | **Data** | Carga e atribuição de variáveis | File picker, toggle header, seletor de separador, tabela preview, atribuição input/output por clique |
 | **Evolution** | Monitoramento em tempo real | Controles (Start/Pause/Resume/Stop), KPIs (Geração, Fitness, $R^2$, Tempo), gráfico de fitness, métricas |
-| **Agent** | Painel do agente | Grid de 12 indicadores com cor semântica, sliders de tuning com reset, monitor de ilhas, gráfico ERR |
-| **Results** | Modelo identificado final | Equação matemática, métricas (RMSE/R²/AIC/BIC/FPE/MDL), tabela ERR/coeficientes, autocorrelação residual |
+| **Agent** | Painel do agente | Seletor de modo (Desligado / Local UCB1 / Remoto Claude), grid de indicadores com cor semântica, sliders de tuning com reset, monitor de ilhas, gráfico ERR |
+| **Results** | Modelo identificado final | Equação matemática, métricas (RMSE/R²/AIC/BIC/FPE/MDL), tabela ERR/coeficientes, autocorrelação residual com bandas de confiança, botão **Exportar JSON** (salva modelo completo + métricas em `.json` via file picker) |
 | **How To** | Guia de uso in-app | Renderizado a partir de `how_to_use.md` com suporte a LaTeX |
 | **About** | Documentação técnica | Renderizado a partir de `IDENTIFICATION_PROCESS.md` com suporte a LaTeX |
 
@@ -506,15 +564,15 @@ flowchart TB
     P --> Q
 
     Q --> R["Polling FFI (200ms) ou callback Dart → atualiza UI"]
-    R --> S["LlmAgent.processSnapshot() a cada 50 gens"]
-    S --> T{"Claude sugere mudança?"}
+    R --> S["OptimizationAgent.processSnapshot() (Local UCB1 ou Remoto Claude)"]
+    S --> T{"Agente sugere mudança?"}
     T -->|Sim| U["applyTuning() → motor C++ ou Dart"]
     T -->|Não| V{"Critério de parada?"}
     U --> V
     V -->|Não| K
     V -->|Sim| W["AutomaticPruner + LocalRefiner"]
     W --> X["aegis_get_best_model() — equação + métricas"]
-    X --> Y[/"Resultados: Equação · RMSE · R² · AIC · BIC · Resíduos"/]
+    X --> Y[/"Resultados: Equação · RMSE · R² · AIC · BIC · Resíduos · Exportar JSON"/]
 
     style A fill:#1a1a2e,stroke:#5EC4D4,color:#F4F4F8
     style Y fill:#1a1a2e,stroke:#4ADE80,color:#F4F4F8
@@ -567,13 +625,14 @@ AEGIS/
 │   │   ├── aegis_ffi_service_stub.dart    # Stub no-op
 │   │   └── aegis_wasm_service.dart        # Serviço JS interop WASM
 │   │
-│   ├── services/                          # Agente LLM e WebSocket
+│   ├── services/                          # Implementações de agentes e WebSocket
+│   │   ├── optimization_agent.dart        # Interface OptimizationAgent + enum AgentMode
+│   │   ├── local_adaptive_agent.dart      # Agente local UCB1 multi-armed bandit
 │   │   ├── llm_agent.dart                 # Export condicional: nativo vs web
 │   │   ├── llm_agent_native.dart          # Chamador da Claude API (dart:io + http)
 │   │   ├── llm_agent_web.dart             # Stub web (agente inativo)
 │   │   ├── llm_agent_stub.dart            # Stub no-op
-│   │   ├── agent_websocket_service.dart   # Cliente WebSocket Dart (porta 8765)
-│   │   └── rule_based_agent.dart          # Agente heurístico fallback
+│   │   └── agent_websocket_service.dart   # Cliente WebSocket Dart (porta 8765)
 │   │
 │   ├── agent/                             # Estruturas de dados de monitoramento
 │   │   ├── generation_snapshot.dart       # Snapshot com todos os indicadores
@@ -610,7 +669,9 @@ AEGIS/
 │
 ├── assets/
 │   ├── how_to_use.md                      # Guia de uso in-app (servido como asset)
-│   └── IDENTIFICATION_PROCESS.md         # Documentação técnica de referência
+│   ├── IDENTIFICATION_PROCESS.md         # Documentação técnica de referência
+│   ├── resultado_identificacao.md        # Análise detalhada do resultado WH (com figuras)
+│   ├── fig1.png – fig6.png               # Figuras do resultado (gráficos, diagnósticos)
 │
 ├── web/
 │   ├── how_to_use.md                      # Cópia do guia para build web
@@ -726,8 +787,8 @@ Três jobs automatizados a cada push para `main`:
 
 <div align="center">
 
-**AEGIS v2.0** · Adaptive Evolutionary Guided Identification System
+**AEGIS v2.1** · Adaptive Evolutionary Guided Identification System
 
-*Núcleo C++ · UI Flutter/Dart · Agente LLM Claude · Web (WASM) + Windows*
+*Núcleo C++ · UI Flutter/Dart · Agente Local UCB1 · Agente Remoto Claude · Currículo 4 Fases · Web (WASM) + Windows*
 
 </div>

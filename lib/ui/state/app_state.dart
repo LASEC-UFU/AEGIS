@@ -14,6 +14,7 @@ import '../../ffi/aegis_ffi_service.dart';
 import '../../services/local_adaptive_agent.dart';
 import '../../services/llm_agent.dart';
 import '../../services/optimization_agent.dart';
+import '../../core/types/chromosome.dart';
 
 // ─── Data providers ───────────────────────────────────────────
 
@@ -82,6 +83,15 @@ class EngineNotifier extends StateNotifier<EngineUiState> {
   OptimizationAgent? _agent;
   AgentMode? _activeAgentMode;
 
+  // ── Modelo carregado de arquivo JSON ─────────────────────────────────────
+  Chromosome? _loadedChromosome;
+  double? _loadedR2Test;
+  double? _loadedRmseTest;
+
+  Chromosome? get loadedChromosome => _loadedChromosome;
+  double?     get loadedR2Test     => _loadedR2Test;
+  double?     get loadedRmseTest   => _loadedRmseTest;
+
   EngineNotifier(this._ref) : super(const EngineUiState()) {
     _ensureAgent();
   }
@@ -123,11 +133,35 @@ class EngineNotifier extends StateNotifier<EngineUiState> {
   ParameterRegistry? get parameters =>
       _usingCpp ? _ffiService!.parameters : _engine?.parameters;
 
+  // ── Carregar resultado de JSON exportado ────────────────────────────────
+
+  void loadFromJson({
+    required Chromosome chromosome,
+    required GenerationSnapshot snapshot,
+    double? r2Test,
+    double? rmseTest,
+  }) {
+    _loadedChromosome = chromosome;
+    _loadedR2Test     = r2Test;
+    _loadedRmseTest   = rmseTest;
+    state = state.copyWith(
+      state:          EngineState.completed,
+      latestSnapshot: snapshot,
+      generation:     snapshot.generation,
+      bestFitness:    chromosome.fitness.isFinite ? chromosome.fitness : null,
+      elapsed:        snapshot.elapsed,
+      statusMessage:  'Modelo carregado de JSON',
+    );
+  }
+
   // ── Initialize ─────────────────────────────────────────────────────────
 
   void initialize({int numIslands = 3}) {
     final data = _ref.read(loadedDataProvider);
     if (data == null) return;
+    _loadedChromosome = null;
+    _loadedR2Test     = null;
+    _loadedRmseTest   = null;
     _ensureAgent(force: true);
 
     final outputCol = _ref.read(outputIndexProvider);
@@ -346,8 +380,8 @@ final snapshotProvider = Provider<GenerationSnapshot?>((ref) {
 });
 
 final fitnessHistoryProvider = Provider<List<double>>((ref) {
-  final engineNotifier = ref.watch(engineProvider.notifier);
-  return engineNotifier.history?.fitnessHistory ?? [];
+  ref.watch(engineProvider); // invalidate on every generation update
+  return ref.read(engineProvider.notifier).history?.fitnessHistory ?? [];
 });
 
 final parameterRegistryProvider = Provider<ParameterRegistry?>((ref) {

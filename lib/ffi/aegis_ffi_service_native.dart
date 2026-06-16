@@ -18,6 +18,7 @@ class AegisFfiService {
   Pointer<Void>? _pipeline;
 
   EngineState state = EngineState.idle;
+  DateTime? _startTime;
   final GenerationHistory history = GenerationHistory();
   final ParameterRegistry parameters = ParameterRegistry();
 
@@ -76,6 +77,7 @@ class AegisFfiService {
     if (_pipeline == null) return false;
     final rc = _lib.start(_pipeline!);
     if (rc != 0) return false;
+    _startTime = DateTime.now();
     state = EngineState.running;
     onStateChanged?.call(state);
     return true;
@@ -247,6 +249,12 @@ class AegisFfiService {
       return [];
     }
 
+    List<String> termLabels() {
+      final raw = j['term_labels'];
+      if (raw is List) return raw.map((e) => e.toString()).toList();
+      return [];
+    }
+
     final gen = n('generation');
     final bestFitness = d('best_fitness', double.infinity);
 
@@ -267,7 +275,9 @@ class AegisFfiService {
 
     return GenerationSnapshot(
       generation:            gen,
-      elapsed:               Duration.zero,
+      elapsed:               _startTime != null
+          ? DateTime.now().difference(_startTime!)
+          : Duration.zero,
       bestFitness:           bestFitness,
       worstFitness:          double.infinity,
       meanFitness:           bestFitness,
@@ -289,8 +299,9 @@ class AegisFfiService {
       successRateHistory:    [],
       bestModelComplexity:   n('num_terms'),
       bestModelMaxDegree:    0,
-      bestModelMaxDelay:     0,
+      bestModelMaxDelay:     n('max_delay'),
       bestModelERR:          arr('residual_autocorr'),
+      bestModelTermLabels:   termLabels(),
       bestModelRMSE:         d('rmse_train'),
       bestModelValidationRMSE: d('rmse_validation').isFinite
           ? d('rmse_validation') : null,

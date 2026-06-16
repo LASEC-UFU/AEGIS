@@ -1,0 +1,5 @@
+https://www.nonlinearbenchmark.org/benchmarks/wiener-hammerstein - Wiener-Hammerstein Benchmark
+
+https://www.nonlinearbenchmark.org/benchmarks/silverbox - Silverbox
+
+https://www.nonlinearbenchmark.org/benchmarks/emps - EMPS Benchmark

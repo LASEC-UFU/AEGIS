@@ -315,6 +315,12 @@ class _FitnessChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Filter out non-finite values (infinity/NaN break fl_chart rendering)
+    final spots = <FlSpot>[];
+    for (var i = 0; i < history.length; i++) {
+      if (history[i].isFinite) spots.add(FlSpot(i.toDouble(), history[i]));
+    }
+
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -334,7 +340,7 @@ class _FitnessChart extends StatelessWidget {
             const SizedBox(height: 16),
             SizedBox(
               height: 220,
-              child: history.length < 2
+              child: spots.length < 2
                   ? const Center(
                       child: Text(
                         'Waiting for data...',
@@ -369,7 +375,7 @@ class _FitnessChart extends StatelessWidget {
                             sideTitles: SideTitles(
                               showTitles: true,
                               reservedSize: 24,
-                              interval: (history.length / 5)
+                              interval: (spots.length / 5)
                                   .ceilToDouble()
                                   .clamp(1, double.infinity),
                               getTitlesWidget: (v, meta) => Text(
@@ -391,10 +397,7 @@ class _FitnessChart extends StatelessWidget {
                         borderData: FlBorderData(show: false),
                         lineBarsData: [
                           LineChartBarData(
-                            spots: List.generate(
-                              history.length,
-                              (i) => FlSpot(i.toDouble(), history[i]),
-                            ),
+                            spots: spots,
                             isCurved: true,
                             curveSmoothness: 0.2,
                             color: AppColors.accent,

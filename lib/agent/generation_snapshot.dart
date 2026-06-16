@@ -39,6 +39,7 @@ class GenerationSnapshot {
   final double bestModelMaxDegree;
   final int bestModelMaxDelay;
   final List<double> bestModelERR;
+  final List<String> bestModelTermLabels;
   final double bestModelRMSE;
   final double? bestModelValidationRMSE;
   final double bestModelR2;
@@ -87,6 +88,7 @@ class GenerationSnapshot {
     required this.bestModelMaxDegree,
     required this.bestModelMaxDelay,
     required this.bestModelERR,
+    this.bestModelTermLabels = const [],
     required this.bestModelRMSE,
     this.bestModelValidationRMSE,
     required this.bestModelR2,

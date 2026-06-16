@@ -1,0 +1,162 @@
+{
+  "aegis_version": "2.0",
+  "exported_at": "2026-06-16T09-22-12",
+  "model": {
+    "num_regressors": 8,
+    "max_delay": 15,
+    "max_degree": 2.28152495,
+    "intercept": 0.00005185,
+    "coefficients": [
+      -0.00133616,
+      -0.00031837,
+      0.00507093,
+      0.01017467,
+      -2.89294919,
+      2.98937148,
+      -0.10876382,
+      1.00063754
+    ],
+    "err": [
+      0.00031247,
+      0.37890301,
+      0.00002903,
+      0.49397699,
+      0.10261155,
+      0.02404534,
+      0.00001411,
+      0.00007768
+    ],
+    "regressors": [
+      {
+        "terms": [
+          {
+            "variable": 0,
+            "delay": 2,
+            "exponent": 0.97651525,
+            "isDenominator": false,
+            "role": "u"
+          }
+        ]
+      },
+      {
+        "terms": [
+          {
+            "variable": 0,
+            "delay": 15,
+            "exponent": 0.67676458,
+            "isDenominator": false,
+            "role": "u"
+          },
+          {
+            "variable": 1,
+            "delay": 3,
+            "exponent": 1.42276017,
+            "isDenominator": false,
+            "role": "y"
+          },
+          {
+            "variable": 0,
+            "delay": 15,
+            "exponent": 0.92912655,
+            "isDenominator": false,
+            "role": "u"
+          }
+        ]
+      },
+      {
+        "terms": [
+          {
+            "variable": 0,
+            "delay": 1,
+            "exponent": 1.37899832,
+            "isDenominator": false,
+            "role": "u"
+          }
+        ]
+      },
+      {
+        "terms": [
+          {
+            "variable": 1,
+            "delay": 1,
+            "exponent": 2.28152495,
+            "isDenominator": false,
+            "role": "y"
+          }
+        ]
+      },
+      {
+        "terms": [
+          {
+            "variable": 1,
+            "delay": 2,
+            "exponent": 1.1055841,
+            "isDenominator": false,
+            "role": "y"
+          }
+        ]
+      },
+      {
+        "terms": [
+          {
+            "variable": 1,
+            "delay": 1,
+            "exponent": 1.04612735,
+            "isDenominator": false,
+            "role": "y"
+          }
+        ]
+      },
+      {
+        "terms": [
+          {
+            "variable": 1,
+            "delay": 2,
+            "exponent": 0.68249914,
+            "isDenominator": false,
+            "role": "y"
+          }
+        ]
+      },
+      {
+        "terms": [
+          {
+            "variable": 1,
+            "delay": 3,
+            "exponent": 1.11223274,
+            "isDenominator": false,
+            "role": "y"
+          }
+        ]
+      }
+    ],
+    "fitness": -0.37750876
+  },
+  "metrics": {
+    "r2_train": 0.99997008,
+    "rmse_train": 0.00253969,
+    "r2_test": 0.99995849,
+    "rmse_test": 0.00260632
+  },
+  "run": {
+    "generations": 917,
+    "elapsed_ms": 926801,
+    "stagnation": 141,
+    "phase": 3,
+    "phase_name": "local_refinement",
+    "success_rate": 0.027778,
+    "unique_structures": 144,
+    "population_variance": 0.014117,
+    "input_contribution_ratio": 0.379256
+  },
+  "fitness_breakdown": {
+    "rmse": 0.002879,
+    "bic_term": -0.596891,
+    "denom_term": 0.0,
+    "complexity_term": 0.18568,
+    "exponent_term": 0.030823,
+    "stability_term": 0.0,
+    "no_input_term": 0.0,
+    "free_run_term": 0.0
+  }
+}

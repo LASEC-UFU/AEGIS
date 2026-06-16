@@ -69,15 +69,17 @@ struct GenerationReport {
     double mu_f                = 0.0;
     double mu_cr               = 0.0;
     int    num_terms           = 0;
+    int    best_max_delay      = 0;
     bool   is_stable           = true;
     bool   overfitting         = false;
     bool   underfitting        = false;
     bool   pe_ok               = false;
     std::vector<double> residual_autocorr;
-    std::vector<double> best_coefficients;
-    double              best_intercept     = 0.0;
-    std::vector<double> best_exponents;
-    std::string         alerts;
+    std::vector<double>      best_coefficients;
+    double                   best_intercept     = 0.0;
+    std::vector<double>      best_exponents;
+    std::vector<std::string> best_term_labels;  // human-readable label per regressor
+    std::string              alerts;
 
     // ── AEGIS Curriculum indicators ──────────────────────────────────────
     double free_run_rmse            = std::numeric_limits<double>::quiet_NaN();
