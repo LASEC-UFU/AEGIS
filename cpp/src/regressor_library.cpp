@@ -120,7 +120,13 @@ bool qr_solve(const double* A, int m, int n, const double* b, double* x) {
         for (int i = j; i < m; ++i)
             norm += R[static_cast<size_t>(i) * n + j] * R[static_cast<size_t>(i) * n + j];
         norm = std::sqrt(norm);
-        if (norm < rank_tol) return false; // rank deficient
+        if (norm < rank_tol) {
+            // Near-linearly-dependent column (common with highly-autocorrelated
+            // AR regressors at high sample rates). Zero out this coefficient and
+            // continue — remaining regressors still get OLS-optimal coefficients.
+            x[j] = 0.0;
+            continue;
+        }
 
         double alpha = -std::copysign(norm, R[static_cast<size_t>(j) * n + j]);
         std::vector<double> v(m - j, 0.0);
@@ -159,7 +165,7 @@ bool qr_solve(const double* A, int m, int n, const double* b, double* x) {
         for (int k = i + 1; k < n; ++k)
             s -= R[static_cast<size_t>(i) * n + k] * x[k];
         double diag = R[static_cast<size_t>(i) * n + i];
-        if (std::abs(diag) < rank_tol) return false;
+        if (std::abs(diag) < rank_tol) { x[i] = 0.0; continue; }
         x[i] = s / diag;
     }
 

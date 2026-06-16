@@ -192,8 +192,8 @@ Chromosome Island::mutate_jade(int target_idx, double& f_i, double& cr_i) {
             double nd    = xi_d + f_i * (b_d - xi_d) + f_i * (r1_d - r2_d);
             term.delay   = std::max(1, std::min(cfg_.max_delay, (int)std::round(nd)));
 
-            // Variable mutation (rare: swap variable index)
-            if (u01(rng_) < 0.1) {
+            // Variable mutation (structural gene — higher rate than exponent/delay)
+            if (u01(rng_) < 0.3) {
                 std::uniform_int_distribution<int> rn_var(0, cfg_.num_variables - 1);
                 term.variable = rn_var(rng_);
             }

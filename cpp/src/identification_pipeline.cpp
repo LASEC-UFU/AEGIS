@@ -326,16 +326,17 @@ FitnessWeights IdentificationPipeline::phase_weights(
     w.gamma = gamma;
     switch (phase) {
         case IdentificationPhase::StructuralExploration:
-            // Strongly discourage purely-autoregressive models so the
-            // population is forced to explore input-dependent structures
-            // before any nonlinear / free-run penalties kick in.
-            w.zeta  = std::max(cfg_.weights.zeta, 5.0);
+            // Discourage purely-autoregressive (y-only) models without
+            // blocking mixed AR+input structures, which are crucial for
+            // Wiener-Hammerstein and similar benchmarks. A zeta of 5 made
+            // even perfect AR models uncompetitive vs trivial u-only ones.
+            w.zeta  = std::max(cfg_.weights.zeta, 1.5);
             w.theta = 0.0;
             break;
         case IdentificationPhase::NonlinearExpansion:
             // Relax the input-usage pressure and start ramping in the
             // free-run penalty as candidate structures gain nonlinear terms.
-            w.zeta  = std::max(cfg_.weights.zeta * 0.6, 2.0);
+            w.zeta  = std::max(cfg_.weights.zeta * 0.6, 0.8);
             w.theta = cfg_.free_run_penalty * 0.5;
             break;
         case IdentificationPhase::ParsimonyValidation:
