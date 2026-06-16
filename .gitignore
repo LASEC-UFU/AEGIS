@@ -39,6 +39,11 @@ anthropic_api_key.txt
 # Large benchmark datasets (not tracked in git)
 assets/benchmark/
 
+# CMake build directories (never commit — paths are machine-specific)
+cpp/build_win/
+cpp/build_wasm/
+cpp/build/
+
 # Symbolication related
 app.*.symbols
 
