@@ -1,8 +1,6 @@
 ﻿import 'dart:convert';
-import 'dart:io';
 import 'dart:math' as math;
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
@@ -14,6 +12,7 @@ import '../../engine/de/de_engine.dart';
 import '../../core/types/chromosome.dart';
 import '../../core/types/regressor.dart';
 import '../../core/types/term.dart';
+import '../../services/file_io.dart';
 
 /// Results screen — shows final model, equation, and validation.
 class ResultsScreen extends ConsumerWidget {
@@ -298,18 +297,12 @@ Future<void> _exportJson(
   final defaultName = 'aegis_model_$timestamp.json';
 
   try {
-    final path = await FilePicker.platform.saveFile(
-      dialogTitle: 'Salvar modelo identificado',
-      fileName: defaultName,
-      type: FileType.custom,
-      allowedExtensions: ['json'],
-    );
-    if (path == null) return; // cancelled
-    await File(path).writeAsString(jsonString, encoding: utf8);
+    final saved = await saveJson(jsonString, defaultName);
+    if (saved == null) return; // cancelado (nativo)
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Exportado: $path'),
+          content: Text('Exportado: $saved'),
           backgroundColor: AppColors.success,
           duration: const Duration(seconds: 4),
         ),
@@ -366,28 +359,11 @@ List<String> _labelsFromPayload(Map<String, dynamic> payload) {
 // ─── Import JSON ────────────────────────────────────────────────
 
 Future<void> _importJson(BuildContext context, WidgetRef ref) async {
-  FilePickerResult? result;
   try {
-    result = await FilePicker.platform.pickFiles(
-      dialogTitle: 'Abrir modelo AEGIS exportado',
-      type: FileType.custom,
-      allowedExtensions: ['json'],
-    );
-  } catch (e) {
-    if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao abrir arquivo: $e'),
-            backgroundColor: AppColors.error),
-      );
-    }
-    return;
-  }
-  if (result == null || result.files.isEmpty) return;
+    final picked = await pickAndReadJson('Abrir modelo AEGIS exportado');
+    if (picked == null) return; // cancelado
 
-  try {
-    final path = result.files.single.path!;
-    final content = await File(path).readAsString();
-    final payload = jsonDecode(content) as Map<String, dynamic>;
+    final payload = jsonDecode(picked.content) as Map<String, dynamic>;
 
     // Valida formato básico
     if (payload['model'] == null) {
@@ -458,7 +434,7 @@ Future<void> _importJson(BuildContext context, WidgetRef ref) async {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Modelo carregado: ${result.files.single.name}'),
+          content: Text('Modelo carregado: ${picked.name}'),
           backgroundColor: AppColors.success,
           duration: const Duration(seconds: 3),
         ),

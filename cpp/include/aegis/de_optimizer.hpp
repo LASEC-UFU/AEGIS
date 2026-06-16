@@ -263,6 +263,11 @@ public:
      *  their configured defaults. Last-resort anti-stagnation measure. */
     void trigger_restart(double ratio);
 
+    /** Inject an external chromosome (from another Worker island) as a
+     *  migrant into island 0. The chromosome is reevaluated before injection
+     *  so its fitness is meaningful under this island's data+weights. */
+    void inject_migrant(const Chromosome& c);
+
     DEConfig& config_mut() { return cfg_; }
 
 private:

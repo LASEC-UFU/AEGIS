@@ -1,6 +1,17 @@
 {
-  "aegis_version": "2.0",
+  "aegis_version": "2.1",
   "exported_at": "2026-06-16T09-22-12",
+  "output_col": 1,
+  "term_labels": [
+    "u(k-2)",
+    "u(k-15)^0.68·y(k-3)^1.42·u(k-15)^0.93",
+    "u(k-1)^1.38",
+    "y(k-1)^2.28",
+    "y(k-2)^1.11",
+    "y(k-1)",
+    "y(k-2)^0.68",
+    "y(k-3)^1.11"
+  ],
   "model": {
     "num_regressors": 8,
     "max_delay": 15,

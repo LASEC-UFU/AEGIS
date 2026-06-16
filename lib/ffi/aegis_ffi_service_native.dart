@@ -118,7 +118,8 @@ class AegisFfiService {
   }
 
   /// Poll the C++ engine for the latest snapshot. Call this from the UI timer.
-  GenerationSnapshot? pollSnapshot() {
+  /// Retorna Future para manter assinatura idêntica ao serviço WASM (Workers).
+  Future<GenerationSnapshot?> pollSnapshot() async {
     if (_pipeline == null) return null;
     final snap = _lib.callStringFn(() => _lib.getSnapshot(_pipeline!));
     if (snap.isEmpty) return null;

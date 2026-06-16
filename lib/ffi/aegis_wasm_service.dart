@@ -41,8 +41,9 @@ external int _jsResume(int p);
 @JS('AegisWasm.stop')
 external int _jsStop(int p);
 
+// step() agora retorna Promise<string> (snapshot JSON do melhor Worker)
 @JS('AegisWasm.step')
-external int _jsStep(int p, int n);
+external JSPromise<JSString> _jsStep(int p, int n);
 
 @JS('AegisWasm.getStatus')
 external JSString _jsGetStatus(int p);
@@ -80,7 +81,9 @@ class AegisFfiService {
   void Function(GenerationSnapshot)? onGenerationComplete;
   void Function(EngineState)? onStateChanged;
 
-  static const int _kStepsPerPoll = 5;
+  // 1 geração por poll evita bloquear a UI por muitos segundos em datasets pesados.
+  // Para datasets leves pode aumentar para 2-3.
+  static const int _kStepsPerPoll = 1;
 
   AegisFfiService(this._lib) {
     parameters.registerDefaults();
@@ -164,17 +167,22 @@ class AegisFfiService {
 
   // ── Polling ───────────────────────────────────────────────────────────────
 
-  /// Drive the engine synchronously then return the latest snapshot.
-  /// Called every 200 ms by the UI polling timer in app_state.dart.
-  GenerationSnapshot? pollSnapshot() {
+  /// Avança a engine e retorna o snapshot mais recente.
+  /// Chamado a cada 200 ms pelo timer de polling em app_state.dart.
+  /// Retorna Future porque step() dos Workers é assíncrono (Promise JS).
+  Future<GenerationSnapshot?> pollSnapshot() async {
     if (_pipeline == 0) return null;
 
-    // Drive computation (WASM has no background thread)
+    String raw;
     if (state == EngineState.running) {
-      _jsStep(_pipeline, _kStepsPerPoll);
+      // step() retorna Promise<string> com o melhor snapshot dos Workers
+      final jsResult = await _jsStep(_pipeline, _kStepsPerPoll).toDart;
+      raw = jsResult.toDart;
+    } else {
+      // Pausado/parado: lê cache do coordenador (síncrono)
+      raw = _jsGetSnapshot(_pipeline).toDart;
     }
 
-    final raw = _jsGetSnapshot(_pipeline).toDart;
     if (raw.isEmpty) return null;
     try {
       final json = jsonDecode(raw) as Map<String, dynamic>;
@@ -299,6 +307,12 @@ class AegisFfiService {
       return [];
     }
 
+    List<String> termLabels() {
+      final raw = j['term_labels'];
+      if (raw is List) return raw.map((e) => e.toString()).toList();
+      return [];
+    }
+
     final gen = n('generation');
     final bestFitness = d('best_fitness', double.infinity);
     final fitHistory = history.fitnessHistory;
@@ -343,6 +357,7 @@ class AegisFfiService {
       bestModelMaxDegree: 0,
       bestModelMaxDelay: 0,
       bestModelERR: arr('residual_autocorr'),
+      bestModelTermLabels: termLabels(),
       bestModelRMSE: d('rmse_train'),
       bestModelValidationRMSE: d('rmse_validation').isFinite
           ? d('rmse_validation')

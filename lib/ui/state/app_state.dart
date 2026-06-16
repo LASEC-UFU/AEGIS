@@ -236,8 +236,12 @@ class EngineNotifier extends StateNotifier<EngineUiState> {
 
   void _startCppPolling() {
     _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(const Duration(milliseconds: 200), (_) {
-      final snap = _ffiService?.pollSnapshot();
+    // Callback async: pollSnapshot() é Future no modo WASM (Workers paralelos).
+    // Timer não aguarda o Future — dispara a cada 200 ms independentemente.
+    // Se o passo demorar mais que 200 ms, os chamados se sobrepõem de forma
+    // segura: cada await completa em sua própria microtask.
+    _pollTimer = Timer.periodic(const Duration(milliseconds: 200), (_) async {
+      final snap = await _ffiService?.pollSnapshot();
       if (snap != null) _onGeneration(snap);
 
       final status = _ffiService?.pollStatus();

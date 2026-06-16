@@ -833,6 +833,15 @@ void DifferentialEvolutionOptimizer::trigger_restart(double ratio) {
     for (auto& isl : islands_) isl->restart(ratio);
 }
 
+void DifferentialEvolutionOptimizer::inject_migrant(const Chromosome& c) {
+    std::lock_guard<std::mutex> lk(islands_mutex_);
+    if (islands_.empty()) return;
+    Chromosome copy = c;
+    islands_[0]->reevaluate(copy);
+    if (copy.evaluated && std::isfinite(copy.fitness))
+        islands_[0]->accept_migrants({copy});
+}
+
 void DifferentialEvolutionOptimizer::set_island_validation_window(
     int idx, const double* val_data, int val_rows
 ) {

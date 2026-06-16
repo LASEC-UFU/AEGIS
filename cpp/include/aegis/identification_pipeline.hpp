@@ -160,6 +160,12 @@ public:
                       const std::string& reason);
     std::string tuning_log_json() const;
 
+    /** Inject an external chromosome encoded as best_model_json() JSON.
+     *  Used by the multi-Worker coordinator to propagate migrants between
+     *  independent WASM instances running in separate Web Workers.
+     *  Returns false if the JSON is empty or unparseable. */
+    bool inject_individual(const std::string& json);
+
 private:
     PipelineConfig              cfg_;
     std::atomic<PipelineState>  state_{PipelineState::Idle};

@@ -116,7 +116,7 @@ if(DEFINED EMSCRIPTEN)
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include/aegis
   )
 
-  # Functions exported to JavaScript
+  # Functions exported to JavaScript (main thread + Web Workers)
   set(AEGIS_EXPORTED_FUNCTIONS
     "_aegis_create_pipeline"
     "_aegis_destroy_pipeline"
@@ -130,6 +130,7 @@ if(DEFINED EMSCRIPTEN)
     "_aegis_get_status"
     "_aegis_get_snapshot"
     "_aegis_get_best_model"
+    "_aegis_inject_individual"
     "_aegis_free_string"
     "_aegis_apply_tuning"
     "_aegis_get_tuning_log"
@@ -148,7 +149,7 @@ if(DEFINED EMSCRIPTEN)
     -sINITIAL_MEMORY=67108864       # 64 MB
     -sEXPORTED_FUNCTIONS=[${AEGIS_EXPORTS_STR}]
     -sEXPORTED_RUNTIME_METHODS=[\"UTF8ToString\",\"stringToUTF8\",\"lengthBytesUTF8\",\"HEAPF64\",\"HEAP8\"]
-    -sENVIRONMENT=web
+    -sENVIRONMENT=web,worker
     --no-entry
   )
 

@@ -847,4 +847,80 @@ std::string IdentificationPipeline::tuning_log_json() const {
     return s + "]";
 }
 
+// ── parse_chromosome_json ──────────────────────────────────────────────────
+// Lê o formato exato de best_model_json(): {"regressors":[{"terms":[{...}]}],...}
+// Não usa biblioteca JSON — varre a string diretamente como o restante do código.
+
+static Chromosome parse_chromosome_json(const std::string& json) {
+    Chromosome c;
+
+    // intercept
+    {
+        auto p = json.find("\"intercept\"");
+        if (p != std::string::npos) {
+            auto colon = json.find(':', p);
+            if (colon != std::string::npos)
+                try { c.intercept = std::stod(json.substr(colon + 1)); } catch (...) {}
+        }
+    }
+
+    // regressors: cada ocorrência de "terms":[ corresponde a um Regressor
+    size_t scan = 0;
+    while (true) {
+        auto tp = json.find("\"terms\":[", scan);
+        if (tp == std::string::npos) break;
+
+        Regressor reg;
+        size_t pos = tp + 9; // logo após o '['
+
+        // Cada par {...} dentro do array é um Term (objetos planos, sem aninhamento)
+        while (pos < json.size()) {
+            while (pos < json.size() && json[pos] != '{' && json[pos] != ']') ++pos;
+            if (pos >= json.size() || json[pos] == ']') break;
+
+            // Início do objeto term
+            auto close = json.find('}', pos + 1);
+            if (close == std::string::npos) break;
+            std::string ts = json.substr(pos, close - pos + 1);
+
+            auto find_int = [&](const std::string& key, int def) -> int {
+                auto p2 = ts.find("\"" + key + "\"");
+                if (p2 == std::string::npos) return def;
+                auto c2 = ts.find(':', p2);
+                if (c2 == std::string::npos) return def;
+                try { return std::stoi(ts.substr(c2 + 1)); } catch (...) { return def; }
+            };
+            auto find_dbl = [&](const std::string& key, double def) -> double {
+                auto p2 = ts.find("\"" + key + "\"");
+                if (p2 == std::string::npos) return def;
+                auto c2 = ts.find(':', p2);
+                if (c2 == std::string::npos) return def;
+                try { return std::stod(ts.substr(c2 + 1)); } catch (...) { return def; }
+            };
+
+            Term t;
+            t.variable      = find_int("variable", 0);
+            t.delay         = find_int("delay",    1);
+            t.exponent      = find_dbl("exponent", 1.0);
+            t.is_denominator= (ts.find("\"isDenominator\":true") != std::string::npos);
+
+            reg.terms.push_back(t);
+            pos = close + 1;
+        }
+
+        if (!reg.terms.empty()) c.regressors.push_back(reg);
+        scan = tp + 9;
+    }
+
+    return c;
+}
+
+bool IdentificationPipeline::inject_individual(const std::string& json) {
+    if (!de_ || json.empty()) return false;
+    Chromosome c = parse_chromosome_json(json);
+    if (c.regressors.empty()) return false;
+    de_->inject_migrant(c);
+    return true;
+}
+
 } // namespace aegis

@@ -101,6 +101,15 @@ AEGIS_API int aegis_apply_tuning(
     );
 }
 
+// Injects an external chromosome (best_model_json format) as a migrant.
+// Used by the multi-Worker WASM coordinator for cross-island migration.
+AEGIS_API int aegis_inject_individual(void* pipeline, const char* json) {
+    if (!pipeline || !json) return -1;
+    return static_cast<IdentificationPipeline*>(pipeline)->inject_individual(
+        std::string(json)
+    ) ? 0 : -1;
+}
+
 AEGIS_API char* aegis_get_tuning_log(void* pipeline) {
     if (!pipeline) return dup_string("[]");
     return dup_string(static_cast<IdentificationPipeline*>(pipeline)->tuning_log_json());
