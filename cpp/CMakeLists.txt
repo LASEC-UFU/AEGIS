@@ -131,6 +131,22 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   aegis_set_options(api_tests)
   aegis_static_runtime(api_tests)
   add_test(NAME aegis_api_tests COMMAND api_tests)
+
+  # Phase 0 (experiments/phase0/PHASE0_PREREG.md): fixed-structure capacity and
+  # simulation-error fitting. Built in a separate build directory; does not
+  # change any existing target.
+  foreach(p0 aegis_phase0 phase0_tests)
+    if(p0 STREQUAL "aegis_phase0")
+      add_executable(${p0} tools/phase0_fixed.cpp)
+    else()
+      add_executable(${p0} tools/phase0_tests.cpp)
+    endif()
+    target_link_libraries(${p0} PRIVATE aegis_static)
+    target_compile_definitions(${p0} PRIVATE AEGIS_EXPORTS)
+    aegis_set_options(${p0})
+    aegis_static_runtime(${p0})
+  endforeach()
+  add_test(NAME phase0_tests COMMAND phase0_tests)
 endif()
 
 # ── WASM target (Emscripten only) ────────────────────────────────
