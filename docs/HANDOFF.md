@@ -15,6 +15,45 @@ Ele é autocontido; os demais documentos citados dão o detalhe.
 2. Leia §1 (regras do usuário — obrigatórias) e §5 (o que falta fazer).
 3. Não faça commit, push, release nem chamadas pagas (§1).
 
+### 0.0 Fase 0 em andamento (aprovada pelo usuário em 2026-11-20)
+
+**Pré-registro:** `experiments/phase0/PHASE0_PREREG.md`, com commit
+`d275810` feito antes de qualquer execução. Ferramenta: `aegis_phase0`, em
+build separado `cpp/build_phase0`.
+
+**Para compilar**, ponha o UCRT64 antes no PATH: o `/mingw64/bin` do Git
+quebra o g++ em silêncio.
+
+```bash
+export PATH=/c/SourceCode/tools/msys64/ucrt64/bin:$PATH
+experiments/phase0/lowprio.sh cmake -S cpp -B cpp/build_phase0 -G Ninja -DCMAKE_BUILD_TYPE=Release
+experiments/phase0/lowprio.sh cmake --build cpp/build_phase0 --target phase0_tests aegis_phase0 -j 1
+cpp/build_phase0/phase0_tests.exe     # 11 checks
+```
+
+| Etapa | Estado | Resultado |
+|---|---|---|
+| E1/E2 CT | concluído | E1 **não atingido**: PN_K40 1,013 V contra mediana 0,848 V dos campeões, na validação. E2 **não atingido**: mediana +4,8 %; o PN_K40 com LM diverge |
+| E1/E2 WH | concluído | E1 **atingido**: PN_K40 26,5 mV contra 50,8 mV, razão 0,52. E2 **não atingido**: mediana −1,1 %; o PN_DCE com LM diverge |
+| E1/E2 SB | agendado: `experiments/phase0/wait_then.sh sb_champions` (espera os 10 `aegis_full` do SB) | — |
+| E3, triagem | agendado: `experiments/phase0/wait_then.sh protocol_done` (espera `[resume] done` no `protocol_resume.log`; no máximo 6 processos) | — |
+
+**Resumos:**
+- `experiments/results_phase0/SUMMARY_E1E2.md`
+  (`dart run tool/experiments/phase0_summary.dart`);
+- `SUMMARY_E3.md` (`dart run tool/experiments/phase0_e3_summary.dart`).
+
+**Se as tarefas em segundo plano morrerem,** rode de novo:
+- `experiments/phase0/run_e1e2.sh silverbox`, depois que existirem 10
+  `run_*.json` em `experiments/results/silverbox/aegis_full`;
+- `experiments/phase0/run_e3.sh <bench>` para cada benchmark, depois que o
+  protocolo terminar.
+
+**Falta:**
+- `experiments/phase0/PHASE0_REPORT.md`, com todas as estruturas, falhas e
+  gates;
+- a decisão do usuário sobre o A1.
+
 ### 0.1 Continuação mais recente — análise arquitetural concluída
 
 Pedido atendido: `docs/PROMPT_ANALISE_ARQUITETURA.md`, **analisar e propor**,
