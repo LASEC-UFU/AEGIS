@@ -35,7 +35,7 @@ cpp/build_phase0/phase0_tests.exe     # 11 checks
 |---|---|---|
 | E1/E2 CT | concluído | E1 **não atingido**: PN_K40 1,013 V contra mediana 0,848 V dos campeões, na validação. E2 **não atingido**: mediana +4,8 %; o PN_K40 com LM diverge |
 | E1/E2 WH | concluído | E1 **atingido**: PN_K40 26,5 mV contra 50,8 mV, razão 0,52. E2 **não atingido**: mediana −1,1 %; o PN_DCE com LM diverge |
-| E1/E2 SB | agendado: `experiments/phase0/wait_then.sh sb_champions` (espera os 10 `aegis_full` do SB) | — |
+| E1/E2 SB | concluído | E1 **atingido**: 0,60 contra 3,34 mV, razão 0,18. E2 **atingido**: −52 %. **Gates: E1 apoiado (2/3), E2 não apoiado (1/3).** Ver `experiments/phase0/PHASE0_REPORT.md` |
 | E3, triagem | agendado: `experiments/phase0/wait_then.sh protocol_done` (espera `[resume] done` no `protocol_resume.log`; no máximo 6 processos) | — |
 
 **Resumos:**

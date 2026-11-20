@@ -35,7 +35,7 @@ double _median(List<double> xs) {
   return n.isOdd ? s[n ~/ 2] : 0.5 * (s[n ~/ 2 - 1] + s[n ~/ 2]);
 }
 
-String _f(double? v, [int d = 4]) => v == null || v.isNaN ? '—' : v.toStringAsFixed(d);
+String _f(double? v) => v == null || v.isNaN ? '—' : v.toStringAsPrecision(4);
 
 const _executed = {'converged', 'max_iter', 'max_rejects'};
 
