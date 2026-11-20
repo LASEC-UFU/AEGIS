@@ -232,6 +232,52 @@ dart analyze lib test tool    # sem problemas
 
 ## 4. Processos em execução (no momento da escrita)
 
+### 4.0 Incidente de 2026-11-20 e retomada (LER PRIMEIRO)
+
+**O que aconteceu**
+- A máquina congelou por volta das 11:12 e foi reiniciada à força às 15:34
+  (Kernel-Power 41, sem tela azul, sem botão de energia, sem erro WHEA).
+- O protocolo tinha concluído WH `aegis_full`, `aegis_sim`, `de_rand1`,
+  `single_island`, `no_curriculum`, `no_freerun`, `polynomial_only` e
+  `agent_ucb1`: 10/10 em cada, 80 JSON validados depois do reinício.
+- O travamento ocorreu cerca de 2 minutos depois do início das 10 execuções
+  de WH `agent_fuzzy`, junto com um `dart run` de um script curto da sessão.
+- Os arquivos vazios dessa condição foram movidos para
+  `experiments/results_archive/interrupted_2026-11-20_wh_agent_fuzzy/`.
+
+**Causa:** não determinada.
+- Não há evento de limitação térmica nem de erro de hardware.
+- A temperatura real da CPU não é legível sem um driver de sensores. As zonas
+  ACPI dessa placa mostram valores fictícios.
+- **Esta máquina já teve desligamentos inesperados em 04/11 (22:00) e 09/11
+  (06:36), antes desta sessão.**
+- Fatores possíveis, a verificar pelo usuário:
+  - 4 × 16 GB DDR4 a 3200 MT/s com XMP (Kingston KF3200C16D4/16GX), acima
+    da especificação AMD para dois módulos por canal. Os módulos são
+    provavelmente dual-rank; a especificação é 2666 para dual-rank.
+  - BIOS FB de 11/2022.
+  - Temperatura sob carga contínua.
+
+**Retomada:** `experiments/scripts/run_protocol_resume.sh`, log em
+`experiments/results/protocol_resume.log`.
+- Roda WH `agent_fuzzy`, as 7 condições de SB e o código original em WH e SB.
+- Limites de carga:
+  - 6 processos paralelos;
+  - 4 para o código original, que usa 3 threads por execução;
+  - prioridade BelowNormal herdada pelos filhos.
+- Um monitor grava RAM livre, CPU e número de processos a cada 60 s em
+  `experiments/results/protocol_monitor.log`.
+- Os resultados não mudam com o paralelismo (semente fixa, 1 thread); só o
+  `wallSeconds` deixa de ser comparável com as etapas rodadas a 16 jobs.
+
+**Regra daqui em diante:**
+- no máximo 6 processos de cálculo simultâneos nesta máquina;
+- nada de compilação ou script extra enquanto o protocolo roda.
+
+**Código e documentos estão no branch remoto `audit/aegis-1.1.0-wip`:**
+- não houve push na `main`, porque ela dispara deploy e release;
+- dados e resultados estão fora do git (`.gitignore`).
+
 | Tarefa | Comando | Log | Estado |
 |---|---|---|---|
 | Protocolo principal | `experiments/scripts/run_protocol.sh` | `experiments/protocol.log` | CT completo; WH `aegis_full` 10/10; WH `aegis_sim` em andamento (09:53). Restam WH: de_rand1, single_island, no_curriculum, no_freerun, polynomial_only + agentes ucb1 e fuzzy; depois Silverbox (7 condições); depois `run_legacy_head.sh` WH e SB (1000 gerações) |

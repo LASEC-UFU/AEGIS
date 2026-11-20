@@ -105,3 +105,20 @@ protocol below is run once; every result is reported.
 - Extended the offline analyzer for explicitly named alternate evaluation
   JSONL files, with separate output required, duplicate-seed rejection and
   exclusion of the alternative FROLS BIC model. Engine unchanged.
+
+### Incident: machine hang and resumed stages (2026-11-20)
+
+- The machine froze at about 11:12 local and was hard-reset at 15:34 (System
+  log: Kernel-Power 41, no bugcheck, no WHEA error, no firmware throttling
+  event). Cause not determined. The machine also had unexpected shutdowns on
+  2026-11-04 and 2026-11-09, before this work.
+- Completed before the hang (10/10 each, JSON validated after reboot): WH
+  `aegis_full`, `aegis_sim`, `de_rand1`, `single_island`, `no_curriculum`,
+  `no_freerun`, `polynomial_only`, `agent_ucb1`. WH `agent_fuzzy` had only
+  created empty files (moved to `experiments/results_archive/interrupted_2026-11-20_wh_agent_fuzzy/`).
+- Remaining stages resumed with `experiments/scripts/run_protocol_resume.sh`:
+  same binaries, configurations, budgets and seeds; parallelism reduced to 6
+  (legacy stage 4) and BelowNormal priority. Runs are single-threaded and
+  seeded, so results are unaffected; `wallSeconds` of the resumed stages is
+  not comparable with stages run at 16 jobs.
+- No WH/SB test metric was inspected.

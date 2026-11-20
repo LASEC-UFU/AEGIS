@@ -549,3 +549,88 @@ proposta: comparador H8 e início excessivo pela infraestrutura. Ele não é,
 porém, uma especificação pronta para rodar sem as correções acima. Minha
 recomendação é **adotar a Fase 0 enxuta corrigida como próximo desenho a
 aprovar**, mantendo a análise original como registro da evolução da proposta.
+
+---
+
+## 10. Resposta do autor do parecer à seção 9
+
+Data: 2026-11-20. Resposta à seção 9, pedida pelo usuário. Não rodei nenhum
+experimento novo e não abri testes de WH nem de SB. As conferências feitas
+para esta resposta estão listadas abaixo.
+
+### 10.1 Erros meus que a seção 9 corrige, conferidos
+
+| Item | Conferência | Correção |
+|---|---|---|
+| F1: erro livre entre 0,13 e 0,23 | Último `freeRun` das 10 sementes do `aegis_full` no CT: **0,0423–0,1030** | A faixa estava **errada**: vinha de outro campo do histórico. Também aceito a reformulação: γ equivale a cerca de 61 % do RMSE de um passo, mas a aceitação depende da soma completa |
+| F4: "rode sem `--data-test`" | `aegis_batch.cpp:189–196` só preenche os índices quando há arquivo de teste. Sem ele, valem `trainRatio` = 0,8 (configs) e `validationRatio` = 0,15 (`identification_pipeline.cpp:105`) | **Correto**: a divisão vira 80/15/5. Na Fase 0, fixar os índices como na tabela da §9.3(a) |
+| F6: "quase raiz unitária" | Raízes de `z^30 − 0,995462 z^29 + 0,00948517` por Durand–Kerner em Dart, resíduo 2×10⁻¹⁷: dominante **0,9766**; seguinte 0,9423; par complexo de módulo 0,892 | O polo dominante é lento (≈ 42 amostras, ≈ 170 s com Ts = 4 s), mas **não** quase unitário. "Causa mais provável" passa a hipótese |
+| M3: "exata, inclusive perto de quase-divergência" | Ribeiro, Tiels, Umenberger, Schön, Aguirre, *On the smoothness of nonlinear system identification*, Automatica 121, 109158 (2020), conferido na API do arXiv (1905.00820, DOI 10.1016/j.automatica.2020.109158) | "Exata" significa só sem erro de truncamento. As sensibilidades podem explodir com o horizonte. O custo é da ordem de (q+1) contra (2q+1), e precisa ser medido |
+| M6: corrigir o recozimento | — | Aceito. Tornar o recozimento efetivo multiplicaria γ por até 10 e, pelo F1, provavelmente pioraria o subajuste. Vou além da §9: na base do A1, **usar γ constante** (`gammaAnnealStart = gammaAnnealEnd`). Recozimento só em braço separado, se alguém quiser testá-lo |
+| M1: "NARX partindo do zero é o limite" | — | Exagero meu. O resultado negativo vale como "sem apoio para investir neste pacote", não como "classe refutada" |
+| M1/E1: reprodução de 0,417 V dentro do gate | — | Aceito: sai do gate. Ver §10.3 |
+| F3: "sem que ninguém perceba" | O 03 §5.1 declara a recusa | Exagero meu. O conflito real é entre a semeadura e o estudo de capacidade, como diz a §9.5 |
+| EMPS rebaixado "por desempenho esperado" | O DCE 2026 diz que no EMPS, CT e F16 nenhum baseline não linear supera "significativamente" o LTI SS ou o ARX. A Tabela 6 do mesmo artigo mostra pNARX 0,417 contra LTI 0,600 V no CT e 2,65 contra 5,20 mm no EMPS | A frase do DCE é solta e descritiva, como diz a §9.6. O motivo válido para rebaixar o EMPS é **escopo e disponibilidade**, decidido antes dos resultados, não o desempenho esperado |
+
+### 10.2 Onde concordo integralmente
+
+- **§9.1:** a prioridade da Fase 0 e o α = 0 no H8.
+- **§9.3(c):** o E3 é um pacote de triagem. Os pisos de ζ (1,5 / 0,8 / 1,0,
+  em `identification_pipeline.cpp:544–558`) e o piso de θ da ilha free-run
+  (`:567`) continuam ativos mesmo com as penalidades zeradas. É preciso
+  publicar os pesos efetivos.
+- **§9.4:** as fórmulas das sensibilidades e o tratamento de p < 1.
+- **§9.5:** todas as ressalvas de M2, M4, M5, M7, M8, M9 e M10. Em especial:
+  - o veto atua na promoção e na troca do campeão, não só no campeão
+    vigente;
+  - a espinha linear conta em K e no custo;
+  - o E1b precisa existir.
+- **§9.6:**
+  - testes de WH e SB fechados durante a Fase 0;
+  - manifesto datado e aprovado antes de analisar os resultados históricos;
+  - conclusão restrita a WH e SB se esse for o gate;
+  - agentes v2 adiados, com a interface v1 preservada.
+
+Não encontrei ponto em que a seção 9 esteja errada.
+
+### 10.3 Três complementos
+
+1. **A unidade de análise do E1 e do E2 é a estrutura, e as duplicatas
+   precisam sair.**
+   - Os 10 campeões do CT são **7 modelos distintos**: as sementes 3, 4 e 8
+     dão a mesma equação, e as sementes 1 e 10 também. Só a ordem dos termos
+     muda.
+   - Portanto a string `equation` exportada não é canônica. Para remover
+     duplicatas, usar a serialização canônica, não o texto da equação.
+   - Comparar QR e LM pareados por estrutura distinta, rotulados como
+     desenvolvimento.
+2. **A reprodução de 0,417 V tem um valor que os testes sintéticos não
+   cobrem: alinhar a convenção do protocolo** (u(k), `n_ini`, normalização,
+   intercepto).
+   - Manter como verificação **única**, declarada antes de rodar e feita
+     depois de congelar a ferramenta.
+   - Se não bater, relatar a diferença. Qualquer correção feita depois de ver
+     o número é rotulada como tal, e não se reexecuta até coincidir.
+3. **O veto de admissibilidade é barato.**
+   - A cada geração competem poucos candidatos ao campeão: um melhor local
+     por ilha mais o hall da fama.
+   - A simulação longa na validação tem cerca de 205 amostras no CT e 4 000
+     no WH e no SB.
+   - Avaliar todos os candidatos ao campeão, e não só o vigente, cabe no
+     orçamento.
+
+### 10.4 Fase 0 consolidada, para submeter à aprovação
+
+| Passo | Conteúdo | Gate |
+|---|---|---|
+| 0 | O protocolo 1.1.0 termina. Os testes de WH e SB ficam fechados. O build histórico não é tocado | — |
+| 1 | **E1**, ferramenta C++ separada. Testes sintéticos e equivalência Legendre–monômios. Curvas de capacidade com K ∈ {4, 9, 20, 40}, com atrasos a partir de 1 e com o controle u(k). Baselines internos: ARX, pNARX univariado e OE linear. **E1b**: espinha ARX mais uma correção polinomial pequena, com K total contado. Índices de divisão explícitos. ID de estrutura e de ajuste no arquivo de resultado | Critérios por estrutura, pareados, registrados antes |
+| 2 | **E2**: LM de horizonte completo, sensibilidades nos casos diferenciáveis e conferência por diferenças finitas com varredura de passo em casos pequenos. Política fixa para a base híbrida com p < 1, rejeitando ou sinalizando sem excluir. Todas as falhas são contadas | Mediana ≥10 % por estrutura distinta, sem mais falhas. Negativo significa "sem apoio" |
+| 3 | **E3**, triagem: binário 1.1.0, índices explícitos, `gammaAnnealStart = gammaAnnealEnd`, pesos efetivos publicados, rotulado como pacote | Só orienta onde decompor depois |
+| 4 | Memorando de decisão e manifesto datado. Só então decidir quando abrir WH e SB da iteração 2 | Aprovação do usuário |
+| 5 | Verificação única 0,417 V (§10.3, item 2), depois do congelamento | Resultado separado, nunca gate |
+
+Estimativas, sem compromisso: E1 de 1 a 2 dias, E2 de 2 a 3 dias, E3 com
+cerca de 1 dia de máquina. **Limite de carga** (ver HANDOFF, incidente de
+2026-11-20): no máximo 6 processos paralelos, com prioridade abaixo do
+normal.
