@@ -195,6 +195,9 @@ class _AgentDashboardScreenState extends ConsumerState<AgentDashboardScreen> {
       AgentMode.local =>
         'Politica adaptativa local, sem rede, com uma decisao conservadora '
             'a cada janela de 25 geracoes.',
+      AgentMode.fuzzy =>
+        'Politica fuzzy local interpretavel (regras Takagi-Sugeno), sem rede; '
+            'recusa agir quando a ativacao das regras e insuficiente.',
       AgentMode.remote =>
         'Supervisor remoto via Claude API. Requer ANTHROPIC_API_KEY.',
     };
@@ -228,6 +231,11 @@ class _AgentDashboardScreenState extends ConsumerState<AgentDashboardScreen> {
                   value: AgentMode.local,
                   icon: Icon(Icons.computer, size: 16),
                   label: Text('Local'),
+                ),
+                ButtonSegment(
+                  value: AgentMode.fuzzy,
+                  icon: Icon(Icons.rule, size: 16),
+                  label: Text('Fuzzy'),
                 ),
                 ButtonSegment(
                   value: AgentMode.remote,
@@ -265,7 +273,14 @@ class _AgentDashboardScreenState extends ConsumerState<AgentDashboardScreen> {
   // ─── Agent activity log ──────────────────────────────────────
 
   Widget _buildAgentActivityLog() {
-    final log = ref.read(engineProvider.notifier).getTuningLog();
+    final notifier = ref.read(engineProvider.notifier);
+    final log = notifier.getTuningLog();
+    final decisions = notifier.agentDecisions;
+    final counts = <String, int>{};
+    for (final d in decisions) {
+      counts[d.status] = (counts[d.status] ?? 0) + 1;
+    }
+    final lastDecision = decisions.isEmpty ? null : decisions.last;
 
     return Card(
       child: Padding(
@@ -284,6 +299,17 @@ class _AgentDashboardScreenState extends ConsumerState<AgentDashboardScreen> {
               ],
             ),
             const SizedBox(height: 12),
+            if (decisions.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Text(
+                  'Decisões do agente: '
+                  '${counts.entries.map((e) => '${e.key} ${e.value}').join(' · ')}'
+                  '${lastDecision == null ? '' : '\nÚltima (geração ${lastDecision.generation}): '
+                      '${lastDecision.status} — ${lastDecision.rationale}'}',
+                  style: const TextStyle(fontSize: 11, color: AppColors.textSecondary),
+                ),
+              ),
             if (log.isEmpty)
               const Padding(
                 padding: EdgeInsets.symmetric(vertical: 8),
@@ -310,6 +336,8 @@ class _AgentDashboardScreenState extends ConsumerState<AgentDashboardScreen> {
                     final rejection =
                         entry['rejectionReason']?.toString() ?? '';
                     final gen = entry['generation']?.toString() ?? '?';
+                    final source = entry['source']?.toString() ?? '';
+                    final outcome = entry['outcome']?.toString() ?? '';
 
                     return Padding(
                       padding: const EdgeInsets.symmetric(vertical: 6),
@@ -330,7 +358,9 @@ class _AgentDashboardScreenState extends ConsumerState<AgentDashboardScreen> {
                               children: [
                                 Text(
                                   'Gen $gen: $param → '
-                                  '${newValue?.toStringAsFixed(4) ?? '-'}',
+                                  '${newValue?.toStringAsFixed(4) ?? '-'}'
+                                  '${source.isEmpty ? '' : '  [$source]'}'
+                                  '${accepted && outcome.isNotEmpty && outcome != 'n/a' ? '  · $outcome' : ''}',
                                   style: const TextStyle(
                                     fontSize: 12,
                                     fontFamily: 'monospace',

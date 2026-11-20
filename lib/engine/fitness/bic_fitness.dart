@@ -1,10 +1,10 @@
 import 'dart:math' as math;
 
 import '../../core/math/matrix.dart';
-import '../../core/math/decomposition.dart';
 import '../../core/types/chromosome.dart';
 import 'fitness_evaluator.dart';
 import 'err_calculator.dart';
+import 'least_squares.dart';
 
 /// BIC (Bayesian Information Criterion) fitness evaluator.
 ///
@@ -31,35 +31,20 @@ class BicFitness implements FitnessEvaluator {
     Matrix output,
   ) {
     final n = regressorMatrix.rows;
-    final k = regressorMatrix.cols;
-
-    // QR decomposition for stable least squares
-    final (q, r) = Decomposition.modifiedGramSchmidt(regressorMatrix);
-    final qtY = q.transpose().multiply(output);
-    final coefficients = Decomposition.backSubstitute(
-      r.subMatrix(0, k, 0, k),
-      qtY.subMatrix(0, k, 0, 1),
-    );
-
-    // Compute residuals and SSE
-    final predicted = regressorMatrix.multiply(coefficients);
-    final residuals = output - predicted;
-    final sse = residuals.sumOfSquares();
-
-    // Compute ERR values
+    final k = regressorMatrix.cols + 1; // regressors + intercept
+    final fit = LeastSquaresFit.fit(regressorMatrix, output);
     final errValues = errCalculator.computeERR(
       regressorMatrix,
       output,
       chromosome.regressors,
     );
-
-    final fitness = evaluate(sse, n, k);
-
+    final fitness = evaluate(fit.sse, n, k);
     return chromosome.withEvaluation(
-      coefficients: List<double>.generate(k, (i) => coefficients.get(i, 0)),
+      coefficients: fit.coefficients,
+      intercept: fit.intercept,
       err: errValues,
       fitness: fitness,
-      sse: sse,
+      sse: fit.sse,
     );
   }
 }
@@ -85,27 +70,20 @@ class AicFitness implements FitnessEvaluator {
     Matrix output,
   ) {
     final n = regressorMatrix.rows;
-    final k = regressorMatrix.cols;
-    final (q, r) = Decomposition.modifiedGramSchmidt(regressorMatrix);
-    final qtY = q.transpose().multiply(output);
-    final coefficients = Decomposition.backSubstitute(
-      r.subMatrix(0, k, 0, k),
-      qtY.subMatrix(0, k, 0, 1),
-    );
-    final predicted = regressorMatrix.multiply(coefficients);
-    final residuals = output - predicted;
-    final sse = residuals.sumOfSquares();
+    final k = regressorMatrix.cols + 1; // regressors + intercept
+    final fit = LeastSquaresFit.fit(regressorMatrix, output);
     final errValues = errCalculator.computeERR(
       regressorMatrix,
       output,
       chromosome.regressors,
     );
-    final fitness = evaluate(sse, n, k);
+    final fitness = evaluate(fit.sse, n, k);
     return chromosome.withEvaluation(
-      coefficients: List<double>.generate(k, (i) => coefficients.get(i, 0)),
+      coefficients: fit.coefficients,
+      intercept: fit.intercept,
       err: errValues,
       fitness: fitness,
-      sse: sse,
+      sse: fit.sse,
     );
   }
 }

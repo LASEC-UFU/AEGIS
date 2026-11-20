@@ -1,4 +1,4 @@
-import 'dart:math' as math;
+import '../../core/math/power_basis.dart';
 
 import '../../core/math/matrix.dart';
 import '../../core/types/types.dart';
@@ -43,7 +43,7 @@ class RegressorBuilder {
           if (k - delay < 0) return null;
 
           final x = data.get(k - delay, varIdx);
-          value *= math.pow(x, comp.exponent);
+          value *= powerBasis(x, comp.exponent);
 
           if (value.isNaN || value.isInfinite) {
             value = 0.0;

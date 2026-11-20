@@ -1,14 +1,14 @@
-// Web stub — LlmAgent is never instantiated on web (C++ engine unavailable).
+// Stub LlmAgent for platforms without network access (never instantiated).
 import '../agent/generation_snapshot.dart';
 import 'optimization_agent.dart';
 
-class LlmAgent implements OptimizationAgent {
-  @override
-  TuningSuggestion? onSuggestion;
-
+class LlmAgent extends OptimizationAgent {
   LlmAgent({String? apiKey});
 
   bool get hasApiKey => false;
+
+  @override
+  String get id => 'llm';
 
   @override
   String get name => 'Claude remoto';
@@ -17,7 +17,7 @@ class LlmAgent implements OptimizationAgent {
   bool get available => false;
 
   @override
-  void processSnapshot(GenerationSnapshot snap) {}
+  void processSnapshot(GenerationSnapshot snapshot) {}
 
   @override
   void dispose() {}

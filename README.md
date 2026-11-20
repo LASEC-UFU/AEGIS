@@ -2,6 +2,8 @@
 
 > **Nonlinear dynamic system identification via Differential Evolution with island model, JADE adaptive mutation, 4-phase identification curriculum, UCB1 local adaptive agent, C++ computational core, and remote LLM agent interface.**
 
+> **Audit 2026-11.** A technical and scientific audit corrected several defects that affected numerical results (held-out data clipping, inverted stability test, masked free-run divergence, non-functional batch runner, among others) and added a typed agent interface, a fuzzy local policy, reproducible experiment tooling and benchmark provenance. See [docs/audit/](docs/audit/) and [docs/](docs/). Results published before the audit (e.g. `assets/avaliacao_cientifica.md`) were obtained with the previous code and report one-step R² on normalized data; they should not be cited as simulation performance.
+
 AEGIS automatically identifies polynomial and rational NARX (*Nonlinear AutoRegressive with eXogenous inputs*) models from experimental data. The computational core is a C++ shared library (`aegis_core`) compiled to a native DLL on Windows and to WebAssembly on the web, bridged to a Flutter/Dart UI through a conditional FFI layer. A **UCB1 multi-armed bandit local agent** monitors the evolutionary engine in real time and autonomously adjusts DE parameters based on empirical reward signals; alternatively, a **Claude-powered remote LLM agent** can be selected via an in-app toggle to call the Anthropic API for parameter suggestions. Both agents operate within a structured **4-phase identification curriculum** that progressively expands the search space and tightens quality constraints.
 
 ---
@@ -101,7 +103,8 @@ where:
 - $y(k)$ is the output at time step $k$
 - $x_{i_m}$ is the variable with index $i_m$ (input $u$ or output $y$)
 - $\tau_m \geq 1$ is the delay
-- $\alpha_m \in [p_{\min}, p_{\max}]$ is the exponent (default $[0.5, 5.0]$ in steps of 0.5)
+- $\alpha_m \in [p_{\min}, p_{\max}]$ is the exponent (core default $[0.5, 5.0]$, app default $p_{\max}=3$, quantized in steps of `exponentStep` = 0.5)
+- powers use an explicit basis (`powerMode`, exported with every model): **hybrid** (default) — $x^{\alpha}$ exactly for integer $\alpha$, $\operatorname{sign}(x)\lvert x\rvert^{\alpha}$ for non-integer $\alpha$; `signed` — $\operatorname{sign}(x)\lvert x\rvert^{\alpha}$ for all $\alpha$; `legacy` — $\operatorname{sign}(x)(\lvert x\rvert+10^{-6})^{\alpha}$, the semantics of versions ≤ 9e4b1d8, kept only to reproduce old models
 - $\theta_j$ is the coefficient of the $j$-th regressor
 - $n_\theta$ is the number of selected regressors
 - $e(k)$ is the residual
@@ -172,7 +175,7 @@ Options: header row (toggle), column selection, preview of the first 10 records.
 
 | Type | JSON key | Description |
 |------|----------|-------------|
-| Min-Max (default) | `"minmax"` | Scales to $[-1.0, 1.0]$ |
+| Min-Max (default) | `"minmax"` | Maps the **training** range to $[-1.0, 1.0]$; validation/test values outside it are mapped linearly, never clipped |
 | Robust | `"robust"` | Median + IQR — outlier resistant |
 | Z-score | `"zscore"` | Zero mean, unit standard deviation |
 
@@ -249,11 +252,14 @@ $$\mathbf{v}_i = \mathbf{x}_i + F_i \cdot (\mathbf{x}_{p\text{-best}} - \mathbf{
 
 where $\mathbf{x}_{p\text{-best}}$ is randomly selected from the top-$p$ individuals:
 
-$$p = \max\!\left(2,\; \lfloor 0.05 \cdot NP \rfloor\right)$$
+$$p = \max\!\left(2,\; \lceil p_{\text{JADE}} \cdot NP \rceil\right), \quad p_{\text{JADE}} = 0.2 \text{ (config `jadeP`)}$$
+
+JADE is used without the optional external archive. The C++ core also offers
+classic DE/rand/1 with fixed $F$, $CR$ (`mutationStrategy: "rand1"`) for ablations.
 
 **Adaptive parameters per individual:**
 
-- $F_i \sim \text{Cauchy}(\mu_F, 0.1)$, truncated to $(0, 2]$
+- $F_i \sim \text{Cauchy}(\mu_F, 0.1)$, regenerated if $\le 0$, truncated to $1$
 - $CR_i \sim \mathcal{N}(\mu_{CR}, 0.1)$, truncated to $[0, 1]$
 
 **End-of-generation update:**
@@ -279,6 +285,18 @@ Selects a starting point $L$ and copies a contiguous segment from the mutant:
 $$u_{i,j} = \begin{cases} v_{i,j} & \text{if } j \in [L, L+n) \bmod D \\ x_{i,j} & \text{otherwise} \end{cases}$$
 
 where $n$ is the segment length, controlled by $CR$.
+
+### 8.3 Variable-length structures (C++ core)
+
+Chromosomes are ordered lists of regressors of different lengths. The mutant
+length follows the same DE rule as the numeric genes
+($n_v = \operatorname{round}(n_i + F(n_{pbest}-n_i) + F(n_{r1}-n_{r2}))$);
+binomial crossover decides independently for every position, so a trial can be
+**shorter or longer** than its target (in versions ≤ 9e4b1d8 a trial could
+never be shorter, which biased the search towards `maxRegressors`). A
+structural mutation (add / delete / replace one regressor, probability
+`structuralMutationRate`) and a canonical form (no repeated factor inside a
+regressor, no duplicated regressor) complete the operators.
 
 ---
 
@@ -315,9 +333,14 @@ $$f = \text{RMSE}_{\text{val}} + \alpha \cdot \frac{\text{BIC}}{n} + \beta P_D +
 | $P_D$ | `denominatorPenalty` | Penalizes rational (denominator) complexity |
 | $P_C$ | `complexityPenalty` | Penalizes number of terms |
 | $P_E$ | `exponentPenalty` | Penalizes exponents far from 1.0 |
-| $P_S$ | `stabilityPenalty` | Penalizes denominator roots outside the unit circle |
-| $P_I$ | `noInputPenalty` ($\zeta$) | Penalizes a shortfall from the target input contribution — prevents purely autoregressive solutions when $u$ is present |
-| $\text{RMSE}_{\text{free}}$ | `freeRunPenalty` ($\theta$) | Penalizes closed-loop divergence: RMSE of a free-run simulation over `freeRunHorizon` steps using predicted outputs as feedback |
+| $P_S$ | `stabilityPenalty` | Singularity of the rational denominator along the data (1 if $D(k)$ changes sign, else $\max(0,(0.1-\min_k\lvert D(k)\rvert)/0.1)$) + 1 if the free-run simulation diverges (non-finite or $\lvert\hat y\rvert > 10\max\lvert y_{\text{train}}\rvert$). The previous "denominator root" test was inverted and is removed (see docs/audit). |
+| $P_I$ | `noInputPenalty` ($\zeta$) | Shortfall of the input contribution $c$ below `inputContributionMin`, where $c$ is the share of the variance **not explained by the autoregressive terms** that the input-dependent terms explain (AR terms enter the ERR decomposition first) |
+| $\text{RMSE}_{\text{free}}$ | `freeRunPenalty` ($\theta$) | RMSE of a free-run simulation on validation over `freeRunHorizon` steps (0 = whole split) using predicted outputs as feedback |
+
+With `errorMode: "simulation"` the base term is the free-run RMSE over the
+whole validation split and the BIC term is computed on the simulation
+residuals (no separate $\theta$ term). All candidates are scored from the same
+row (`maxDelay`) of each split. See [docs/CONFIGURATION.md](docs/CONFIGURATION.md).
 
 ### 9.5 Information Criteria
 
@@ -341,16 +364,17 @@ The engine maintains $N_I$ independent islands, each with its own RNG, populatio
 
 | Topology | Mechanism | Characteristic |
 |----------|-----------|----------------|
-| **Ring** | Island $i$ sends to island $(i+1) \bmod N_I$ | Gradual propagation, balanced |
-| **Star** | Best island distributes to all | Fast convergence, centralized |
-| **Random** | Random pairs | Maximum exploration |
+| **Ring** | Island $i$ sends to island $(i+1) \bmod N_I$ | Gradual propagation, balanced (the only topology of the C++ core) |
+| **Star** | Best island distributes to all | Dart fallback engine only |
+| **Random** | Random pairs | Dart fallback engine only |
 
-### 10.3 Migration Protocol
+### 10.3 Migration Protocol (C++ core)
 
 - **Period:** every `migrationInterval` generations (default: 20)
-- **Number of migrants:** $\lfloor \text{migrationRate} \times NP \rfloor$, limited to $[1, 5]$
-- **Selection:** best individuals from source island
+- **Number of migrants:** $\max(1, \lfloor \text{migrationRate} \times NP \rfloor)$
+- **Selection:** best individuals from the source island, re-evaluated under the destination's weights and validation window; accepted only if better than the destination's worst individual
 - **Replacement:** worst individuals in destination island
+- **Champion:** each generation the islands' best models are re-evaluated on the **whole** validation split with the reference weights; the best ever seen under the current weights is the reported champion
 
 ---
 
@@ -391,17 +415,26 @@ Five independent criteria combined (any one triggers a stop):
 | `automatic_pruner.cpp` | `AutomaticPruner` | Removes low-ERR / high-VIF / near-zero-coeff regressors |
 | `local_refiner.cpp` | `LocalRefiner` | TRF/LM coefficient refinement for rational models |
 
+Since the 2026-11 audit the residual, stability, over/under-fitting checks run
+on the reported champion every generation, and the pruner (backward
+elimination) and the refiner run once on the final champion; each change is
+kept only if the validation fitness does not get worse. `ExcitationAnalyzer`,
+`CollinearityAnalyzer` and `PopulationDiversityMonitor` are compiled but not
+used by the pipeline. Test metrics (one-step **and** free-run, normalized and
+original units) are computed once, when the run ends.
+
 ---
 
 ## 13. Agent System
 
-AEGIS includes three agent modes selectable at runtime via the **Agent Mode** segmented button on the Agent tab:
+AEGIS includes four agent modes selectable at runtime via the **Agent Mode** segmented button on the Agent tab. All of them act only through the typed, bounded and logged action interface of the core — see **[docs/AGENT_INTERFACE.md](docs/AGENT_INTERFACE.md)** (observation schema, action schema, rejection codes, trajectory records). The details in §13.2–§13.5 below describe the original design; where they differ, docs/AGENT_INTERFACE.md is authoritative.
 
 | Mode | Dart class | Availability | Description |
 |------|-----------|--------------|-------------|
 | **Off** | — | Always | No autonomous tuning |
-| **Local (UCB1)** | `LocalAdaptiveAgent` | All platforms | Bandit-based autonomous tuning from reward signals |
-| **Remote (Claude API)** | `LlmAgent` | Windows only | Calls Claude API for natural-language parameter suggestions |
+| **Local (UCB1)** | `LocalAdaptiveAgent` | All platforms | Heuristic candidates every 25 generations, UCB1 over (parameter, direction) arms, drift-corrected reward on validation RMSE |
+| **Fuzzy** | `FuzzyPolicyAgent` | All platforms | Interpretable Takagi–Sugeno rule base (JSON), refuses to act on weak evidence |
+| **Remote (Claude API)** | `LlmAgent` | Native and web (own key) | Claude Messages API (`claude-opus-5-5` by default) with JSON-schema output, timeout, call/cost budgets |
 
 The active mode is stored in `agentModeProvider` (`StateProvider<AgentMode>`) and takes effect immediately without restarting the engine.
 
@@ -443,15 +476,15 @@ Each generation produces a snapshot with fields including:
 
 `LocalAdaptiveAgent` (`lib/services/local_adaptive_agent.dart`) implements a **UCB1 (Upper Confidence Bound 1) multi-armed bandit** that autonomously selects and applies DE parameter adjustments based on empirical reward signals — no API key required.
 
-**Core loop** (triggered every 10 generations):
+**Core loop** (triggered every 25 generations, `cycleLength`):
 
-1. **Collect rewards** — for each `_PendingObservation` settled after a delay, compare the engine's actual fitness change against the baseline drift. Reward $r = \text{clip}\bigl((\Delta f_{\text{baseline}} - \Delta f_{\text{actual}}) \times \text{scale},\; -1,\; +1\bigr)$.
+1. **Collect rewards** — 50 generations after an action, compare the relative change of the champion's **validation RMSE** with the change observed in the 50 generations before the action (drift baseline). Reward $r = \text{clip}\bigl(10\,[(-\Delta_{\text{after}}) - (-\Delta_{\text{before}})],\; -1,\; +1\bigr)$. Observations that cross a curriculum phase change are inconclusive and discarded; actions rejected by the core are not counted.
 2. **Build candidate pool** — `_buildCandidates()` generates context-sensitive adjustment candidates from the current snapshot (stagnation level, phase, diversity, RMSE signals).
 3. **Select arm via UCB1** — untried arms get infinite priority; otherwise:
 
 $$\text{UCB1}(a) = \bar{r}_a + c\,\sqrt{\frac{\ln N}{n_a}}$$
 
-where $\bar{r}_a$ is average reward, $N$ is total pulls, $n_a$ is pulls for arm $a$, and $c = 1.2$ (exploration coefficient).
+where $\bar{r}_a$ is average reward, $N$ is total pulls, $n_a$ is pulls for arm $a$ (an arm is a (parameter, direction) pair), and $c = 0.5$ (exploration coefficient). Moderate signals must persist for two cycles; severe signals act immediately but never bypass the per-parameter cooldown (2 cycles).
 
 4. **Apply tuning** — calls `applyTuning(param, value)` and records a `_PendingObservation` to collect the reward after a settling window.
 
@@ -484,17 +517,16 @@ Phase transitions are triggered by `phaseStagnationLimit` consecutive stagnant g
 
 The `LlmAgent` class monitors the engine and proposes parameter adjustments:
 
-- **Model:** `claude-opus-4-8`
-- **Trigger:** every 50 generations (configurable `_cooldown`)
-- **Input:** JSON snapshot with fitness, stagnation, diversity, per-island JADE state
-- **Output:** `{"proposed_changes": {"param": value}, "reason": "..."}` or `null`
-- **API key resolution:** constructor argument → `ANTHROPIC_API_KEY` env var → `anthropic_api_key.txt` next to the executable
-
-**Active on Windows only.** The web build uses conditional stubs that exclude `dart:io`.
+- **Model:** `claude-opus-5-5` (configurable), effort `medium`, raw HTTPS to `POST /v1/messages` (`anthropic-version: 2026-10-21`; Dart has no official SDK)
+- **Trigger:** every 50 generations (`consultEvery`), at most one request in flight; never blocks the engine (UI) or is awaited (lockstep experiments)
+- **Input:** `aegis.observation/1` (no test-set data) + the agent's previous decisions and the engine's responses
+- **Output:** JSON-schema-constrained reply `{assessment, diagnosis, evidence_sufficient, actions[], rationale}`; at most one action is applied, after local and core validation; "insufficient evidence" is a valid answer
+- **Safety:** 120 s timeout, call and cost budgets, refusal handling (server-side fallback opt-in), kill switch; every consultation is logged with latency, token usage and estimated cost
+- **API key resolution:** constructor argument → `ANTHROPIC_API_KEY` env var → `anthropic_api_key.txt` next to the executable (never logged)
 
 ### 13.6 WebSocket Server (C++)
 
-`cpp/src/agent_controller.cpp` implements an RFC 6455 WebSocket server on port 8765 for external monitoring tools. Accepts tuning suggestions in the same JSON format as the LLM agent.
+`cpp/src/agent_controller.cpp` implements an RFC 6455 WebSocket server on 127.0.0.1 (`webSocketPort`, disabled by default in the core; the app uses 8765). Snapshots are broadcast with a send timeout (a stalled client is disconnected and cannot block the engine); text frames are routed to the same validated action interface and logged with the source given by the client.
 
 ---
 
@@ -729,6 +761,34 @@ flutter build windows --release
 # Copy DLL next to executable
 copy cpp\build_win\Release\aegis_core.dll build\windows\x64\runner\Release\
 ```
+
+### Tests
+
+```bash
+# C++ core (any compiler; MinGW-w64 example). Builds aegis_core.dll (static runtime),
+# aegis_batch, aegis_frols, aegis_evaluate_models, core_tests, api_tests.
+cmake -S cpp -B cpp/build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build cpp/build
+cpp/build/core_tests        # numerics, operators, determinism, JSON
+cpp/build/api_tests         # C API, action interface, interruption, async, WebSocket
+
+# Dart / Flutter (engine_consistency_test uses cpp/build/aegis_core.dll if present)
+flutter test
+dart analyze lib test tool
+```
+
+### Reproducible experiments
+
+```bash
+dart run tool/benchmarks/prepare_benchmarks.dart          # after downloading the raw files (docs/BENCHMARKS.md)
+cpp/build/aegis_batch --data est.csv --data-test test.csv \
+    --config experiments/configs/conditions/aegis_full.json --runs 10 --seed-start 1 --jobs 8 --output out/
+experiments/scripts/run_protocol.sh                        # full protocol (docs/EXPERIMENTS.md)
+dart run tool/experiments/analyze.dart --results experiments/results/cascaded_tanks
+```
+
+Runs are executed in lockstep (`syncMode`) with explicit seeds and are
+bit-for-bit reproducible for a given binary, data and configuration.
 
 ### LLM Agent Setup (Windows)
 

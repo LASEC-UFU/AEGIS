@@ -17,14 +17,17 @@ struct ColumnNorm {
     bool   valid = false; // true after fit()
     bool   bounded = true; // min-max maps to [lo,hi]; robust/z-score do not
 
-    /** Map raw x → [lo, hi]. */
+    /**
+     * Affine map fitted on the training segment. For min-max, the training
+     * range is mapped onto [lo, hi]; samples outside the training range
+     * (validation/test extrapolation) are mapped linearly and are NOT clipped,
+     * so that held-out data are never altered (audit item P0-3).
+     */
     double transform(double x) const noexcept {
         if (scale < 1e-30) return (lo + hi) * 0.5;
         double v = (x - shift) / scale;
         if (!bounded) return v;
-        // Remap [0,1] to [lo,hi]
-        v = lo + v * (hi - lo);
-        return std::max(lo, std::min(hi, v));
+        return lo + v * (hi - lo);
     }
 
     /** Invert: [lo, hi] → raw. */

@@ -19,12 +19,38 @@ struct ModelMetrics {
     double fpe           = std::numeric_limits<double>::quiet_NaN();
     double mdl           = std::numeric_limits<double>::quiet_NaN();
     int    n_train       = 0;
+    int    n_val         = 0;
     int    n_params      = 0;
 
     // ── AEGIS Curriculum indicators ──────────────────────────────────────
-    double rmse_free_run            = std::numeric_limits<double>::quiet_NaN();
+    double rmse_free_run            = std::numeric_limits<double>::quiet_NaN(); // validation free-run (horizon or whole split)
+    int    n_free_run               = 0;
     double input_contribution_ratio = std::numeric_limits<double>::quiet_NaN();
     double residual_input_corr      = std::numeric_limits<double>::quiet_NaN();
+};
+
+/**
+ * Stability / well-posedness diagnostics of a fitted NARX model.
+ *
+ * Replaces the original "denominator root" test (audit item P0-2), which was
+ * inverted and meaningless for nonlinear rational models. The penalty used in
+ * the fitness combines two observable failure modes:
+ *   - singularity of the rational denominator D(k) along the data
+ *     (|D| close to 0 or sign changes), and
+ *   - divergence of the free-run simulation (non-finite or leaving an
+ *     envelope of 10× the largest absolute training output).
+ * The spectral radius of the purely linear autoregressive part is reported
+ * as a diagnostic only (nonlinear terms can stabilise or destabilise it).
+ */
+struct StabilityDiagnostics {
+    bool   evaluated                 = false;
+    bool   is_stable                 = true;
+    double min_abs_denominator       = std::numeric_limits<double>::quiet_NaN();
+    int    denominator_sign_changes  = 0;
+    bool   free_run_diverged         = false;
+    int    free_run_divergence_step  = -1;
+    double linear_spectral_radius    = std::numeric_limits<double>::quiet_NaN();
+    double penalty                   = 0.0;
 };
 
 /** Decomposed fitness terms (before/after weighting), for diagnostics shown

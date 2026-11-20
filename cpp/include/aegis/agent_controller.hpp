@@ -29,73 +29,39 @@
   #define SOCK_ERR     (-1)
 #endif
 
-#include "de_optimizer.hpp"
-
 namespace aegis {
 
-/** JSON payload broadcast to connected agent clients each generation. */
-struct AgentBroadcast {
-    std::string json; // pre-serialized JSON
-};
-
-/** A suggestion received from an AI agent. */
-struct AgentSuggestion {
-    std::string param_name;
-    double      proposed_value = 0.0;
-    std::string reason;
-};
-
-/** Log entry for accepted/rejected tuning actions. */
-struct TuningLogEntry {
-    bool        accepted;
-    std::string param_name;
-    double      old_value;
-    double      new_value;
-    std::string reason;
-    std::string rejection_reason;
-    int         generation;
-};
-
 /**
- * WebSocket server (RFC 6455) for real-time bidirectional agent communication.
+ * WebSocket server (RFC 6455) for external agents, bound to 127.0.0.1.
  *
- * Listens on localhost:port. Each connected client:
- *   - Receives JSON broadcast frames from the engine every generation.
- *   - Can send JSON suggestion frames (agent → engine).
- *
- * Multiple concurrent agents are supported (one thread per client).
- *
- * Thread safety: broadcast() and stop() are safe to call from any thread.
+ *  - Clients receive JSON snapshots broadcast by the engine.
+ *  - Text frames sent by a client are passed to the message handler, whose
+ *    returned JSON string is sent back as the reply. The pipeline routes them
+ *    through the same typed, validated action interface used by every agent.
+ *  - Sends use a socket timeout: a slow or stalled client is disconnected and
+ *    can never block the evolutionary engine.
  */
 class AgentController {
 public:
-    using SuggestionHandler = std::function<bool(const AgentSuggestion&, TuningLogEntry&)>;
+    using MessageHandler = std::function<std::string(const std::string& payload)>;
 
     explicit AgentController(int port = 8765);
     ~AgentController();
 
-    /** Start the accept loop in a background thread. Non-blocking. */
     bool start();
-
-    /** Gracefully stop all connections and the accept loop. */
     void stop();
 
-    /** Broadcast a JSON string to all connected clients. Returns client count. */
+    /** Broadcast a JSON string to all connected clients. Returns clients reached. */
     int broadcast(const std::string& json);
 
-    /** Broadcast a GenerationReport (serialized internally). */
-    int broadcast_report(const std::string& json_payload);
+    void on_message(MessageHandler handler);
 
-    /** Register the callback invoked when an agent sends a suggestion.
-     *  Return true to accept the suggestion, false to reject.
-     *  The handler must fill in log_entry fields. */
-    void on_suggestion(SuggestionHandler handler);
+    int  client_count() const;
+    int  port()         const { return port_; }
+    bool running()      const { return running_; }
 
-    int         client_count() const;
-    int         port()         const { return port_; }
-    bool        running()      const { return running_; }
-
-    const std::vector<TuningLogEntry>& tuning_log() const { return log_; }
+    static constexpr int kSendTimeoutMs = 200;
+    static constexpr size_t kMaxFrame = 64 * 1024;
 
 private:
     int                 port_;
@@ -107,27 +73,18 @@ private:
     std::vector<std::shared_ptr<ClientConn>> clients_;
     mutable std::mutex clients_mutex_;
 
-    SuggestionHandler   suggestion_handler_;
-    std::vector<TuningLogEntry> log_;
-    mutable std::mutex  log_mutex_;
+    MessageHandler      handler_;
+    std::mutex          handler_mutex_;
 
     void accept_loop();
     void client_loop(std::shared_ptr<ClientConn> conn);
-    bool do_handshake(SocketFd fd, std::string& client_key);
-    void send_frame(SocketFd fd, const std::string& payload, uint8_t opcode = 0x01);
+    bool do_handshake(SocketFd fd);
+    bool send_frame(SocketFd fd, const std::string& payload, uint8_t opcode = 0x01);
     bool recv_frame(SocketFd fd, std::string& payload, uint8_t& opcode);
-    void remove_client(SocketFd fd);
 
-    // RFC 6455 helpers (implemented in agent_controller.cpp)
     static std::string sha1_base64(const std::string& input);
     static std::string base64_encode(const unsigned char* data, size_t len);
     static void        sha1(const unsigned char* msg, size_t len, unsigned char out[20]);
-
-    // JSON parsing (minimal, no external deps)
-    static bool parse_suggestion(const std::string& json, AgentSuggestion& out);
 };
-
-/** Build the broadcast JSON payload from a generation report. */
-std::string build_broadcast_json(const GenerationReport& r);
 
 } // namespace aegis

@@ -9,141 +9,150 @@ namespace aegis {
 
 // ── fit ──────────────────────────────────────────────────────────────────
 
+bool RationalModel::fit_from_psi(Chromosome& chrom, const std::vector<double>& psi,
+                                 int usable, const double* y) {
+    const int nr = chrom.num_regressors();
+    if (usable <= 0 || nr <= 0) return false;
+    const int ncols = nr + 1;
+
+    // Augment Ψ with a constant column (intercept); pseudo-linearise
+    // denominator columns: ψ_j → −y(k)·ψ_j.
+    std::vector<double> psi_aug(static_cast<size_t>(usable) * ncols);
+    std::vector<char> is_den(nr, 0);
+    for (int j = 0; j < nr; ++j) is_den[j] = chrom.regressors[j].is_denominator() ? 1 : 0;
+    for (int i = 0; i < usable; ++i) {
+        const double* src = psi.data() + static_cast<size_t>(i) * nr;
+        double* dst = psi_aug.data() + static_cast<size_t>(i) * ncols;
+        for (int j = 0; j < nr; ++j) dst[j] = is_den[j] ? -y[i] * src[j] : src[j];
+        dst[nr] = 1.0;
+    }
+
+    std::vector<double> theta(ncols, 0.0);
+    if (!qr_solve(psi_aug.data(), usable, ncols, y, theta.data())) return false;
+    for (double v : theta) if (!is_valid(v)) return false;
+
+    chrom.coefficients.assign(theta.begin(), theta.begin() + nr);
+    chrom.intercept = theta[nr];
+    return true;
+}
+
 bool RationalModel::fit(const double* data, int rows, int cols, int output_col) {
     std::vector<double> psi;
     int usable;
     if (!build_psi_matrix(chrom_, data, rows, cols, psi, usable)) return false;
-
-    const int nr = chrom_.num_regressors();
     const int md = chrom_.max_delay();
-
-    // Extract y(k) for the usable samples
-    std::vector<double> y_col(usable);
+    std::vector<double> y(usable);
     for (int i = 0; i < usable; ++i)
-        y_col[i] = data[(i + md) * cols + output_col];
-
-    // Pseudo-linearise denominator columns: ψ_j → −y(k)·ψ_j
-    if (chrom_.is_rational()) {
-        pseudo_linearize(chrom_, y_col.data(), psi.data(), usable, nr);
-    }
-
-    // Augment Ψ with a constant (intercept/bias) column. Without it, models
-    // built from positively-normalized regressors cannot reproduce a
-    // bipolar output with a nonzero mean, which forces R² < 0 even for the
-    // OLS-optimal fit (NARMAX/SINDi-style libraries always include c0).
-    const int ncols = nr + 1;
-    std::vector<double> psi_aug(static_cast<size_t>(usable) * ncols);
-    for (int i = 0; i < usable; ++i) {
-        for (int j = 0; j < nr; ++j)
-            psi_aug[static_cast<size_t>(i) * ncols + j] = psi[static_cast<size_t>(i) * nr + j];
-        psi_aug[static_cast<size_t>(i) * ncols + nr] = 1.0;
-    }
-
-    // Solve Ψ·θ = y  via Householder QR
-    std::vector<double> theta(ncols, 0.0);
-    if (!qr_solve(psi_aug.data(), usable, ncols, y_col.data(), theta.data()))
-        return false;
-
-    // Validate result
-    for (double v : theta) {
-        if (!aegis::is_valid(v)) return false;
-    }
-
-    chrom_.coefficients.assign(theta.begin(), theta.begin() + nr);
-    chrom_.intercept    = theta[nr];
-    chrom_.evaluated    = true;
+        y[i] = data[static_cast<size_t>(i + md) * cols + output_col];
+    if (!fit_from_psi(chrom_, psi, usable, y.data())) return false;
+    chrom_.evaluated = true;
     return true;
 }
 
-// ── evaluate_at ──────────────────────────────────────────────────────────
+// ── prediction ───────────────────────────────────────────────────────────
 
-double RationalModel::eval_numerator(
-    const double* data, int k, int rows, int cols,
-    const double* y_buf, int output_col
-) const noexcept {
-    (void)y_buf;
-    (void)output_col;
-    double num = chrom_.intercept;
-    for (size_t j = 0; j < chrom_.regressors.size(); ++j) {
-        const auto& reg = chrom_.regressors[j];
-        if (reg.is_denominator()) continue;
-        double phi = reg.evaluate(data, k, rows, cols, true);
-        num += chrom_.coefficients[j] * phi;
+void RationalModel::predict_from_psi(const Chromosome& chrom, const std::vector<double>& psi,
+                                     int usable, std::vector<double>& yhat,
+                                     DenominatorStats* den) {
+    const int nr = chrom.num_regressors();
+    yhat.assign(usable, 0.0);
+    if (chrom.coefficients.size() != static_cast<size_t>(nr)) return;
+    const bool rational = chrom.is_rational();
+    std::vector<char> is_den(nr, 0);
+    for (int j = 0; j < nr; ++j) is_den[j] = chrom.regressors[j].is_denominator() ? 1 : 0;
+    double prev = 1.0;
+    for (int i = 0; i < usable; ++i) {
+        const double* row = psi.data() + static_cast<size_t>(i) * nr;
+        double num = chrom.intercept, d = 1.0;
+        for (int j = 0; j < nr; ++j) {
+            if (is_den[j]) d += chrom.coefficients[j] * row[j];
+            else           num += chrom.coefficients[j] * row[j];
+        }
+        if (rational) {
+            if (den) den->add(d, prev);
+            if (std::abs(d) < kMinDenominator) d = std::copysign(kMinDenominator, d);
+            yhat[i] = num / d;
+        } else {
+            yhat[i] = num;
+        }
     }
-    return num;
 }
 
-double RationalModel::eval_denominator(
-    const double* data, int k, int rows, int cols,
-    const double* y_buf, int output_col
-) const noexcept {
-    (void)y_buf;
-    (void)output_col;
-    double denom = 1.0;
+void RationalModel::num_den_at(const double* data, int k, int rows, int cols,
+                               double& num, double& den) const noexcept {
+    num = chrom_.intercept;
+    den = 1.0;
     for (size_t j = 0; j < chrom_.regressors.size(); ++j) {
         const auto& reg = chrom_.regressors[j];
-        if (!reg.is_denominator()) continue;
-        // Denominator terms reference y(k-delay); use y_buf if output var
-        double phi = reg.evaluate(data, k, rows, cols, true);
-        denom += chrom_.coefficients[j] * phi;
+        const double phi = reg.evaluate(data, k, rows, cols, chrom_.power_mode);
+        if (reg.is_denominator()) den += chrom_.coefficients[j] * phi;
+        else                      num += chrom_.coefficients[j] * phi;
     }
-    return denom;
 }
 
 double RationalModel::evaluate_at(
     const double* data, int k, int rows, int cols,
-    const double*, int output_col
+    const double*, int /*output_col*/
 ) const noexcept {
-    if (chrom_.coefficients.empty()) return 0.0;
-    double num   = eval_numerator  (data, k, rows, cols, nullptr, output_col);
-    double denom = eval_denominator(data, k, rows, cols, nullptr, output_col);
-    if (std::abs(denom) < 1e-12) denom = std::copysign(1e-12, denom);
-    return num / denom;
+    if (chrom_.coefficients.size() != chrom_.regressors.size()) return 0.0;
+    double num, den;
+    num_den_at(data, k, rows, cols, num, den);
+    if (std::abs(den) < kMinDenominator) den = std::copysign(kMinDenominator, den);
+    return num / den;
 }
 
-// ── predict_one_step ──────────────────────────────────────────────────────
-
 std::vector<double> RationalModel::predict_one_step(
-    const double* data, int rows, int cols, int output_col
+    const double* data, int rows, int cols, int output_col,
+    DenominatorStats* den
 ) const {
-    const int md = chrom_.max_delay();
-    const int n  = rows - md;
-    std::vector<double> yhat(n);
-    for (int i = 0; i < n; ++i) {
-        int k = i + md;
-        yhat[i] = evaluate_at(data, k, rows, cols, nullptr, output_col);
-    }
+    std::vector<double> psi;
+    int usable = 0;
+    std::vector<double> yhat;
+    (void)output_col;
+    if (!build_psi_matrix(chrom_, data, rows, cols, psi, usable)) return yhat;
+    predict_from_psi(chrom_, psi, usable, yhat, den);
     return yhat;
 }
 
-// ── predict_free_run ─────────────────────────────────────────────────────
-
-std::vector<double> RationalModel::predict_free_run(
-    const double* data, int rows, int cols, int output_col, int horizon
+FreeRunResult RationalModel::simulate(
+    const double* data, int rows, int cols, int output_col,
+    int horizon, double bound
 ) const {
+    FreeRunResult res;
     const int md = chrom_.max_delay();
     const int available = rows - md;
     const int n = horizon > 0 ? std::min(available, horizon) : available;
-    if (n <= 0) return {};
+    if (n <= 0 || chrom_.coefficients.size() != chrom_.regressors.size()) return res;
     const int needed_rows = md + n;
 
-    // Make a mutable copy of data so we can overwrite the output column
-    std::vector<double> data_buf(
-        data, data + static_cast<size_t>(needed_rows) * cols
-    );
-    std::vector<double> yhat(n);
-
+    // Mutable copy: the output column is overwritten by the predictions.
+    std::vector<double> buf(data, data + static_cast<size_t>(needed_rows) * cols);
+    res.yhat.resize(n);
+    const bool rational = chrom_.is_rational();
+    double prev_den = 1.0;
     for (int i = 0; i < n; ++i) {
-        int k = i + md;
-        double yp = evaluate_at(
-            data_buf.data(), k, needed_rows, cols, nullptr, output_col
-        );
-        if (!std::isfinite(yp)) yp = 0.0;
-        yhat[i] = yp;
-        // Feed prediction back for future time steps
-        data_buf[static_cast<size_t>(k) * cols + output_col] = yp;
+        const int k = i + md;
+        double yp;
+        if (res.diverged) {
+            yp = res.yhat[i - 1];
+        } else {
+            double num, den;
+            num_den_at(buf.data(), k, needed_rows, cols, num, den);
+            if (rational) res.den.add(den, prev_den);
+            if (std::abs(den) < kMinDenominator) den = std::copysign(kMinDenominator, den);
+            yp = num / den;
+            if (!std::isfinite(yp) || std::abs(yp) > bound) {
+                res.diverged = true;
+                res.divergence_step = i;
+                if (!std::isfinite(yp)) yp = (std::isnan(yp) || yp > 0) ? bound : -bound;
+                else yp = std::copysign(bound, yp);
+                if (!std::isfinite(yp)) yp = 0.0; // unbounded case: keep finite
+            }
+        }
+        res.yhat[i] = yp;
+        buf[static_cast<size_t>(k) * cols + output_col] = yp;
     }
-    return yhat;
+    return res;
 }
 
 // ── equation_string ───────────────────────────────────────────────────────
@@ -158,20 +167,19 @@ std::string RationalModel::equation_string() const {
         const auto& reg = chrom_.regressors[j];
         double coef = chrom_.coefficients[j];
         std::ostringstream term_ss;
-        term_ss << std::fixed << std::setprecision(4) << std::abs(coef);
+        term_ss << std::setprecision(6) << std::abs(coef);
         for (const auto& t : reg.terms) {
-            term_ss << "·" << (t.is_denominator ? "y" : "x")
-                    << t.variable << "(k-" << t.delay << ")";
+            term_ss << "*x" << t.variable << "(k-" << t.delay << ")";
             if (t.exponent != 1.0)
-                term_ss << "^" << std::fixed << std::setprecision(2) << t.exponent;
+                term_ss << "^" << std::setprecision(4) << t.exponent;
         }
         std::string sign = (coef >= 0) ? " + " : " - ";
         if (reg.is_denominator()) {
-            if (!first_den) den_ss << sign;
+            if (!first_den) den_ss << sign; else if (coef < 0) den_ss << "-";
             den_ss << term_ss.str();
             first_den = false;
         } else {
-            if (!first_num) num_ss << sign;
+            if (!first_num) num_ss << sign; else if (coef < 0) num_ss << "-";
             num_ss << term_ss.str();
             first_num = false;
         }
@@ -179,7 +187,7 @@ std::string RationalModel::equation_string() const {
 
     if (std::abs(chrom_.intercept) > 1e-12) {
         std::ostringstream ic_ss;
-        ic_ss << std::fixed << std::setprecision(4) << std::abs(chrom_.intercept);
+        ic_ss << std::setprecision(6) << std::abs(chrom_.intercept);
         if (!num_ss.str().empty())
             num_ss << (chrom_.intercept >= 0 ? " + " : " - ");
         else if (chrom_.intercept < 0)
@@ -189,7 +197,8 @@ std::string RationalModel::equation_string() const {
 
     std::string num = num_ss.str().empty() ? "0" : num_ss.str();
     std::string den = den_ss.str().empty() ? "" : (" + " + den_ss.str());
-    return "y_hat(k) = (" + num + ") / (1" + den + ")";
+    return "y_hat(k) = (" + num + ") / (1" + den + ")  [basis=" +
+           power_mode_name(chrom_.power_mode) + "]";
 }
 
 } // namespace aegis

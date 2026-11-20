@@ -82,7 +82,7 @@ jobs:
         run: cmake -S cpp -B cpp/build_win -DCMAKE_BUILD_TYPE=Release
 
       - name: Build aegis_core.dll
-        run: cmake --build cpp/build_win --config Release
+        run: cmake --build cpp/build_win --config Release --target aegis_core
 
       - name: Setup Flutter (stable)
         uses: subosito/flutter-action@v2

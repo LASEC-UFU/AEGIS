@@ -3,148 +3,186 @@
 #include "de_optimizer.hpp"
 #include "local_refiner.hpp"
 #include "agent_controller.hpp"
-#include "overfitting_detector.hpp"
-#include "underfitting_detector.hpp"
 #include "automatic_pruner.hpp"
-#include "excitation_analyzer.hpp"
+#include "model_io.hpp"
 #include <string>
 #include <memory>
 #include <atomic>
 #include <condition_variable>
+#include <deque>
+#include <map>
 
 namespace aegis {
 
 /**
- * AEGIS Curriculum: staged identification phases. The "reflex layer"
- * (deterministic, runs every generation in IdentificationPipeline) advances
- * through these phases automatically based on indicator thresholds and
- * stagnation, adjusting FitnessWeights and search-space bounds for each
- * island without requiring an LLM round-trip.
+ * AEGIS Curriculum: staged identification phases. The deterministic "reflex
+ * layer" advances phases from indicator thresholds and stagnation, adjusting
+ * FitnessWeights and the search space. Can be disabled (curriculum=false).
  */
 enum class IdentificationPhase : int {
-    StructuralExploration = 0, // narrow search space, favor models that use inputs
-    NonlinearExpansion    = 1, // full pmax/max_delay, free-run penalty ramps in
-    ParsimonyValidation   = 2, // complexity/free-run penalties at full strength
-    LocalRefinement       = 3, // fine-tuning: reduced mutation, max penalties
+    StructuralExploration = 0,
+    NonlinearExpansion    = 1,
+    ParsimonyValidation   = 2,
+    LocalRefinement       = 3,
 };
 
-/** Human-readable phase name (for logs and UI). */
 const char* phase_name(IdentificationPhase p);
+const char* phase_name_int(int p);
 
-/**
- * Island specialization roles ("objective x regime grid"). Each island is
- * assigned a FitnessWeights profile on top of the current curriculum phase,
- * plus (when enough validation data is available) a non-contiguous
- * validation fold ("regime"). Migration between islands acts as a two-layer
- * filter: a migrant must survive reevaluation under the destination's
- * weights+regime before being accepted, naturally discarding solutions that
- * are only good in their original objective/regime ("regional trivial
- * solutions").
- */
+/** Island specialization roles (objective × regime grid). */
 enum class IslandRole : int {
-    Balanced        = 0, // unchanged curriculum weights (reference role)
-    Parsimony       = 1, // stronger complexity/no-input pressure
-    FreeRunFidelity = 2, // stronger free-run penalty, relaxed complexity
-    Stability       = 3, // stronger stability/denominator pressure
+    Balanced        = 0,
+    Parsimony       = 1,
+    FreeRunFidelity = 2,
+    Stability       = 3,
 };
 
-/** Human-readable island role name (for logs and UI). */
 const char* island_role_name(IslandRole r);
 
 /** Full pipeline configuration (matches aegis_configure JSON keys). */
 struct PipelineConfig {
-    // Data
+    // Data / splits
     NormalizerType normalizer_type = NormalizerType::MinMax;
     double         norm_lo         = -1.0;
     double         norm_hi         = 1.0;
     double         train_ratio     = 0.70;
     double         val_ratio       = 0.15;
+    int            train_end_row   = -1;  // index mode (overrides ratios when ≥ 0)
+    int            val_end_row     = -1;
+    int            test_start_row  = -1;  // default: val_end_row (contiguous)
+    int            test_transient  = 0;   // extra samples skipped at test start when scoring
     int            output_col      = -1;  // -1 = last column
+    std::string    dataset_name;
 
     // DE
     DEConfig       de;
 
-    // Refiner
+    // Post-processing
     RefineConfig   refine;
     bool           enable_refiner  = true;
-
-    // Pruner
-    AutomaticPruner::Config prune;
     bool           enable_pruner   = true;
+    AutomaticPruner::Config prune;
 
-    // Fitness weights
+    // Fitness weights (base values; phases and island roles derive from them)
     FitnessWeights weights;
 
-    // AEGIS Curriculum (phased identification) tunables
-    double free_run_penalty       = 0.5;  // target theta for late phases
-    double input_contribution_min = 0.3;  // min input ERR share to leave Phase 1
-    double gamma_anneal_start     = 0.01; // complexity penalty at generation 0
-    double gamma_anneal_end       = 0.1;  // complexity penalty at max_generations
-    int    phase_stagnation_limit = 150;  // stagnation generations to force a phase advance
+    // Curriculum
+    bool   curriculum             = true;
+    double free_run_penalty       = 0.5;
+    double input_contribution_min = 0.3;
+    double gamma_anneal_start     = 0.01;
+    double gamma_anneal_end       = 0.1;
+    int    phase_stagnation_limit = 150;
+    double initial_pmax           = 1.5;
+    double initial_delay_fraction = 0.5;
 
-    // Agent WebSocket
-    int            ws_port         = 8765;
-    bool           enable_ws       = true;
+    // Islands
+    bool   island_roles   = true;
+    bool   island_regimes = true;
 
-    /** Parse from JSON string. Returns false on parse error. */
-    bool from_json(const std::string& json);
+    // Agent interface
+    int    ws_port                 = 0;     // 0 disables the WebSocket server
+    bool   enable_ws               = false;
+    bool   agent_actions_enabled   = true;
+    bool   allow_budget_actions    = false; // stagnationLimit changes stopping → off by default
+    int    action_cooldown         = 10;    // generations between changes of the same parameter
+    int    outcome_horizon         = 25;    // generations used to score an action
+    int    broadcast_interval      = 1;     // WebSocket broadcast every N generations
 
-    /** Serialize to JSON string. */
+    // Execution
+    bool   sync_mode               = false; // lockstep: generations only advance via aegis_step()
+    int    history_stride          = 1;     // store every N-th generation in the history
+
+    bool from_json(const std::string& json, std::string* error, std::vector<std::string>* warnings);
     std::string to_json() const;
 };
 
 enum class PipelineState { Idle, Running, Paused, Stopped, Completed, Error };
 
-/** Converts PipelineState to string. */
 const char* pipeline_state_str(PipelineState s);
+
+/** Compact state digest used for action pre/post comparison. */
+struct StateDigest {
+    int    generation = 0;
+    long long evaluations = 0;
+    int    phase = 0;
+    double best_fitness = std::numeric_limits<double>::quiet_NaN();
+    double rmse_val = std::numeric_limits<double>::quiet_NaN();
+    double rmse_train = std::numeric_limits<double>::quiet_NaN();
+    double free_run_rmse = std::numeric_limits<double>::quiet_NaN();
+    double free_run_val_full = std::numeric_limits<double>::quiet_NaN();
+    double diversity = std::numeric_limits<double>::quiet_NaN();
+    double success_rate = std::numeric_limits<double>::quiet_NaN();
+    int    stagnation = 0;
+    int    unique_structures = 0;
+    int    num_regressors = 0;
+    std::string to_json() const;
+};
+
+/** One agent action (accepted or rejected) and its observed outcome. */
+struct ActionRecord {
+    int         id = 0;
+    std::string source;          // "local-ucb1", "llm", "fuzzy", "websocket", "ui", "reflex", ...
+    std::string param;
+    std::string reason;
+    std::string request_json;    // original request (as received)
+    double      requested = std::numeric_limits<double>::quiet_NaN();
+    double      old_value = std::numeric_limits<double>::quiet_NaN();
+    double      new_value = std::numeric_limits<double>::quiet_NaN();
+    double      effective_value = std::numeric_limits<double>::quiet_NaN(); // canonical weight after phase rules
+    bool        accepted = false;
+    std::string code;            // "accepted" | rejection code
+    std::string message;
+    int         generation_received = 0;
+    int         generation_applied  = -1;
+    StateDigest pre;
+    StateDigest post;
+    bool        resolved = false;
+    std::string outcome;         // improved | worsened | neutral | inconclusive | pending
+    std::string outcome_note;
+    double      pre_trend = std::numeric_limits<double>::quiet_NaN();   // rel. rmse_val change in H gens before
+    double      post_change = std::numeric_limits<double>::quiet_NaN(); // rel. rmse_val change in H gens after
+    std::string to_json() const;
+};
+
+/** Specification of one agent-tunable parameter (published as schema). */
+struct ActionSpec {
+    std::string name;
+    std::string kind;        // "de" | "weight" | "event"
+    double min = 0.0, max = 1.0, max_step = 1.0;
+    bool   integer = false;
+    bool   budget = false;   // affects the evaluation budget / stopping
+    int    cooldown = 10;
+    std::string description;
+};
 
 /**
  * Top-level AEGIS identification pipeline.
  *
  * Thread model:
- *   - The caller owns the pipeline object.
- *   - start() launches a background thread running DE + refiner.
- *   - The WebSocket server runs in its own threads (one accept + one per client).
- *   - stop()/pause()/resume() are thread-safe.
+ *   - async mode: start() launches the DE worker thread; agent actions are
+ *     validated immediately and applied by the worker at the next generation
+ *     boundary (never mid-generation);
+ *   - sync (lockstep) mode: generations advance only inside step(); actions
+ *     are applied at the beginning of the next step;
+ *   - the optional WebSocket server runs in its own threads and uses the
+ *     same action interface.
  */
 class IdentificationPipeline {
 public:
     IdentificationPipeline();
     ~IdentificationPipeline();
 
-    // Non-copyable, non-movable
     IdentificationPipeline(const IdentificationPipeline&) = delete;
     IdentificationPipeline& operator=(const IdentificationPipeline&) = delete;
 
-    /**
-     * Load raw data matrix (row-major, rows × cols).
-     * Data is copied internally.
-     */
     bool load_data(const double* data, int rows, int cols);
-
-    /** Configure the pipeline. Must be called before start(). */
     bool configure(const std::string& json_config);
-
-    /** Start asynchronous identification (native) or initialize sync state (WASM). */
     bool start();
-
-    /**
-     * Run up to n DE generations synchronously (WASM / single-thread path).
-     * Called repeatedly from Dart polling timer instead of run_async.
-     * Returns generations run; 0 when engine is done or not running.
-     */
-    int step(int n = 5);
-
-    /** Pause the running identification. */
+    int  step(int n = 5);
     void pause();
-
-    /** Resume after pause. */
     void resume();
-
-    /** Stop gracefully. */
     void stop();
-
-    // ── Status ──────────────────────────────────────────────────
 
     PipelineState state() const { return state_.load(); }
     int           generation()  const { return generation_.load(); }
@@ -153,17 +191,25 @@ public:
     std::string   status_json() const;
     std::string   best_model_json() const;
     std::string   snapshot_json() const;
+    std::string   config_json() const;
+    std::string   history_json() const;
+    std::string   final_report_json() const;
+    std::string   last_error() const;
 
-    // ── Agent tuning (thread-safe) ───────────────────────────────
+    // ── Agent interface ─────────────────────────────────────────────
+    /** Validate and (queue) one action; returns the result JSON. */
+    std::string apply_action_json(const std::string& action_json);
+    /** Legacy entry point: 0 accepted, 1 rejected, -1 unknown parameter. */
+    int  apply_tuning(const std::string& param, double value, const std::string& reason,
+                      const std::string& source = "legacy");
+    std::string tuning_log_json() const;   // all action records
+    std::string action_schema_json() const;
+    void set_agent_enabled(bool enabled);
+    bool agent_enabled() const { return agent_enabled_.load(); }
 
-    int  apply_tuning(const std::string& param, double value,
-                      const std::string& reason);
-    std::string tuning_log_json() const;
+    /** Evaluate an external model JSON on this pipeline's data and splits. */
+    std::string evaluate_model_json(const std::string& model_json, bool refit);
 
-    /** Inject an external chromosome encoded as best_model_json() JSON.
-     *  Used by the multi-Worker coordinator to propagate migrants between
-     *  independent WASM instances running in separate Web Workers.
-     *  Returns false if the JSON is empty or unparseable. */
     bool inject_individual(const std::string& json);
 
 private:
@@ -171,56 +217,74 @@ private:
     std::atomic<PipelineState>  state_{PipelineState::Idle};
     std::atomic<int>            generation_{0};
     std::atomic<double>         best_fitness_{std::numeric_limits<double>::infinity()};
+    std::atomic<bool>           agent_enabled_{true};
+    std::atomic<bool>           finalized_{false};
 
-    // Owned data (raw + normalized splits)
     std::vector<double> raw_data_;
     int raw_rows_ = 0, raw_cols_ = 0;
+    std::string data_hash_;
 
-    std::vector<double> train_data_, val_data_, test_data_;
-    int train_rows_ = 0, val_rows_ = 0, test_rows_ = 0;
+    // Normalized full series + split boundaries
+    std::vector<double> norm_data_;
+    int train_end_ = 0, val_end_ = 0, test_start_ = 0;
+    std::vector<double> train_data_, val_data_;
+    int train_rows_ = 0, val_rows_ = 0;
 
-    // Engine
     std::unique_ptr<Normalizer>                      normalizer_;
     std::unique_ptr<DifferentialEvolutionOptimizer>  de_;
-    std::unique_ptr<LocalRefiner>                    refiner_;
-    std::unique_ptr<AutomaticPruner>                 pruner_;
-    std::unique_ptr<AgentController>                 agent_;
+    std::unique_ptr<AgentController>                 ws_;
 
-    // Latest results (protected by results_mutex_)
+    // Results
     mutable std::mutex results_mutex_;
     Chromosome         best_chromosome_;
     GenerationReport   latest_report_;
-    std::vector<TuningLogEntry> tuning_log_;
+    std::vector<std::string> history_;      // compact per-generation JSON records
+    std::deque<StateDigest>  recent_;       // last outcome_horizon+1 digests
+    std::string        final_report_;
+    std::string        last_error_;
+    std::string        post_processing_log_;
+    std::chrono::steady_clock::time_point t_start_;
+    double             elapsed_s_ = 0.0;
 
-    // ── AEGIS Curriculum phase manager (deterministic "reflex" layer) ────
+    // Control (configuration, weights, actions)
+    mutable std::mutex control_mutex_;
+    std::vector<ActionRecord> actions_;
+    std::vector<int>          pending_;     // indices into actions_ awaiting application
+    std::map<std::string, int> last_change_gen_;
+    std::vector<ActionSpec>   specs_;
+    int                       next_action_id_ = 1;
+
     std::atomic<int>   phase_{0};
-    double             last_gamma_applied_ = 0.0;
-
-    // ── Specialized islands (objective x regime grid) ─────────────────────
     std::vector<IslandRole> island_roles_;
+    double             annealed_gamma_ = 0.01; // γ chosen by the curriculum at the last phase change
+    double             gamma_override_ = -1.0; // ≥ 0 once an agent has set complexityPenalty
+    double current_gamma_value() const;
 
-    // Background thread for pause/resume
     std::thread     worker_thread_;
-    // Periodically refreshes best_chromosome_ while running, so the Results
-    // tab can show the currently converging model (not just the final one).
-    std::thread     results_refresh_thread_;
-    std::atomic<bool> pause_flag_{false};
-    std::mutex        pause_mutex_;
-    std::condition_variable pause_cv_;
+    std::atomic<bool> shutdown_{false};
 
-    void worker_loop();
-    void split_data();
-    bool setup_agent();
-    bool handle_suggestion(const AgentSuggestion& s, TuningLogEntry& entry);
-    /** Evaluate best_chromosome_ on the held-out test split (rmse_test/r2_test). */
-    void compute_test_metrics();
+    void build_specs();
+    const ActionSpec* find_spec(const std::string& name) const;
+    double current_value_locked(const std::string& name) const;
+    double effective_value_locked(const std::string& name) const;
+    void   apply_pending_locked();
+    void   apply_action_locked(ActionRecord& a);
+    void   push_weights_locked();
+    void   resolve_outcomes(const StateDigest& now, bool phase_changed);
+    StateDigest digest(const GenerationReport& r) const;
 
-    /** FitnessWeights profile for a given phase + annealed gamma. */
-    FitnessWeights phase_weights(IdentificationPhase phase, double gamma) const;
-    /** Apply an island's role specialization on top of the phase profile. */
+    void prepare_data();
+    void on_generation(const GenerationReport& report);
+    bool before_generation();
+    void finalize(const std::string& reason);
+    void post_process(Chromosome& champ);
+
+    FitnessWeights phase_weights(int phase, double gamma) const;
     FitnessWeights apply_role_profile(FitnessWeights w, IslandRole role) const;
-    /** Reflex layer: advance phases and log transitions. Mutates rpt.phase/phase_name. */
     void update_phase(GenerationReport& rpt);
+    void log_reflex(const std::string& param, double value, const std::string& reason, int gen);
+    double divergence_bound() const;
+    std::string segment_metrics_json(const Chromosome& c) const;
 };
 
 } // namespace aegis

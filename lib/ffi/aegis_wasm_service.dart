@@ -14,6 +14,7 @@ import '../agent/generation_history.dart';
 import '../agent/tunable_parameter.dart';
 import '../engine/de/de_engine.dart' show EngineState;
 import 'aegis_library.dart';
+import 'snapshot_parser.dart';
 
 // ── JS bridge declarations ────────────────────────────────────────────────
 
@@ -159,11 +160,36 @@ class AegisFfiService {
     onStateChanged?.call(state);
   }
 
-  void applyTuning(String param, double value, {String? reason}) {
-    if (_pipeline == 0) return;
-    parameters.update(param, value);
-    _jsApplyTuning(_pipeline, param.toJS, value, (reason ?? '').toJS);
+  /// The web build routes every action through the core's validated
+  /// interface via the legacy entry point (0 accepted, 1 rejected, -1 unknown).
+  Map<String, dynamic> applyAction(String param, double value,
+      {String? reason, String source = 'ui'}) {
+    if (_pipeline == 0) return {'accepted': false, 'code': 'not_running', 'param': param};
+    final rc = _jsApplyTuning(_pipeline, param.toJS, value, (reason ?? '').toJS);
+    if (rc == 0) parameters.update(param, value);
+    return {
+      'accepted': rc == 0,
+      'code': rc == 0 ? 'accepted' : (rc == -1 ? 'unknown_parameter' : 'rejected'),
+      'param': param,
+      'newValue': value,
+      'source': source,
+    };
   }
+
+  void applyTuning(String param, double value, {String? reason, String source = 'ui'}) {
+    applyAction(param, value, reason: reason, source: source);
+  }
+
+  // Features of the audited native core not exposed by the JS coordinator.
+  bool get hasAuditApi => false;
+  int step(int n) => 0;
+  void setAgentEnabled(bool enabled) {}
+  Map<String, dynamic>? getFinalReport() => null;
+  Map<String, dynamic>? getConfig() => null;
+  Map<String, dynamic>? getActionSchema() => null;
+  List<dynamic> getHistoryRecords() => const [];
+  String lastError() => '';
+  int _lastGeneration = -1;
 
   // ── Polling ───────────────────────────────────────────────────────────────
 
@@ -186,8 +212,11 @@ class AegisFfiService {
     if (raw.isEmpty) return null;
     try {
       final json = jsonDecode(raw) as Map<String, dynamic>;
-      final result = _snapshotFromJson(json);
-      history.addSnapshot(result);
+      final result = snapshotFromCoreJson(json, history: history, elapsed: Duration.zero);
+      if (result.generation > _lastGeneration) {
+        history.addSnapshot(result);
+        _lastGeneration = result.generation;
+      }
       return result;
     } catch (_) {
       return null;
@@ -241,142 +270,10 @@ class AegisFfiService {
 
   // ── Config builder ────────────────────────────────────────────────────────
 
-  String _buildConfigJson(int outputCol, int numIslands) {
-    double p(String k) => parameters.get(k)?.currentValue ?? 0.0;
-    int i(String k) => p(k).toInt();
-
-    return jsonEncode({
-      'normalizerType': 'minmax',
-      'outputCol': outputCol,
-      'numIslands': numIslands,
-      'populationSize': i('populationSize'),
-      'mutationFactor': p('mutationFactor'),
-      'crossoverRate': p('crossoverRate'),
-      'elitismCount': i('elitismCount'),
-      'migrationInterval': i('migrationInterval'),
-      'migrationRate': p('migrationRate'),
-      'maxRegressors': i('maxRegressors'),
-      'maxDelay': i('maxDelay'),
-      'pmin': 0.5,
-      'pmax': p('maxExponent'),
-      'stagnationLimit': i('stagnationLimit'),
-      'complexityPenalty': p('complexityPenalty'),
-      'noInputPenalty': p('noInputPenalty'),
-      'freeRunPenalty': p('freeRunPenalty'),
-      'freeRunHorizon': i('freeRunHorizon'),
-      'inputContributionMin': p('inputContributionMin'),
-      'gammaAnnealStart': p('gammaAnnealStart'),
-      'gammaAnnealEnd': p('gammaAnnealEnd'),
-      'phaseStagnationLimit': i('phaseStagnationLimit'),
-      'reinitializationRatio': p('reinitializationRatio'),
-    });
-  }
-
-  // ── Snapshot deserializer ──────────────────────────────────────────────────
-
-  GenerationSnapshot _snapshotFromJson(Map<String, dynamic> j) {
-    double d(String k, [double def = 0.0]) => (j[k] as num?)?.toDouble() ?? def;
-    int n(String k, [int def = 0]) => (j[k] as num?)?.toInt() ?? def;
-
-    List<double> arr(String k) {
-      final raw = j[k];
-      if (raw is List) return raw.map((e) => (e as num).toDouble()).toList();
-      return [];
-    }
-
-    Map<String, double> fitnessBreakdown() {
-      final raw = j['fitness_breakdown'];
-      if (raw is Map) {
-        return raw.map(
-          (k, v) => MapEntry(k.toString(), (v as num?)?.toDouble() ?? 0.0),
-        );
-      }
-      return {};
-    }
-
-    double? optd(String k) {
-      final v = j[k];
-      if (v == null) return null;
-      final dv = (v as num).toDouble();
-      return dv.isFinite ? dv : null;
-    }
-
-    List<String> islandRoles() {
-      final raw = j['island_roles'];
-      if (raw is List) return raw.map((e) => e.toString()).toList();
-      return [];
-    }
-
-    List<String> termLabels() {
-      final raw = j['term_labels'];
-      if (raw is List) return raw.map((e) => e.toString()).toList();
-      return [];
-    }
-
-    final gen = n('generation');
-    final bestFitness = d('best_fitness', double.infinity);
-    final fitHistory = history.fitnessHistory;
-    double impAbs = 0;
-    double impRel = 0;
-    if (fitHistory.isNotEmpty) {
-      final prev = fitHistory.last;
-      impAbs = prev - bestFitness;
-      impRel = prev.abs() > 1e-30 ? impAbs / prev.abs() : 0;
-    }
-
-    double improvementRate(int window) {
-      if (fitHistory.length < window) return 0;
-      final old = fitHistory[fitHistory.length - window];
-      if (old.abs() < 1e-30) return 0;
-      return (old - bestFitness) / old.abs();
-    }
-
-    return GenerationSnapshot(
-      generation: gen,
-      elapsed: Duration.zero,
-      bestFitness: bestFitness,
-      worstFitness: double.infinity,
-      meanFitness: bestFitness,
-      medianFitness: bestFitness,
-      stdDevFitness: d('population_diversity'),
-      q1Fitness: double.infinity,
-      q3Fitness: double.infinity,
-      improvementAbsolute: impAbs,
-      improvementRelative: impRel,
-      improvementRate5: improvementRate(5),
-      improvementRate20: improvementRate(20),
-      stagnationCounter: n('stagnation'),
-      uniqueStructures: n('unique_structures'),
-      structureEntropy: d('structure_entropy'),
-      phenotypicDiversity: d('population_diversity'),
-      regressorFrequency: {},
-      populationVariance: d('population_variance'),
-      successRate: d('success_rate'),
-      successRateHistory: [],
-      bestModelComplexity: n('num_terms'),
-      bestModelMaxDegree: 0,
-      bestModelMaxDelay: 0,
-      bestModelERR: arr('residual_autocorr'),
-      bestModelTermLabels: termLabels(),
-      bestModelRMSE: d('rmse_train'),
-      bestModelValidationRMSE: d('rmse_validation').isFinite
-          ? d('rmse_validation')
-          : null,
-      bestModelR2: d('r2_train'),
-      residualAutocorrelation: arr('residual_autocorr').isEmpty
-          ? null
-          : arr('residual_autocorr'),
-      islandSnapshots: [],
-      migrationImpact: null,
-      phase: n('phase'),
-      phaseName: (j['phase_name'] as String?) ?? '',
-      freeRunRmse: optd('free_run_rmse'),
-      inputContributionRatio: optd('input_contribution_ratio'),
-      residualInputCorr: optd('residual_input_corr'),
-      fitnessBreakdown: fitnessBreakdown(),
-      bestContextsSurvived: n('best_contexts_survived'),
-      bestWorstFitnessSeen: optd('best_worst_fitness_seen'),
-      islandRoles: islandRoles(),
-    );
-  }
+  String _buildConfigJson(int outputCol, int numIslands) => buildCoreConfigJson(
+        parameters,
+        outputCol: outputCol,
+        numIslands: numIslands,
+        webSocketPort: 0,
+      );
 }

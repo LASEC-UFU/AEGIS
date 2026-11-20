@@ -9,10 +9,10 @@ namespace aegis {
 
 /** A single factor in a regressor: variable_idx^exponent(k - delay). */
 struct Term {
-    int    variable;      // 0-based column index into data matrix
-    int    delay;         // time delay ≥ 1
-    double exponent;      // real exponent in [pmin, pmax]
-    bool   is_denominator;// true → belongs to denominator of rational model
+    int    variable       = 0;     // 0-based column index into data matrix
+    int    delay          = 1;     // time delay ≥ 1
+    double exponent       = 1.0;   // real exponent in [pmin, pmax]
+    bool   is_denominator = false; // true → belongs to denominator of rational model
 
     uint32_t encoded() const noexcept {
         return ((is_denominator ? 1u : 0u) << 22) |
@@ -22,8 +22,9 @@ struct Term {
 };
 
 /**
- * A regressor is a product of Terms (each raised to its own exponent).
- *   value(k) = ∏ sign(x_i(k-d_i)) * (|x_i(k-d_i)| + ε)^{p_i}
+ * A regressor is a product of Terms (each raised to its own exponent):
+ *   value(k) = ∏ power_basis(x_i(k-d_i), p_i, mode)
+ * See PowerMode in safe_power.hpp for the basis definition.
  */
 struct Regressor {
     std::vector<Term> terms;
@@ -45,21 +46,19 @@ struct Regressor {
         return me;
     }
 
+    /** Structure-only hash (variables, delays, numerator/denominator). */
     uint32_t structural_hash() const noexcept {
         uint32_t h = 0;
         for (const auto& t : terms) h = h * 31u + t.encoded();
         return h;
     }
 
-    /**
-     * Evaluate this regressor at sample k given the full data matrix.
-     *   data    : row-major, rows × cols
-     *   k       : current sample index (0-based)
-     *   rows    : total rows in data
-     *   use_signed_power : if true use signed_power (default false → safe_power)
-     */
+    /** Full hash including exponents (used for duplicate detection/caching). */
+    uint64_t full_hash() const noexcept;
+
+    /** Evaluate this regressor at sample k (row-major data, rows × cols). */
     double evaluate(const double* data, int k, int rows, int cols,
-                    bool use_signed_power = true) const noexcept;
+                    PowerMode mode) const noexcept;
 };
 
 /** A model chromosome: ordered list of Regressors + optional coefficient array. */
@@ -71,18 +70,34 @@ struct Chromosome {
     double                 fitness    = std::numeric_limits<double>::infinity();
     double                 sse        = std::numeric_limits<double>::infinity();
     bool                   evaluated  = false;
+    PowerMode              power_mode = PowerMode::Hybrid; // basis semantics of this model
     ModelMetrics           metrics;      // RMSE/R²/BIC/AIC, populated on evaluate()
     FitnessBreakdown       fitness_breakdown; // decomposed fitness terms, populated on evaluate()
+    StabilityDiagnostics   stability;    // populated on evaluate()
 
     // ── Cross-context robustness tracking (specialized islands / migration) ──
     int    contexts_survived  = 0; // number of reevaluations under foreign weights/regimes
     double worst_fitness_seen = std::numeric_limits<double>::quiet_NaN();
 
     int  num_regressors() const noexcept { return static_cast<int>(regressors.size()); }
+    int  num_terms()      const noexcept;
     bool is_rational()    const noexcept;
     int  max_delay()      const noexcept;
     double max_exponent() const noexcept;
     uint32_t structural_hash() const noexcept;
+    uint64_t full_hash() const noexcept;
+
+    /**
+     * Canonical form: within a regressor, repeated (variable, delay) factors
+     * are removed (first occurrence kept) and every factor takes the
+     * regressor's numerator/denominator flag; duplicated regressors (same
+     * full hash) are removed. Clears fitted state when anything changes.
+     * Returns true if the chromosome was modified.
+     */
+    bool canonicalize();
+
+    /** Drop all fitted/evaluated state (structure kept). */
+    void invalidate();
 };
 
 /**
@@ -121,12 +136,17 @@ void pseudo_linearize(
  *   A : m × n  (row-major)
  *   b : m × 1
  *   x : n × 1  (output)
- * Returns false if system is degenerate (rank deficient).
+ * Columns that are numerically dependent on the previously accepted columns
+ * receive x_j = 0 and do not consume a row of R, so the remaining
+ * coefficients are the least-squares solution on the reduced column set.
+ * Returns false only for invalid dimensions or an all-zero matrix.
+ * If rank_out is given, it receives the number of accepted columns.
  */
 bool qr_solve(
     const double* A, int m, int n,
     const double* b,
-    double*       x
+    double*       x,
+    int*          rank_out = nullptr
 );
 
 } // namespace aegis

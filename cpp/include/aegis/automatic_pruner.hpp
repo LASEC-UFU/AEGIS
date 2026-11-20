@@ -1,55 +1,46 @@
 #pragma once
 #include "regressor_library.hpp"
+#include "individual_evaluator.hpp"
 #include <vector>
+#include <string>
 
 namespace aegis {
 
 struct PruneResult {
     Chromosome pruned_chromosome;
-    std::vector<int> removed_indices;  // original regressor indices removed
-    double fitness_before;
-    double fitness_after;
-    bool   improved;
+    std::vector<int> removed_indices;  // indices (in the original chromosome) removed
+    double fitness_before = std::numeric_limits<double>::infinity();
+    double fitness_after  = std::numeric_limits<double>::infinity();
+    bool   improved = false;
+    int    evaluations = 0;
 };
 
 /**
- * Automatic pruner: removes low-contribution regressors using
- * ERR threshold, coefficient magnitude, and VIF collinearity.
+ * Backward-elimination pruner (post-processing).
  *
- * Pipeline:
- *   1. Compute ERR for each regressor
- *   2. Compute VIF collinearity
- *   3. Mark candidates: ERR < err_threshold OR |coeff| < coeff_threshold OR VIF > vif_max
- *   4. Remove least-contributing candidates one at a time
- *   5. Refit and validate; accept removal if fitness does not worsen beyond tolerance
+ * Regressors are tried for removal in increasing order of ERR. A removal is
+ * accepted only if the model, re-fitted on the training split and scored by
+ * the supplied (canonical) evaluator on the validation split, has a fitness
+ * no worse than the current one (fitness_tol is a relative tolerance on
+ * |fitness|; the default 0 means "never worse"). The test split is never used.
  */
 class AutomaticPruner {
 public:
     struct Config {
-        double err_threshold;    // regressors below this ERR are candidates
-        double coeff_threshold;  // |coeff| below this → candidate
-        double vif_max;          // VIF above this → collinear candidate
-        double fitness_tol;      // allow up to 5% fitness worsening
-        int    max_removals;     // max regressors to remove in one pass
+        double fitness_tol;      // relative tolerance on |fitness| (0 = strictly not worse)
+        int    max_removals;     // max regressors removed in one pass
 
-        // Explicit default constructor avoids Clang CWG-1861 with nested
-        // structs that have default member initializers used as default args.
-        Config()
-            : err_threshold(0.01), coeff_threshold(1e-4), vif_max(10.0),
-              fitness_tol(0.05), max_removals(5) {}
+        Config() : fitness_tol(0.0), max_removals(10) {}
     };
 
     explicit AutomaticPruner(const Config& cfg = Config()) : cfg_(cfg) {}
 
-    /**
-     * Prune a chromosome.
-     *   chrom      : fitted chromosome with coefficients and ERR values
-     *   data       : training data (row-major, rows × cols)
-     *   output_col : output column index
-     */
     PruneResult prune(
         const Chromosome& chrom,
-        const double* data, int rows, int cols, int output_col
+        const IndividualEvaluator& evaluator,
+        const double* train_data, int train_rows,
+        const double* val_data, int val_rows,
+        int cols, int output_col
     ) const;
 
 private:

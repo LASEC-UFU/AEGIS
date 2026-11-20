@@ -57,8 +57,9 @@ class DataNormalizer {
         final invSpan = 1.0 / span;
         for (var r = 0; r < rows; r++) {
           final v = data.data[off + r];
-          normalized.data[nOff + r] = (range * (v - min) * invSpan + lowerBound)
-              .clamp(lowerBound, upperBound);
+          // Affine map, never clipped: held-out values outside the training
+          // range must not be altered (audit P0-3).
+          normalized.data[nOff + r] = range * (v - min) * invSpan + lowerBound;
         }
       }
     }

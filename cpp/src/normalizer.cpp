@@ -49,7 +49,8 @@ void Normalizer::fit_minmax(const double* data, int rows, int cols) {
         auto& c = cols_[j];
         double range = mx - mn;
         if (range < 1e-30) {
-            c.shift = (mn + mx) * 0.5;
+            // Constant column: map the constant to the centre of [lo, hi].
+            c.shift = mn - 0.5;
             c.scale = 1.0;
         } else {
             c.shift = mn;

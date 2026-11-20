@@ -82,3 +82,21 @@ typedef AegisAgentServerStop   = void Function(Pointer<Void>);
 typedef AegisAgentBroadcast    = int Function(Pointer<Void>, Pointer<Utf8>);
 typedef AegisAgentClientCount  = int Function(Pointer<Void>);
 typedef AegisVersion           = Pointer<Utf8> Function();
+
+// ─── Audit additions (1.1.0): typed agent actions, records, evaluation ────
+// These symbols are looked up optionally so older DLLs still load.
+
+typedef AegisStepNative          = Int32 Function(Pointer<Void> pipeline, Int32 n);
+typedef AegisStringOpNative      = Pointer<Utf8> Function(Pointer<Void> pipeline);
+typedef AegisStringArgOpNative   = Pointer<Utf8> Function(Pointer<Void> pipeline, Pointer<Utf8> arg);
+typedef AegisSetAgentEnabledNative = Int32 Function(Pointer<Void> pipeline, Int32 enabled);
+typedef AegisEvaluateModelNative = Pointer<Utf8> Function(
+  Pointer<Void> pipeline, Pointer<Utf8> modelJson, Int32 refit);
+typedef AegisBuildInfoNative     = Pointer<Utf8> Function();
+
+typedef AegisStep            = int Function(Pointer<Void>, int);
+typedef AegisStringOp        = Pointer<Utf8> Function(Pointer<Void>);
+typedef AegisStringArgOp     = Pointer<Utf8> Function(Pointer<Void>, Pointer<Utf8>);
+typedef AegisSetAgentEnabled = int Function(Pointer<Void>, int);
+typedef AegisEvaluateModel   = Pointer<Utf8> Function(Pointer<Void>, Pointer<Utf8>, int);
+typedef AegisBuildInfo       = Pointer<Utf8> Function();

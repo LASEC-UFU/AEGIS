@@ -6,127 +6,87 @@
 
 namespace aegis {
 
-// Companion matrix eigenvalues via power iteration (simplified)
-std::vector<std::complex<double>> StabilityAnalyzer::poly_roots(
-    const std::vector<double>& coeffs
-) {
-    int n = static_cast<int>(coeffs.size()) - 1;
-    if (n <= 0) return {};
-
-    // Build companion matrix (column-major)
-    std::vector<double> C(n * n, 0.0);
-    for (int i = 0; i < n - 1; ++i)
-        C[(i + 1) * n + i] = 1.0; // sub-diagonal
-    double an = coeffs[n];
-    if (std::abs(an) < 1e-30) an = 1.0;
-    for (int i = 0; i < n; ++i)
-        C[i * n + (n - 1)] = -coeffs[i] / an; // last column
-
-    // QR iteration to find eigenvalues (simplified - returns diagonal after 100 iters)
-    std::vector<std::complex<double>> roots;
-
-    // For small polynomials use analytical solutions
-    if (n == 1) {
-        double r = -coeffs[0] / coeffs[1];
-        roots.emplace_back(r, 0.0);
-        return roots;
-    }
-    if (n == 2) {
-        double a = coeffs[2], b = coeffs[1], c = coeffs[0];
-        double disc = b * b - 4.0 * a * c;
-        if (disc >= 0) {
-            double sq = std::sqrt(disc);
-            roots.emplace_back((-b + sq) / (2 * a), 0.0);
-            roots.emplace_back((-b - sq) / (2 * a), 0.0);
-        } else {
-            double real = -b / (2 * a);
-            double imag = std::sqrt(-disc) / (2 * a);
-            roots.emplace_back(real,  imag);
-            roots.emplace_back(real, -imag);
+void StabilityAnalyzer::finalize(StabilityDiagnostics& d, bool is_rational) {
+    double p_sing = 0.0;
+    if (is_rational) {
+        if (d.denominator_sign_changes > 0) {
+            p_sing = 1.0;
+        } else if (std::isfinite(d.min_abs_denominator)) {
+            p_sing = std::max(0.0, (kDenominatorMargin - d.min_abs_denominator) /
+                                   kDenominatorMargin);
         }
-        return roots;
     }
+    const double p_div = d.free_run_diverged ? 1.0 : 0.0;
+    d.penalty = p_sing + p_div;
+    d.is_stable = !d.free_run_diverged &&
+                  (!is_rational || (d.denominator_sign_changes == 0 &&
+                                    !(d.min_abs_denominator < 1e-6)));
+    d.evaluated = true;
+}
 
-    // For higher order: use companion matrix power iteration to estimate
-    // the dominant eigenvalue, then deflate. This is a rough approximation.
-    // Production code would use a full QR eigenvalue algorithm.
-    std::vector<double> v(n, 1.0 / std::sqrt((double)n));
-    for (int iter = 0; iter < 200; ++iter) {
-        std::vector<double> w(n, 0.0);
-        for (int i = 0; i < n; ++i)
+std::vector<std::complex<double>> StabilityAnalyzer::monic_roots(const std::vector<double>& c) {
+    using cd = std::complex<double>;
+    const int n = static_cast<int>(c.size());
+    std::vector<cd> roots;
+    if (n == 0) return roots;
+    if (n == 1) { roots.emplace_back(-c[0], 0.0); return roots; }
+
+    // Cauchy bound for the initial circle radius.
+    double bound = 0.0;
+    for (double v : c) bound = std::max(bound, std::abs(v));
+    bound = 1.0 + bound;
+
+    auto poly = [&](const cd& z) {
+        cd p(1.0, 0.0);
+        for (int i = 0; i < n; ++i) p = p * z + c[i];
+        return p;
+    };
+
+    roots.resize(n);
+    const cd seed(0.4, 0.9);
+    cd w(1.0, 0.0);
+    for (int i = 0; i < n; ++i) {
+        w *= seed;
+        roots[i] = bound * w / std::abs(w);
+    }
+    for (int it = 0; it < 2000; ++it) {
+        double max_delta = 0.0;
+        for (int i = 0; i < n; ++i) {
+            cd denom(1.0, 0.0);
             for (int j = 0; j < n; ++j)
-                w[i] += C[j * n + i] * v[j];
-        double norm = 0.0;
-        for (double x : w) norm += x * x;
-        norm = std::sqrt(norm);
-        if (norm < 1e-30) break;
-        for (double& x : w) x /= norm;
-        v = w;
+                if (j != i) denom *= (roots[i] - roots[j]);
+            if (std::abs(denom) < 1e-300) denom = cd(1e-300, 0.0);
+            const cd delta = poly(roots[i]) / denom;
+            roots[i] -= delta;
+            max_delta = std::max(max_delta, std::abs(delta));
+        }
+        if (max_delta < 1e-13 * bound) break;
     }
-    // Rayleigh quotient for dominant eigenvalue
-    std::vector<double> Cv(n, 0.0);
-    for (int i = 0; i < n; ++i)
-        for (int j = 0; j < n; ++j)
-            Cv[i] += C[j * n + i] * v[j];
-    double ev = 0.0;
-    for (int i = 0; i < n; ++i) ev += v[i] * Cv[i];
-    roots.emplace_back(ev, 0.0);
-
-    // Fill remaining with zero (conservative stability check)
-    for (int i = 1; i < n; ++i) roots.emplace_back(0.0, 0.0);
     return roots;
 }
 
-std::vector<double> StabilityAnalyzer::extract_denom_poly(
-    const Chromosome& chrom
-) const {
-    // Collect denominator coefficients grouped by delay
-    int max_del = 0;
-    for (const auto& r : chrom.regressors)
-        if (r.is_denominator()) max_del = std::max(max_del, r.max_delay());
-    if (max_del == 0) return {};
-
-    std::vector<double> poly(max_del + 1, 0.0);
-    poly[0] = 1.0; // D(k) = 1 + ...
-
+double StabilityAnalyzer::linear_spectral_radius(const Chromosome& chrom, int output_col) {
+    if (chrom.coefficients.size() != chrom.regressors.size()) return std::nan("");
+    int n = 0;
+    std::vector<double> a(1, 0.0); // a[d] for d = 1..n (index 0 unused)
     for (size_t j = 0; j < chrom.regressors.size(); ++j) {
         const auto& reg = chrom.regressors[j];
-        if (!reg.is_denominator()) continue;
-        if (j >= chrom.coefficients.size()) continue;
-        int del = reg.max_delay();
-        if (del < 1 || del > max_del) continue;
-        poly[del] += chrom.coefficients[j];
+        if (reg.is_denominator() || reg.terms.size() != 1) continue;
+        const auto& t = reg.terms[0];
+        if (t.variable != output_col || std::abs(t.exponent - 1.0) > 1e-9) continue;
+        if (t.delay > n) { n = t.delay; a.resize(n + 1, 0.0); }
+        a[t.delay] += chrom.coefficients[j];
     }
-    return poly;
-}
-
-StabilityResult StabilityAnalyzer::analyze(const Chromosome& chrom) const {
-    StabilityResult res;
-    if (!chrom.is_rational() || chrom.coefficients.empty()) {
-        res.is_stable = true;
-        res.stability_margin = 1.0;
-        res.penalty = 0.0;
-        return res;
-    }
-
-    auto poly = extract_denom_poly(chrom);
-    if (poly.empty()) return res;
-
-    res.denominator_roots = poly_roots(poly);
-
-    double max_mod = 0.0;
-    for (const auto& root : res.denominator_roots) {
-        double mod = std::abs(root);
-        max_mod = std::max(max_mod, mod);
-    }
-
-    res.is_stable = (max_mod < 1.0);
-    res.stability_margin = 1.0 - max_mod;
-
-    if (!res.is_stable) {
-        res.penalty = std::max(0.0, max_mod - 1.0) * 10.0;
-    }
-    return res;
+    if (n == 0) return 0.0;
+    // z^n − a1 z^{n−1} − … − an  →  monic coefficients c[i] = −a[i+1]
+    std::vector<double> c(n);
+    for (int i = 0; i < n; ++i) c[i] = -a[i + 1];
+    // Trailing zero coefficients correspond to roots at the origin.
+    while (!c.empty() && std::abs(c.back()) < 1e-300) c.pop_back();
+    if (c.empty()) return 0.0;
+    double rho = 0.0;
+    for (const auto& r : monic_roots(c)) rho = std::max(rho, std::abs(r));
+    return rho;
 }
 
 } // namespace aegis

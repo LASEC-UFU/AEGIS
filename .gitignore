@@ -54,3 +54,10 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# AEGIS experiments: raw/processed data and per-run outputs are reproducible and not versioned
+experiments/data/
+experiments/results/
+experiments/bin/
+experiments/results_archive/
+experiments/results_policy_eval/

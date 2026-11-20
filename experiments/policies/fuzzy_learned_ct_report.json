@@ -1,0 +1,117 @@
+{
+  "schema": "aegis.fuzzy_learning_report/1",
+  "sources": [
+    "experiments/results/cascaded_tanks/agent_ucb1",
+    "experiments/results/cascaded_tanks/agent_fuzzy"
+  ],
+  "trainingSeeds": "1-10",
+  "actionsSeen": 505,
+  "rejectedByCore": 0,
+  "inconclusive": 96,
+  "conclusiveRecords": 409,
+  "meanScore": 0.0016145682883209047,
+  "bySource": {
+    "local-ucb1": 237,
+    "fuzzy": 172
+  },
+  "minSupport": 3.0,
+  "outcome": "freeRunValFull",
+  "rules": [
+    {
+      "rule": "R1",
+      "param": "mutationFactor",
+      "delta": 0.1,
+      "supportSame": 64.46666666693332,
+      "nSame": 67,
+      "utilitySame": 0.0,
+      "supportOpposite": 0.0,
+      "nOpposite": 0,
+      "utilityOpposite": null,
+      "decision": "kept (non-negative utility)"
+    },
+    {
+      "rule": "R2",
+      "param": "reinitializationRatio",
+      "delta": 0.05,
+      "supportSame": 23.386666666666667,
+      "nSame": 26,
+      "utilitySame": 0.0,
+      "supportOpposite": 0.0,
+      "nOpposite": 0,
+      "utilityOpposite": null,
+      "decision": "kept (non-negative utility)"
+    },
+    {
+      "rule": "R3",
+      "param": "structuralMutationRate",
+      "delta": 0.05,
+      "supportSame": 0.0,
+      "nSame": 0,
+      "utilitySame": null,
+      "supportOpposite": 0.0,
+      "nOpposite": 0,
+      "utilityOpposite": null,
+      "decision": "kept (insufficient data)"
+    },
+    {
+      "rule": "R4",
+      "param": "crossoverRate",
+      "delta": -0.1,
+      "supportSame": 21.7333333334,
+      "nSame": 22,
+      "utilitySame": 0.0,
+      "supportOpposite": 0.0,
+      "nOpposite": 0,
+      "utilityOpposite": null,
+      "decision": "kept (non-negative utility)"
+    },
+    {
+      "rule": "R5",
+      "param": "mutationFactor",
+      "delta": -0.05,
+      "supportSame": 0.0,
+      "nSame": 0,
+      "utilitySame": null,
+      "supportOpposite": 0.0,
+      "nOpposite": 0,
+      "utilityOpposite": null,
+      "decision": "kept (insufficient data)"
+    },
+    {
+      "rule": "R6",
+      "param": "complexityPenalty",
+      "delta": 0.01,
+      "supportSame": 1.0807966568304674,
+      "nSame": 2,
+      "utilitySame": 0.5078031724412059,
+      "supportOpposite": 0.0,
+      "nOpposite": 0,
+      "utilityOpposite": null,
+      "decision": "kept (insufficient data)"
+    },
+    {
+      "rule": "R7",
+      "param": "freeRunPenalty",
+      "delta": 0.25,
+      "supportSame": 138.0,
+      "nSame": 138,
+      "utilitySame": -0.004387845484881939,
+      "supportOpposite": 0.0,
+      "nOpposite": 0,
+      "utilityOpposite": null,
+      "decision": "disabled (negative utility)"
+    },
+    {
+      "rule": "R8",
+      "param": "migrationRate",
+      "delta": 0.05,
+      "supportSame": 0.0,
+      "nSame": 0,
+      "utilitySame": null,
+      "supportOpposite": 0.0,
+      "nOpposite": 0,
+      "utilityOpposite": null,
+      "decision": "kept (insufficient data)"
+    }
+  ]
+}

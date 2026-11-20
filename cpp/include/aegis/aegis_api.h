@@ -53,32 +53,12 @@ AEGIS_API int aegis_load_data(
 /* ── Configuration ──────────────────────────────────────────────── */
 
 /**
- * Configure the pipeline from a JSON string.
- * Accepted keys (all optional, use defaults otherwise):
- *   normalizerType      : "minmax" | "robust" | "zscore"  (default "minmax")
- *   trainRatio          : double  [0.5,0.9]   (default 0.7)
- *   validationRatio     : double  [0.05,0.3]  (default 0.15)
- *   outputCol           : int                 (default last column)
- *   numIslands          : int    [1,16]        (default 3)
- *   populationSize      : int    [20,500]      (default 50)
- *   maxGenerations      : int    [100,100000]  (default 5000)
- *   stagnationLimit     : int    [50,5000]     (default 500)
- *   mutationFactor      : double [0.0,2.0]     (default 0.5)
- *   crossoverRate       : double [0.0,1.0]     (default 0.9)
- *   elitismCount        : int    [0,20]        (default 2)
- *   migrationInterval   : int    [5,200]       (default 20)
- *   migrationRate       : double [0.0,0.5]     (default 0.1)
- *   maxRegressors       : int    [2,30]        (default 8)
- *   maxTermsPerReg      : int    [1,5]         (default 3)
- *   pmin                : double [0.1,1.0]     (default 0.5)
- *   pmax                : double [1.0,10.0]    (default 5.0)
- *   maxDelay            : int    [1,200]       (default 40)
- *   complexityPenalty   : double [0.0,1.0]     (default 0.01)
- *   denominatorPenalty  : double [0.0,10.0]    (default 0.1)
- *   exponentPenalty     : double [0.0,1.0]     (default 0.01)
- *   stabilityPenalty    : double [0.0,10.0]    (default 1.0)
- *   numThreads          : int    [1,64]        (default hardware)
- *   webSocketPort       : int    [1024,65535]  (default 8765)
+ * Configure the pipeline from a JSON object (must be called after
+ * aegis_load_data). Unknown keys are ignored and reported through
+ * aegis_get_last_error(). The complete list of keys, defaults and valid
+ * ranges is documented in docs/CONFIGURATION.md; aegis_get_config() returns
+ * the effective configuration, including the effective random seed.
+ * Returns 0 on success, -1 on error (message in aegis_get_last_error()).
  */
 AEGIS_API int aegis_configure(void* pipeline, const char* json_config);
 
@@ -137,10 +117,11 @@ AEGIS_API void aegis_free_string(char* ptr);
 
 /**
  * Apply a parameter adjustment from the Dart AI agent.
- *   param_name : one of the configuration keys listed in aegis_configure
- *   new_value  : proposed value (validated against limits)
+ *   param_name : one of the parameters of aegis_get_action_schema()
+ *   new_value  : proposed value (validated against range, max step, cooldown)
  *   reason     : human-readable reason string (may be NULL)
- *   returns    : 0 = accepted, 1 = rejected (out of bounds or invalid), -1 = unknown param
+ *   returns    : 0 = accepted, 1 = rejected, -1 = unknown param
+ * Legacy wrapper around aegis_apply_action (source = "legacy").
  */
 AEGIS_API int aegis_apply_tuning(
     void*       pipeline,
@@ -154,6 +135,55 @@ AEGIS_API int aegis_apply_tuning(
  * Caller must free with aegis_free_string().
  */
 AEGIS_API char* aegis_get_tuning_log(void* pipeline);
+
+/* ── Agent action interface (typed, validated, logged) ─────────────── */
+
+/**
+ * Submit one action as JSON: {"param":"mutationFactor","value":0.6,
+ * "reason":"...","source":"llm"}. Also accepts
+ * {"actions":[{"param":..,"value":..},...]} and the legacy
+ * {"proposed_changes":{"param":value},"reason":"..."}.
+ * Returns {"results":[ActionRecord,...]} (caller frees). Accepted actions are
+ * applied at the next generation boundary; see docs/AGENT_INTERFACE.md.
+ */
+AEGIS_API char* aegis_apply_action(void* pipeline, const char* action_json);
+
+/** Published schema of agent-tunable parameters (ranges, max step, cooldown). */
+AEGIS_API char* aegis_get_action_schema(void* pipeline);
+
+/** Enable (1) or disable (0) agent actions without touching the run. */
+AEGIS_API int   aegis_set_agent_enabled(void* pipeline, int enabled);
+
+/* ── Records / reproducibility ─────────────────────────────────────── */
+
+/** Effective configuration (after validation, includes the effective seed). */
+AEGIS_API char* aegis_get_config(void* pipeline);
+
+/** Compact per-generation history (convergence curves). */
+AEGIS_API char* aegis_get_history(void* pipeline);
+
+/**
+ * Final report (available after completion or stop): config, seed, data
+ * hash, splits, normalization, model, train/validation/test metrics (one-step
+ * and free-run, normalized and original units), actions and outcomes.
+ */
+AEGIS_API char* aegis_get_final_report(void* pipeline);
+
+/** Last configuration/data error or warning (empty string if none). */
+AEGIS_API char* aegis_get_last_error(void* pipeline);
+
+/**
+ * Evaluate an external model (AEGIS model JSON) on the pipeline's data and
+ * splits. refit != 0 re-estimates coefficients on the training split.
+ * Uses the test split: intended for post-hoc baseline evaluation only.
+ */
+AEGIS_API char* aegis_evaluate_model(void* pipeline, const char* model_json, int refit);
+
+/** Build information JSON (static; do NOT free). */
+AEGIS_API const char* aegis_build_info(void);
+
+/** Inject a model (best_model JSON) as a migrant into island 0. */
+AEGIS_API int   aegis_inject_individual(void* pipeline, const char* json);
 
 /* ── WebSocket agent server ─────────────────────────────────────── */
 

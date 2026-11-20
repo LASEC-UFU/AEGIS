@@ -13,7 +13,7 @@ void main() {
 
     final notifier = container.read(engineProvider.notifier);
     expect(container.read(agentModeProvider), AgentMode.local);
-    expect(notifier.agentName, 'Agente local adaptativo');
+    expect(notifier.agentName, 'Agente local (UCB1)');
     expect(notifier.agentAvailable, isTrue);
 
     notifier.setAgentMode(AgentMode.off);

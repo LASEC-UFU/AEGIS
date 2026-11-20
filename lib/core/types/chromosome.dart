@@ -70,10 +70,12 @@ class Chromosome {
     required List<double> err,
     required double fitness,
     required double sse,
+    double intercept = 0.0,
   }) {
     return Chromosome(
       regressors: regressors,
       coefficients: coefficients,
+      intercept: intercept,
       err: err,
       fitness: fitness,
       sse: sse,

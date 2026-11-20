@@ -11,6 +11,7 @@ import '../../agent/generation_history.dart';
 import '../../agent/tunable_parameter.dart';
 import '../../ffi/aegis_library.dart';
 import '../../ffi/aegis_ffi_service.dart';
+import '../../services/fuzzy_policy_agent.dart';
 import '../../services/local_adaptive_agent.dart';
 import '../../services/llm_agent.dart';
 import '../../services/optimization_agent.dart';
@@ -322,20 +323,48 @@ class EngineNotifier extends StateNotifier<EngineUiState> {
         currentParameters: () =>
             parameters?.currentValues ?? const <String, double>{},
       ),
+      AgentMode.fuzzy => FuzzyPolicyAgent(),
       AgentMode.remote => LlmAgent(),
     };
     _activeAgentMode = mode;
-    _agent?.onSuggestion = (parameter, value, reason) {
-      applyTuning(parameter, value, reason: reason);
+    final agent = _agent;
+    agent?.onSuggestion = (parameter, value, reason) {
+      final result = applyTuning(parameter, value, reason: reason, source: agent.id);
+      agent.onActionResult(result);
+    };
+    agent?.onDecision = (decision) {
+      _decisions.add(decision);
+      if (_decisions.length > 1000) _decisions.removeAt(0);
     };
   }
 
-  void applyTuning(String param, double value, {String? reason}) {
+  final List<AgentDecision> _decisions = [];
+
+  /// Decisions of the active agent (including "no action"), oldest first.
+  List<AgentDecision> get agentDecisions => List.unmodifiable(_decisions);
+
+  /// Final report of the C++ core (null while running or for the Dart engine).
+  Map<String, dynamic>? getFinalReport() => _ffiService?.getFinalReport();
+
+  /// Submits an action through the engine's validated interface and returns
+  /// the core's ActionRecord (accepted, code, message, oldValue, newValue…).
+  Map<String, dynamic> applyTuning(String param, double value,
+      {String? reason, String source = 'ui'}) {
     if (_usingCpp) {
-      _ffiService?.applyTuning(param, value, reason: reason);
-    } else {
-      _engine?.applyTuning(param, value, reason: reason);
+      return _ffiService?.applyAction(param, value, reason: reason, source: source) ??
+          {'accepted': false, 'code': 'not_running', 'param': param};
     }
+    final before = _engine?.parameters.get(param)?.currentValue;
+    _engine?.applyTuning(param, value, reason: reason);
+    final after = _engine?.parameters.get(param)?.currentValue;
+    return {
+      'accepted': before != null,
+      'code': before == null ? 'unknown_parameter' : 'accepted',
+      'param': param,
+      'oldValue': before,
+      'newValue': after,
+      'source': source,
+    };
   }
 
   // ── Callbacks ──────────────────────────────────────────────────────────

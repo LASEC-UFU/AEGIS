@@ -57,6 +57,51 @@ class AegisLibrary {
     agentBroadcast    = _lib.lookupFunction<AegisAgentBroadcastNative,     AegisAgentBroadcast>   ('aegis_agent_broadcast');
     agentClientCount  = _lib.lookupFunction<AegisAgentClientCountNative,   AegisAgentClientCount> ('aegis_agent_client_count');
     version           = _lib.lookupFunction<AegisVersionNative,            AegisVersion>          ('aegis_version');
+
+    // Optional symbols (null when the loaded DLL predates the 2026-11 audit).
+    T? opt<T>(T Function() look) {
+      try {
+        return look();
+      } catch (_) {
+        return null;
+      }
+    }
+
+    step            = opt(() => _lib.lookupFunction<AegisStepNative, AegisStep>('aegis_step'));
+    applyAction     = opt(() => _lib.lookupFunction<AegisStringArgOpNative, AegisStringArgOp>('aegis_apply_action'));
+    getActionSchema = opt(() => _lib.lookupFunction<AegisStringOpNative, AegisStringOp>('aegis_get_action_schema'));
+    setAgentEnabled = opt(() => _lib.lookupFunction<AegisSetAgentEnabledNative, AegisSetAgentEnabled>('aegis_set_agent_enabled'));
+    getConfig       = opt(() => _lib.lookupFunction<AegisStringOpNative, AegisStringOp>('aegis_get_config'));
+    getHistory      = opt(() => _lib.lookupFunction<AegisStringOpNative, AegisStringOp>('aegis_get_history'));
+    getFinalReport  = opt(() => _lib.lookupFunction<AegisStringOpNative, AegisStringOp>('aegis_get_final_report'));
+    getLastError    = opt(() => _lib.lookupFunction<AegisStringOpNative, AegisStringOp>('aegis_get_last_error'));
+    evaluateModel   = opt(() => _lib.lookupFunction<AegisEvaluateModelNative, AegisEvaluateModel>('aegis_evaluate_model'));
+    buildInfo       = opt(() => _lib.lookupFunction<AegisBuildInfoNative, AegisBuildInfo>('aegis_build_info'));
+  }
+
+  // Optional symbols added by the 2026-11 audit.
+  AegisStep?            step;
+  AegisStringArgOp?     applyAction;
+  AegisStringOp?        getActionSchema;
+  AegisSetAgentEnabled? setAgentEnabled;
+  AegisStringOp?        getConfig;
+  AegisStringOp?        getHistory;
+  AegisStringOp?        getFinalReport;
+  AegisStringOp?        getLastError;
+  AegisEvaluateModel?   evaluateModel;
+  AegisBuildInfo?       buildInfo;
+
+  /// True when the typed action interface and final reports are available.
+  bool get hasAuditApi => applyAction != null && getFinalReport != null && step != null;
+
+  /// Calls a string-returning function that takes one string argument.
+  String callStringArg(Pointer<Void> p, AegisStringArgOp fn, String arg) {
+    final a = arg.toNativeUtf8();
+    try {
+      return callStringFn(() => fn(p, a));
+    } finally {
+      calloc.free(a);
+    }
   }
 
   /// Singleton accessor. Returns null if the native library cannot be loaded.
@@ -64,10 +109,10 @@ class AegisLibrary {
 
   /// Try to open the native library. Must be called once at app startup
   /// (e.g., inside main()) before using any C++ features.
-  static bool tryLoad() {
+  static bool tryLoad({String? path}) {
     if (_instance != null) return true;
     try {
-      final lib = _openLibrary();
+      final lib = path != null ? DynamicLibrary.open(path) : _openLibrary();
       _instance = AegisLibrary._(lib);
       return true;
     } catch (_) {

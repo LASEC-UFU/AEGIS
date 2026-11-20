@@ -1,0 +1,237 @@
+{
+  "schema": "aegis.fuzzy_rule_base/1",
+  "name": "learned-v1",
+  "evidenceThreshold": 0.4,
+  "variables": {
+    "stag": {
+      "low": [
+        null,
+        null,
+        0.15,
+        0.3
+      ],
+      "medium": [
+        0.2,
+        0.4,
+        0.5,
+        0.7
+      ],
+      "high": [
+        0.55,
+        0.8,
+        null,
+        null
+      ]
+    },
+    "sr": {
+      "low": [
+        null,
+        null,
+        0.03,
+        0.08
+      ],
+      "medium": [
+        0.05,
+        0.1,
+        0.15,
+        0.3
+      ],
+      "high": [
+        0.2,
+        0.35,
+        null,
+        null
+      ]
+    },
+    "div": {
+      "low": [
+        null,
+        null,
+        0.1,
+        0.2
+      ],
+      "medium": [
+        0.12,
+        0.25,
+        0.35,
+        0.5
+      ],
+      "high": [
+        0.4,
+        0.6,
+        null,
+        null
+      ]
+    },
+    "gap": {
+      "ok": [
+        null,
+        null,
+        0.1,
+        0.3
+      ],
+      "high": [
+        0.2,
+        0.5,
+        null,
+        null
+      ]
+    },
+    "sim": {
+      "ok": [
+        null,
+        null,
+        1.5,
+        3.0
+      ],
+      "high": [
+        2.0,
+        5.0,
+        null,
+        null
+      ]
+    }
+  },
+  "rules": [
+    {
+      "id": "R1",
+      "if": {
+        "stag": "high",
+        "sr": "low"
+      },
+      "then": {
+        "param": "mutationFactor",
+        "delta": 0.1
+      },
+      "weight": 1.0,
+      "explanation": "stagnation with failing trials: larger differential steps"
+    },
+    {
+      "id": "R2",
+      "if": {
+        "stag": "high",
+        "div": "low"
+      },
+      "then": {
+        "param": "reinitializationRatio",
+        "delta": 0.05
+      },
+      "weight": 1.0,
+      "explanation": "stagnation with structural collapse: more random immigrants"
+    },
+    {
+      "id": "R3",
+      "if": {
+        "stag": "high",
+        "div": "low"
+      },
+      "then": {
+        "param": "structuralMutationRate",
+        "delta": 0.05
+      },
+      "weight": 1.0,
+      "explanation": "stagnation with structural collapse: more add/delete/replace moves"
+    },
+    {
+      "id": "R4",
+      "if": {
+        "stag": "medium",
+        "sr": "low"
+      },
+      "then": {
+        "param": "crossoverRate",
+        "delta": -0.1
+      },
+      "weight": 1.0,
+      "explanation": "slowing progress: inherit fewer regressors per trial (smaller moves)"
+    },
+    {
+      "id": "R5",
+      "if": {
+        "stag": "low",
+        "sr": "high"
+      },
+      "then": {
+        "param": "mutationFactor",
+        "delta": -0.05
+      },
+      "weight": 1.0,
+      "explanation": "healthy progress: refine with smaller steps"
+    },
+    {
+      "id": "R6",
+      "if": {
+        "gap": "high"
+      },
+      "then": {
+        "param": "complexityPenalty",
+        "delta": 0.01
+      },
+      "weight": 1.0,
+      "explanation": "validation error well above training error: more parsimony"
+    },
+    {
+      "id": "R7",
+      "if": {
+        "sim": "high"
+      },
+      "then": {
+        "param": "freeRunPenalty",
+        "delta": 0.25
+      },
+      "weight": 0.0,
+      "explanation": "simulation much worse than one-step prediction: weight free-run error"
+    },
+    {
+      "id": "R8",
+      "if": {
+        "stag": "high",
+        "sr": "low",
+        "div": "high"
+      },
+      "then": {
+        "param": "migrationRate",
+        "delta": 0.05
+      },
+      "weight": 1.0,
+      "explanation": "diverse but stuck islands: exchange more individuals"
+    }
+  ],
+  "bounds": {
+    "mutationFactor": [
+      0.1,
+      1.0,
+      0.3
+    ],
+    "crossoverRate": [
+      0.1,
+      1.0,
+      0.3
+    ],
+    "reinitializationRatio": [
+      0.0,
+      0.4,
+      0.2
+    ],
+    "structuralMutationRate": [
+      0.0,
+      0.4,
+      0.2
+    ],
+    "complexityPenalty": [
+      0.0,
+      0.2,
+      0.1
+    ],
+    "freeRunPenalty": [
+      0.0,
+      3.0,
+      1.0
+    ],
+    "migrationRate": [
+      0.0,
+      0.3,
+      0.2
+    ]
+  }
+}

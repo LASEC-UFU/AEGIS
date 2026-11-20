@@ -27,6 +27,8 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^6.0.0
+  # SHA-256 of benchmark files in tool/ (already resolved transitively).
+  crypto: ^3.0.7
 
 # The following section is specific to Flutter packages.
 flutter:

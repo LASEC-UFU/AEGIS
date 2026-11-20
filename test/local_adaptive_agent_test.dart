@@ -20,7 +20,7 @@ void main() {
     expect(actions, hasLength(1));
     expect(actions.single.parameter, 'freeRunPenalty');
     expect(actions.single.value, greaterThan(0.5));
-    expect(actions.single.reason, startsWith('Agente local:'));
+    expect(actions.single.reason, startsWith('Agente local UCB1:'));
   });
 
   test('requires persistence before acting on a moderate signal', () {

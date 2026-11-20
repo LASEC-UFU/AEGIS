@@ -123,6 +123,9 @@ class ResultsScreen extends ConsumerWidget {
               r2Test: r2Test,
               rmseTest: rmseTest,
               outputCol: outputCol,
+              finalReport: notifier.getFinalReport(),
+              tuningLog: notifier.getTuningLog(),
+              agentDecisions: notifier.agentDecisions.map((d) => d.toMap()).toList(),
             ),
           ),
           if (eState.state == EngineState.completed)
@@ -238,6 +241,9 @@ Future<void> _exportJson(
   double? r2Test,
   double? rmseTest,
   required int outputCol,
+  Map<String, dynamic>? finalReport,
+  List<Map<String, dynamic>> tuningLog = const [],
+  List<Map<String, dynamic>> agentDecisions = const [],
 }) async {
   final timestamp = DateTime.now().toIso8601String().replaceAll(':', '-').substring(0, 19);
 
@@ -291,6 +297,12 @@ Future<void> _exportJson(
       'input_contribution_ratio': snap.inputContributionRatio,
     },
     'fitness_breakdown': snap.fitnessBreakdown,
+    // Reproducibility: the core's final report carries the effective
+    // configuration (incl. seed), data hash, splits, normalization and the
+    // train/validation/test metrics; the logs record every agent action.
+    'final_report': finalReport,
+    'tuning_log': tuningLog,
+    'agent_decisions': agentDecisions,
   };
 
   final jsonString = const JsonEncoder.withIndent('  ').convert(payload);
