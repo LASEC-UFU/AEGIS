@@ -27,7 +27,7 @@ fi
 monitor() {
   while kill -0 "$1" 2>/dev/null; do
     powershell.exe -NoProfile -Command \
-      "\$o = Get-CimInstance Win32_OperatingSystem; \$c = (Get-CimInstance Win32_Processor | Measure-Object LoadPercentage -Average).Average; \$n = @(Get-Process | Where-Object { \$_.ProcessName -match 'aegis|legacy_head' }).Count; '{0:s} freeRAM_GB={1:N1} cpu%={2} aegis_procs={3}' -f (Get-Date), (\$o.FreePhysicalMemory/1MB), \$c, \$n" \
+      "\$o = Get-CimInstance Win32_OperatingSystem; \$c = [math]::Round((Get-Counter '\Processor(_Total)\% Processor Time' -SampleInterval 2 -MaxSamples 1).CounterSamples[0].CookedValue); \$n = @(Get-Process | Where-Object { \$_.ProcessName -match 'aegis|legacy_head' }).Count; '{0:s} freeRAM_GB={1:N1} cpu%={2} aegis_procs={3}' -f (Get-Date), (\$o.FreePhysicalMemory/1MB), \$c, \$n" \
       >> "$MON" 2>/dev/null
     sleep 60
   done

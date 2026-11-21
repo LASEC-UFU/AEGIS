@@ -1,6 +1,7 @@
 # AEGIS — Documento de passagem (handoff) para continuidade por outro agente
 
-Última atualização: 2026-11-20 ~10:43 (horário local, UTC−3), após a análise
+Última atualização: 2026-11-21 ~10:00 (horário local, UTC−3), após o segundo
+travamento da máquina (§4.0a). Antes: 2026-11-20 ~10:43, após a análise
 arquitetural. O registro original da auditoria é de ~09:56. Leia este arquivo inteiro antes de agir.
 Ele é autocontido; os demais documentos citados dão o detalhe.
 
@@ -36,7 +37,7 @@ cpp/build_phase0/phase0_tests.exe     # 11 checks
 | E1/E2 CT | concluído | E1 **não atingido**: PN_K40 1,013 V contra mediana 0,848 V dos campeões, na validação. E2 **não atingido**: mediana +4,8 %; o PN_K40 com LM diverge |
 | E1/E2 WH | concluído | E1 **atingido**: PN_K40 26,5 mV contra 50,8 mV, razão 0,52. E2 **não atingido**: mediana −1,1 %; o PN_DCE com LM diverge |
 | E1/E2 SB | concluído | E1 **atingido**: 0,60 contra 3,34 mV, razão 0,18. E2 **atingido**: −52 %. **Gates: E1 apoiado (2/3), E2 não apoiado (1/3).** Ver `experiments/phase0/PHASE0_REPORT.md` |
-| E3, triagem | agendado: `experiments/phase0/wait_then.sh protocol_done` (espera `[resume] done` no `protocol_resume.log`; no máximo 6 processos) | — |
+| E3, triagem | **não iniciado.** A máquina travou às 18:42 durante a etapa do código original do protocolo (ver §4.0a). Aguarda decisão do usuário | — |
 
 **Resumos:**
 - `experiments/results_phase0/SUMMARY_E1E2.md`
@@ -271,7 +272,55 @@ dart analyze lib test tool    # sem problemas
 
 ## 4. Processos em execução (no momento da escrita)
 
-### 4.0 Incidente de 2026-11-20 e retomada (LER PRIMEIRO)
+### 4.0a Segundo travamento, 2026-11-20 18:42 (LER PRIMEIRO)
+
+**Estado:** nada roda. **Não reinicie experimentos sem decisão do usuário.**
+
+**O que aconteceu**
+- Congelou às 18:42:27 e foi reiniciada em 21/11 às 09:43.
+- Kernel-Power 41 com BugcheckCode 0. Não há erro WHEA, nem evento de disco
+  ou de GPU, nem dump. É a mesma assinatura de 11:12, 07/11 19:02 e 04/11
+  21:57; as duas últimas são anteriores a este trabalho.
+- Carga no momento:
+  - só 4 execuções do código original, cerca de 12 threads de 32;
+  - 50 GB de RAM livre;
+  - prioridade BelowNormal.
+- Reduzir a carga, portanto, **não evitou** o travamento.
+
+**Correção do monitor:** o `cpu%` de `protocol_monitor.log` (WMI
+`LoadPercentage`) está superestimado. Ele marca cerca de 43 % com a máquina
+ociosa, quando a carga real é de 1 a 4 %. Não use esse valor.
+
+**Estado dos resultados**
+- Protocolo 1.1.0 completo, exceto o código original:
+  - WH `legacy_head`: execuções 1–4 completas, com JSON validado. As
+    execuções 5–8 foram interrompidas e ficaram só com `.log` vazios; as
+    execuções 9–10 não começaram.
+  - SB `legacy_head`: 0/10.
+- E3 da Fase 0: não iniciado.
+
+**Diagnóstico**
+- Um processo de usuário com RAM sobrando não consegue congelar o Windows sem
+  deixar registro. O defeito é de hardware ou firmware; a carga longa apenas
+  o expõe.
+- Suspeitos, em ordem:
+  1. **RAM:** 4 × 16 GB Kingston KF3200C16D4/16GX a 3200 MT/s, com perfil
+     XMP/DOCP. O WMI informa rank 1 (single-rank), o que corrige a nota
+     antiga de dual-rank. Com 4 módulos, a AMD garante menos de 3200 para
+     Ryzen 5000.
+  2. **BIOS:** versão FB, de 11/2022, para a B550M AORUS ELITE com Ryzen 9
+     5950X.
+  3. **Travamentos do Ryzen 5000** em transição de carga ou em ociosidade.
+     O ajuste "Power Supply Idle Control = Typical Current Idle" é o mais
+     citado.
+  4. **Fonte ou VRM.**
+- Superaquecimento é improvável como causa principal: a carga era moderada,
+  e CPU quente limita a frequência e depois desliga, não fica congelada por
+  horas. Mesmo assim, não há como medir sem driver de sensores.
+- O SSD ADATA LEGEND 850 marca 44 °C agora e registra máxima de 86 °C. Não
+  há eventos de disco.
+
+### 4.0 Incidente de 2026-11-20 e retomada
 
 **O que aconteceu**
 - A máquina congelou por volta das 11:12 e foi reiniciada à força às 15:34
@@ -288,12 +337,12 @@ dart analyze lib test tool    # sem problemas
 - Não há evento de limitação térmica nem de erro de hardware.
 - A temperatura real da CPU não é legível sem um driver de sensores. As zonas
   ACPI dessa placa mostram valores fictícios.
-- **Esta máquina já teve desligamentos inesperados em 04/11 (22:00) e 09/11
-  (06:36), antes desta sessão.**
+- **Esta máquina já teve desligamentos inesperados em 04/11 (21:57) e 07/11
+  (19:02; reiniciada em 09/11 às 06:36), antes desta sessão.**
 - Fatores possíveis, a verificar pelo usuário:
   - 4 × 16 GB DDR4 a 3200 MT/s com XMP (Kingston KF3200C16D4/16GX), acima
-    da especificação AMD para dois módulos por canal. Os módulos são
-    provavelmente dual-rank; a especificação é 2666 para dual-rank.
+    da especificação AMD para dois módulos por canal. A suposição de
+    dual-rank estava errada: o WMI informa single-rank (ver §4.0a).
   - BIOS FB de 11/2022.
   - Temperatura sob carga contínua.
 

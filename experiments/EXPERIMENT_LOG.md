@@ -122,3 +122,31 @@ protocol below is run once; every result is reported.
   seeded, so results are unaffected; `wallSeconds` of the resumed stages is
   not comparable with stages run at 16 jobs.
 - No WH/SB test metric was inspected.
+
+### Incident 2: second machine hang (2026-11-20 18:42)
+
+- The machine froze at 18:42:27 local and was restarted on 2026-11-21 at
+  09:43.
+- System log: Kernel-Power 41 with BugcheckCode 0. There is no WHEA error,
+  no storage or display-driver event, and no dump. This matches 11:12 the
+  same day and 2026-11-04 21:57 / 2026-11-07 19:02, both before this work.
+- Load at the time:
+  - 4 runs of the original code (WH `legacy_head`), about 12 threads of 32;
+  - 50 GB of free RAM;
+  - BelowNormal priority.
+- Reducing the load after the first hang did not prevent the second.
+- Results at the time of the hang:
+  - WH `legacy_head` runs 1–4 completed; JSON validated after reboot.
+  - WH `legacy_head` runs 5–8 were interrupted and left empty `.log` files
+    only; runs 9–10 never started.
+  - SB `legacy_head` and Phase 0 E3 had not started.
+  - No WH/SB test metric was inspected.
+- Monitor correction: the `cpu%` column of `protocol_monitor.log` came from
+  WMI `Win32_Processor.LoadPercentage`, which reads about 43 % on an idle
+  machine while `\Processor(_Total)\% Processor Time` reads 1–4 %. Those
+  values are overstated and must not be used. The monitor in
+  `run_protocol_resume.sh` now uses the performance counter.
+- The cause is still undetermined. The diagnosis and suspects (RAM profile,
+  2022 BIOS, Ryzen 5000 idle/transition freezes, PSU/VRM) are in
+  `docs/HANDOFF.md` §4.0a.
+- Runs are not restarted until the user decides.
