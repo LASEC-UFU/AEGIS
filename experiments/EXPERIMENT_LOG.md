@@ -150,3 +150,37 @@ protocol below is run once; every result is reported.
   2022 BIOS, Ryzen 5000 idle/transition freezes, PSU/VRM) are in
   `docs/HANDOFF.md` §4.0a.
 - Runs are not restarted until the user decides.
+
+### Continuation on a second machine (2026-11-21)
+
+- The original workstation (Ryzen 9 5950X) was retired from long runs after
+  the hangs above. Work continues per `docs/PROMPT_CONTINUACAO_OUTRA_MAQUINA.md`.
+- Second machine: AMD Ryzen 5 PRO 5650G (6 cores / 12 logical CPUs), 7.4 GB
+  RAM, Windows 11 Pro 10.0.26300 (pt-BR locale), Flutter 3.44.0 / Dart 3.12.0.
+  No compiler used; no binary rebuilt.
+- Integrity: state package `aegis_estado_local_2026-11-21.tar.gz` SHA-256
+  `4fdf47ba…7155c` matches; `sha256sum -c experiments/transfer/FILES.sha256`
+  OK for all 741 files; frozen binaries `cpp/build/aegis_core.dll`,
+  `cpp/build/aegis_batch.exe`, `cpp/build_phase0/aegis_phase0.exe` and
+  `experiments/bin/head-9e4b1d8/*` match the recorded hashes.
+- Sanity: `core_tests` 91 checks / 0 failures; `api_tests` 66 / 0;
+  `phase0_tests` 11 passed / 0 failed.
+- Cross-machine reproduction: CT `aegis_full`, seed 1, 3×10⁵ evaluations,
+  written to `experiments/transfer/repro_ct/`. `report.model`,
+  `report.evaluations` and `report.metrics.validation` are **identical** to
+  `experiments/results/cascaded_tanks/aegis_full/run_1.json` (validation
+  free-run RMSE 0.8320657852 V in both). Bit-for-bit reproduction across the
+  two machines is confirmed for this run.
+- `wallSeconds` / `elapsedSeconds` from this machine are not comparable with
+  the original machine (different CPU and parallelism).
+- Load rules on this machine: at most 6 compute processes and never more
+  than half of the 12 logical CPUs. The original code uses about 3 threads
+  per run, so `legacy_head` runs here with 2 in parallel (the prompt's value
+  of 4 was set for the 32-thread machine). Parallelism does not change
+  seeded results. CPU load is read from
+  `Win32_PerfFormattedData_PerfOS_Processor` (`_Total`), since the
+  `\Processor(_Total)\% Processor Time` counter path is localized on this
+  Windows (pt-BR) and fails under that English name.
+- The empty `.log` files of the interrupted WH `legacy_head` seeds 5–8 were
+  moved to `experiments/results_archive/interrupted_2026-11-20_wh_legacy_head/`
+  before resuming.
