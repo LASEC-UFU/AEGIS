@@ -200,7 +200,7 @@ protocol below is run once; every result is reported.
 ### Protocol 1.1.0 completed (2026-11-21 13:43)
 
 - Every protocol condition has 10/10 complete `run_*.json`:
-  - CT: 15 conditions (including the agents, `legacy_head` and the CT-only
+  - CT: 14 conditions (including the agents, `legacy_head` and the CT-only
     ablations);
   - WH: 7 core conditions, `agent_ucb1`, `agent_fuzzy` and `legacy_head`;
   - SB: 7 core conditions and `legacy_head`;
