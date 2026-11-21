@@ -98,6 +98,10 @@ documentos.
 - **Flutter 3.44.x / Dart 3.12.x**, necessário para os resumos `dart run`.
   O `pubspec.yaml` depende de Flutter; rode `flutter pub get` uma vez.
 - Não precisa de compilador C++.
+- Os `.sh` são versionados com fim de linha LF, pelo `.gitattributes`, e
+  modo 100644. O Git Bash executa scripts com `#!`. Se aparecer
+  `Permission denied` ou `$'\r'`, confira o fim de linha com
+  `git ls-files --eol`; não converta à mão.
 - Se faltar alguma ferramenta, peça autorização ao usuário antes de
   instalar.
 
