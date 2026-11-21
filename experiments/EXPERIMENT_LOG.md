@@ -184,3 +184,10 @@ protocol below is run once; every result is reported.
 - The empty `.log` files of the interrupted WH `legacy_head` seeds 5–8 were
   moved to `experiments/results_archive/interrupted_2026-11-20_wh_legacy_head/`
   before resuming.
+- WH `legacy_head` resumed on the second machine 2026-11-21 11:24–12:14
+  (`run_legacy_head.sh wiener_hammerstein 1000 2 10`, BelowNormal, log
+  `experiments/results/legacy_resume_wh.log`, exit 0). Seeds 1–4 come from the
+  original machine; seeds 5–10 from this one. About 15 min per run, 2 in
+  parallel. 10/10 `run_*.json` parse as complete JSON objects (only parsed;
+  no metric read). `aegis_evaluate_models` regenerated
+  `legacy_head/evaluations.jsonl` over all 10 runs; that file was not opened.
