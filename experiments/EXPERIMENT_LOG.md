@@ -191,3 +191,26 @@ protocol below is run once; every result is reported.
   parallel. 10/10 `run_*.json` parse as complete JSON objects (only parsed;
   no metric read). `aegis_evaluate_models` regenerated
   `legacy_head/evaluations.jsonl` over all 10 runs; that file was not opened.
+- SB `legacy_head` run on the second machine 2026-11-21 12:15–13:43
+  (`run_legacy_head.sh silverbox 1000 2 10`, BelowNormal, log
+  `experiments/results/legacy_resume_sb.log`, exit 0). About 17–18 min per
+  run, 2 in parallel. 10/10 `run_*.json` parse as complete JSON objects.
+  `legacy_head/evaluations.jsonl` generated and not opened.
+
+### Protocol 1.1.0 completed (2026-11-21 13:43)
+
+- Every protocol condition has 10/10 complete `run_*.json`:
+  - CT: 15 conditions (including the agents, `legacy_head` and the CT-only
+    ablations);
+  - WH: 7 core conditions, `agent_ucb1`, `agent_fuzzy` and `legacy_head`;
+  - SB: 7 core conditions and `legacy_head`;
+  - FROLS baselines are in `frols/` (different file format, not counted).
+- Failures and deviations over the whole protocol: two machine hangs on the
+  original machine (WH `agent_fuzzy` restarted from scratch; WH
+  `legacy_head` seeds 5–8 restarted), and the machine change for WH
+  `legacy_head` seeds 5–10 and SB `legacy_head` 1–10 (bit-for-bit
+  reproduction across machines confirmed on CT `aegis_full` seed 1).
+  Parallelism differed between stages; `wallSeconds` is not comparable
+  across stages.
+- No WH/SB test metric has been inspected. The final analysis
+  (`analyze.dart`, arrow evaluation) waits for the user's decision.
