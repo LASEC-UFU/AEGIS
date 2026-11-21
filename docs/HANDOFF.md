@@ -153,9 +153,14 @@ a análise solicitada, incluindo os dois complementos do usuário, está entregu
 
 ## 1. Regras do usuário (obrigatórias, vindas do pedido original)
 
-- Trabalhar na cópia existente em `C:\SourceCode\AEGIS` (repo `LASEC-UFU/AEGIS`,
-  branch `main`, HEAD `9e4b1d8`). Não clonar/baixar o projeto de novo.
-- **Sem commit, push, release ou publicação remota** sem autorização explícita.
+- Trabalhar na cópia existente em `C:\SourceCode\AEGIS` (repo `LASEC-UFU/AEGIS`;
+  o trabalho partiu da `main` em `9e4b1d8` e está no branch
+  `audit/aegis-1.1.0-wip`). Não clonar/baixar o projeto de novo nessa máquina.
+  Para continuar em **outra máquina**, siga
+  `docs/PROMPT_CONTINUACAO_OUTRA_MAQUINA.md`.
+- **Commit e push:** autorizados pelo usuário (20/11) **somente** no branch
+  `audit/aegis-1.1.0-wip`, para continuidade. Nunca na `main` (dispara
+  deploy/release); sem release, PR ou publicação sem autorização explícita.
 - Não descartar/reverter alterações sem identificar origem e impacto; antes de
   apagar/sobrescrever dados **fora** do AEGIS, parar e consultar o usuário.
 - Não alterar outros projetos/arquivos do computador. Privilégios de admin só
@@ -275,6 +280,10 @@ dart analyze lib test tool    # sem problemas
 ### 4.0a Segundo travamento, 2026-11-20 18:42 (LER PRIMEIRO)
 
 **Estado:** nada roda. **Não reinicie experimentos sem decisão do usuário.**
+O usuário decidiu continuar **em outra máquina**: instruções completas em
+`docs/PROMPT_CONTINUACAO_OUTRA_MAQUINA.md`; estado local (fora do git) em
+`experiments/transfer/aegis_estado_local_2026-11-21.tar.gz` (SHA-256
+`4fdf47ba66f19a26635e00262aaf2b6422fe1b10e378e605067a67bc4dd7155c`).
 
 **O que aconteceu**
 - Congelou às 18:42:27 e foi reiniciada em 21/11 às 09:43.

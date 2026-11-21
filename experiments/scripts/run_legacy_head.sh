@@ -25,7 +25,11 @@ run_one() {
 }
 export -f run_one
 export ROOT BIN BASE MAXGEN OUT DATA
-seq 1 "$SEEDS" | xargs -P "$PAR" -I{} bash -c 'run_one {}'
+# Resumable: a seed whose run_<s>.json already exists and is non-empty is
+# skipped (the runner writes the JSON only at the end of a run). Validate
+# existing JSON files before resuming after a crash.
+seq 1 "$SEEDS" | while read -r s; do [ -s "$OUT/run_$s.json" ] || echo "$s"; done \
+  | xargs -r -P "$PAR" -I{} bash -c 'run_one {}'
 "$ROOT/cpp/build/aegis_evaluate_models.exe" --data "$DATA/est.csv" --data-test "$TEST" \
   --config '{"powerMode":"legacy","trainRatio":0.8,"maxDelay":40,"testTransient":50,"outputCol":1}' \
   --refit 1 --output "$OUT/evaluations.jsonl" "$OUT"/run_*.json
