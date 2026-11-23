@@ -561,3 +561,109 @@ características em 2⁻¹⁵. Fica como opção a comparar, não como base.
 **Resumo para o usuário:** a ideia da TDF-II se mantém, aplicada onde está
 o custo. Os atrasos viram índices numa tabela de correlações calculada uma
 vez, e o expoente real continua no centro da representação.
+
+---
+
+## 11. Resposta à revisão externa da §10 (2026-11-23)
+
+Um revisor leu a §10 e recomendou: (1) P0 com *profiling* por etapa em
+candidatos pequenos e grandes, registrando a distribuição de K,
+racionalidade, fatores e expoentes; (2) P1 com cada otimização exata
+avaliada **separadamente**; (3) P2′ como **pesquisa**, derivando as
+estatísticas corretas para os pares NN, ND e DD e estimando cache frio,
+cache quente e *fallback* antes de prometer O(N·K); (4) a simulação só
+depois, se o *profiling* indicar; (5) operadores locais e sensibilidades
+por último, medidos por qualidade × tempo total. Conclusão do revisor: a
+ideia é promissora, mas a §10.2 **ainda não é um algoritmo correto** para
+o AEGIS racional.
+
+**Veredito desta auditoria: a revisão procede nos dois pontos decisivos.**
+A ordem dela substitui a §10.4.
+
+### 11.1 O erro da §10.2: colunas do denominador não são deslocáveis
+
+[código] `fit_from_psi` (`rational_model.cpp:18–28`) pseudo-lineariza as
+colunas do denominador como −y(k)·ψ_j(k), com **y no atraso 0**. A §10.2
+tratou essas colunas como "formas com produtos" no mesmo cache das demais.
+Está errado. O fator y(k) fica preso ao instante k e não se desloca junto
+com o atraso m_j, então a forma de −y·φ_j **muda com m_j**. As entradas do
+Gram ficam assim (z = forma, m = atraso de disparo):
+
+| Par | Entrada | Índices | Deslocável? |
+|---|---|---|---|
+| N·N | Σ z_a(k−m_a)·z_b(k−m_b) | 1 (m_a − m_b) | sim: C_ab(Δ) |
+| N·y | Σ z_a(k−m_a)·y(k) | 1 (m_a) | sim |
+| N·D | −Σ y(k)·z_a(k−m_a)·z_b(k−m_b) | **2 (m_a, m_b)** | **não**: correlação tripla |
+| D·D | Σ y(k)²·z_a(k−m_a)·z_b(k−m_b) | **2 (m_a, m_b)** | **não**: tripla, peso y² |
+| D·y | −Σ y(k)²·z_b(k−m_b) | 1 (m_b) | sim, peso y² |
+| intercepto | Σ z_a, Σ y·z_b, Σ 1 | 1 | sim (somas de prefixo) |
+
+**Consequências:**
+- As tabelas de ND e DD têm **dois índices de atraso**. Só para formas de
+  um fator: 12 × 12 × L² por peso (y e y²). Com L = 40, ≈ 2,3×10⁵
+  entradas por peso, ≈ 4,6×10⁵ no total (≈ 3,7 MB). Cada entrada custa
+  O(N), ≈ 7×10⁹ multiplicações por execução no WH, metade por simetria.
+  [inferência] Ainda é pequeno diante de horas de execução, mas a
+  estimativa de "11 700 números" da §10.2 vale **só para NN**.
+- Com formas de produto (termos cruzados), as tabelas de dois índices
+  crescem como S² × L² e **precisam** de cache preguiçoso.
+- Os modelos de penalidade zero do E3 têm muitos fatores no denominador
+  (resumo da sessão). O caso ND/DD é a regra nesses modelos, não a exceção.
+
+### 11.2 Cache frio e o ganho que não depende do cache
+
+A revisão pede o custo com o cache frio. A conta separa duas fontes de
+ganho que a §10.2 misturou:
+
+1. **Mover o ERR e a solução para o espaço K×K** (Gram → Cholesky → ERR
+   guloso sobre o Gram). Isso independe da invariância a deslocamento.
+   Mesmo formando o Gram de forma ingênua, sem cache algum (½·N·K² por
+   simetria), o custo cai de ≈ 10·N·K² para ≈ 0,5–1·N·K² + O(K³).
+   [inferência] Esse é o **piso garantido com cache frio**: cada falta
+   custa O(N), o mesmo que uma entrada do Gram ingênuo.
+2. **Cache de estatísticas deslocáveis.** Leva o termo N·K² para ≈ K²·L
+   consultas mais as correções de borda, mas **só na fração de acertos**.
+
+Por isso P2′ passa a ter duas sub-etapas, medidas separadamente:
+- **P2′a:** equações normais com Gram ingênuo + ERR no espaço K×K +
+  *fallback* Householder por condição. Sem cache. Valida a numérica
+  (§10.3, itens 1–3) sozinha.
+- **P2′b:** tabelas NN/N·y/D·y (um índice) e ND/DD (dois índices) com
+  cache preguiçoso e LRU. Antes de implementar, medir no P0 a taxa de
+  acerto que o *pool* do DE produziria, registrando os pares (forma a,
+  forma b, m_a, m_b) pedidos pelos candidatos.
+
+**A promessa de O(N·K) fica retirada** até P2′b medir a taxa de acerto.
+O que se pode dizer agora: O(N·K²) com constante ≈ 10× menor no pior caso
+(P2′a), e O(N·K) no limite de acerto total (P2′b). [inferência]
+
+### 11.3 P0 e P1 como a revisão pede
+
+- **P0** registra, por candidato avaliado e não só pelo campeão: K,
+  número de termos de denominador, fatores por termo, expoentes
+  (inteiros × não inteiros) e tempo por etapa (montagem de Ψ, QR, ERR por
+  grupo, ERR completo, validação, simulação). Só os campeões já estão nos
+  `report.model` do E3; a distribuição dos candidatos exige um *build*
+  instrumentado.
+- **P1** mede cada otimização exata isoladamente (ERR completo sob
+  demanda, QR por linhas, cache de séries de fator), confirmando fitness e
+  relatórios idênticos bit a bit e tempo total.
+- **Restrição operacional:** os binários de `cpp/build` e
+  `cpp/build_phase0` estão congelados, e esta máquina não tem compilador
+  C++. P0 e P1 exigem um diretório de *build* **novo e separado** e a
+  instalação de um compilador. As duas coisas dependem de autorização do
+  usuário.
+
+### 11.4 Ordem final (substitui a §10.4)
+
+| Etapa | Conteúdo | Critério para avançar |
+|---|---|---|
+| **P0** | *Profiling* por etapa; distribuição de K, racionalidade, fatores e expoentes dos candidatos; registro dos pares de estatísticas pedidos | Saber qual fração do tempo é ajuste/ERR em candidatos pequenos e grandes |
+| **P1** | Exatos, um de cada vez: ERR sob demanda, QR por linhas, cache de fatores | Fitness e relatórios idênticos bit a bit; ganho de tempo total |
+| **P2′a** | Gram ingênuo + Cholesky + ERR no espaço K×K, com *fallback* | θ, posto, SSE, ERR e fitness por candidato dentro de tolerância; contagem de *fallbacks* |
+| **P2′b** | Estatísticas deslocáveis NN/ND/DD com cache | Taxa de acerto medida; qualidade × tempo total com sementes pareadas |
+| **P3′** | Simulação em estados (08/09) contra forma direta com reaproveitamento | Só se o *profiling* pós-P2′ mostrar a simulação como parcela relevante |
+| **P4/P5** | Operadores dirigidos e sensibilidades (09) | Qualidade alcançada por tempo total |
+
+**O expoente real não é afetado em nenhuma etapa:** as tabelas são
+indexadas por forma, e a forma carrega o expoente qualquer que seja.
