@@ -1,5 +1,15 @@
 # 08 — Realização em estados no estilo TDF-II dos modelos NARX do AEGIS
 
+> **Nota de 2026-11-23, depois da auditoria [10_AUDITORIA_DO_09.md](10_AUDITORIA_DO_09.md):**
+> - O usuário **não tem interesse em embarcar o código**; o objetivo é
+>   velocidade e arquitetura, com expoentes reais.
+> - Os tempos do E3 indicam que o gargalo nos modelos grandes é o ajuste e o
+>   ERR (O(N·K²)), não a simulação.
+> - A realização deste documento passa a ser a **etapa 2** (simulação livre),
+>   depois da "TDF-II do ajuste" (10 §10.2). As seções de ponto fixo e
+>   implantação (§7–§8) ficam como referência, sem prioridade.
+> - O R4 deve ter três braços (10 §8).
+
 Data: 2026-11-23. Situação: **proposta para revisão independente**. Nada
 aqui foi implementado nem executado. O usuário pediu que outro agente
 analise esta proposta com rigor; a §13 lista os pontos que o autor considera
