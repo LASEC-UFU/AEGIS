@@ -232,7 +232,7 @@ protocol below is run once; every result is reported.
   of 3): `one_step` met 2/3 (CT 1.22 not met, WH 0.56, SB 0.12);
   `simulation` met 3/3 (CT 0.52, WH 0.28, SB 0.13). Report:
   `experiments/phase0/PHASE0_REPORT.md` §7; summary `SUMMARY_E3.md`.
-- Deviations: none in execution. The E3 cells for CT and WH partly ran on
-  the original machine and the rest on the second machine. Document
+- Deviations: none in execution. All E3 cells ran on the second machine
+  (the original machine never started E3). Document
   discrepancy noted in the report (parecer 07 §10.4 vs prereg §3 on gamma
   annealing in the default cells; the prereg was followed).

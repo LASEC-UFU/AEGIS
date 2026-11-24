@@ -149,10 +149,10 @@ Pré-registro: [PHASE0_PREREG.md](PHASE0_PREREG.md) §3. Resumo gerado por
   no CT, ≈ 1,5×10⁵ no WH e no SB).
 - **Divergências na validação:** 2 execuções, ambas no CT
   `mr39_zero_one_step`. Nenhuma nas demais 23 células.
-- **Troca de máquina:** CT e WH começaram na máquina original e as células
-  seguintes rodaram na segunda máquina (Ryzen 5 PRO 5650G). A reprodução bit
-  a bit entre as máquinas foi conferida antes (EXPERIMENT_LOG, 2026-11-21).
-  Os tempos de parede não são comparáveis entre máquinas.
+- **Máquina:** todo o E3 rodou na segunda máquina (Ryzen 5 PRO 5650G,
+  6C/12T), diferente da que gerou o protocolo 1.1.0 e o E1/E2. A reprodução
+  bit a bit entre as máquinas foi conferida antes (EXPERIMENT_LOG,
+  2026-11-21). Os tempos de parede do E3 não são comparáveis aos do estudo.
 - Execução com até 6 em paralelo, prioridade BelowNormal.
 
 ### 7.2 Critério pré-registrado
@@ -237,7 +237,7 @@ qualquer conclusão causal.
   geração/`maxGenerations` com `maxGenerations` = 100 000, e as execuções
   param pelo orçamento de avaliações muito antes. Nas células padrão, γ
   fica perto do valor inicial.
-- **Troca de máquina no meio do E3** (§7.1).
+- **Máquina diferente da do estudo 1.1.0 e do E1/E2** (§7.1).
 - O tempo de parede foi medido com a máquina compartilhada; serve só como
   ordem de grandeza.
 
