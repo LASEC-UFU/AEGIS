@@ -214,3 +214,25 @@ protocol below is run once; every result is reported.
   across stages.
 - No WH/SB test metric has been inspected. The final analysis
   (`analyze.dart`, arrow evaluation) waits for the user's decision.
+
+### Phase 0 E3 completed (2026-11-23 21:59)
+
+- `experiments/phase0/run_e3.sh` (unchanged), `PAR=6`, BelowNormal, frozen
+  `cpp/build/aegis_batch.exe`, for CT, WH and SB in sequence; log
+  `experiments/results_phase0/e3_run.log`, exit 0 for all three. One commit
+  of `MANIFEST.jsonl` per benchmark.
+- 240/240 runs complete (3 benchmarks × 8 cells × seeds 21–30). No test
+  segment exists in these runs (`testStartRow` = `valEndRow`); the summary
+  script aborts if one is found, and it did not.
+- Validation divergences: 2, both in CT `mr39_zero_one_step`.
+- Longest cells: `mr39_zero_*` on WH and SB, median 19 000–27 000 s per run
+  (about 12–13 h per cell with 6 in parallel). The SB
+  `mr39_zero_simulation` cell ran 09:13–21:59 on 2026-11-23.
+- Pre-registered screening (zero+39 / default+8 median ratio ≤ 0.90 in ≥ 2
+  of 3): `one_step` met 2/3 (CT 1.22 not met, WH 0.56, SB 0.12);
+  `simulation` met 3/3 (CT 0.52, WH 0.28, SB 0.13). Report:
+  `experiments/phase0/PHASE0_REPORT.md` §7; summary `SUMMARY_E3.md`.
+- Deviations: none in execution. The E3 cells for CT and WH partly ran on
+  the original machine and the rest on the second machine. Document
+  discrepancy noted in the report (parecer 07 §10.4 vs prereg §3 on gamma
+  annealing in the default cells; the prereg was followed).

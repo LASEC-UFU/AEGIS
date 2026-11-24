@@ -1,12 +1,11 @@
-# Fase 0: relatório de E1 e E2
+# Fase 0: relatório de E1, E2 e E3
 
 Data: 2026-11-20. Pré-registro: [PHASE0_PREREG.md](PHASE0_PREREG.md), commit
 `d275810`, anterior a todas as execuções. Tabela completa por estrutura:
 [SUMMARY_E1E2.md](../results_phase0/SUMMARY_E1E2.md). Dados brutos:
 `experiments/results_phase0/<b>/e1e2.jsonl`. Manifesto com hashes:
 `experiments/results_phase0/MANIFEST.jsonl`. O E3 (triagem só por
-configuração) está agendado para depois do protocolo 1.1.0 e terá relatório
-próprio.
+configuração) rodou depois do protocolo 1.1.0; seu relatório está na §7 (2026-11-23).
 
 **Só validação.** Nenhum dado de teste foi lido. A métrica é o RMSE de
 simulação livre na validação, em unidades originais. Não é comparável com os
@@ -126,3 +125,130 @@ importante para não piorar o CT ao melhorar WH e SB.
 - O LM seguiu exatamente o pré-registro: sem regularização, sem restrição de
   estabilidade, 100 iterações. Variantes regularizadas não foram testadas e
   não devem ser inferidas destes resultados.
+
+---
+
+## 7. E3: triagem só por configuração (2026-11-23)
+
+Pré-registro: [PHASE0_PREREG.md](PHASE0_PREREG.md) §3. Resumo gerado por
+`tool/experiments/phase0_e3_summary.dart`:
+[SUMMARY_E3.md](../results_phase0/SUMMARY_E3.md). Dados:
+`experiments/results_phase0/<b>/e3/<célula>/run_*.json`, `MANIFEST.jsonl`
+(hash do binário e da configuração por célula). Script:
+`experiments/phase0/run_e3.sh`, sem alteração.
+
+**Só validação.** As execuções usam divisão explícita sem segmento de teste
+(`testStartRow` = `valEndRow`), então não existe métrica de teste nelas.
+
+### 7.1 Integridade
+
+- **240 de 240 execuções** completas: 3 benchmarks × 8 células × sementes
+  21–30, todas com 10/10.
+- Binário congelado `cpp/build/aegis_batch.exe` (1.1.0), configuração
+  `aegis_full.json`, orçamento do estudo (mediana de avaliações: ≈ 3,0×10⁵
+  no CT, ≈ 1,5×10⁵ no WH e no SB).
+- **Divergências na validação:** 2 execuções, ambas no CT
+  `mr39_zero_one_step`. Nenhuma nas demais 23 células.
+- **Troca de máquina:** CT e WH começaram na máquina original e as células
+  seguintes rodaram na segunda máquina (Ryzen 5 PRO 5650G). A reprodução bit
+  a bit entre as máquinas foi conferida antes (EXPERIMENT_LOG, 2026-11-21).
+  Os tempos de parede não são comparáveis entre máquinas.
+- Execução com até 6 em paralelo, prioridade BelowNormal.
+
+### 7.2 Critério pré-registrado
+
+Comparação: penalidades zeradas com teto 39 contra o padrão com teto 8, no
+mesmo `errorMode`. Critério: razão das medianas ≤ 0,90 em pelo menos 2 de 3
+benchmarks.
+
+| `errorMode` | CT (V) | WH (mV) | SB (mV) | Resultado |
+|---|---|---|---|---|
+| `one_step` | 0,938 → 1,146 = **1,22** ✗ | 50,8 → 28,2 = **0,56** ✓ | 3,34 → 0,41 = **0,12** ✓ | **2 de 3: atingido** |
+| `simulation` | 0,947 → 0,494 = **0,52** ✓ | 38,9 → 10,7 = **0,28** ✓ | 2,59 → 0,34 = **0,13** ✓ | **3 de 3: atingido** |
+
+**Consequência pré-registrada:** decompor a pressão de parcimônia antes de
+qualquer conclusão causal.
+
+### 7.3 O que os dados mostram (descritivo)
+
+1. **O teto de regressores não é a restrição ativa com as penalidades
+   padrão.** Com o teto 39 e penalidades padrão, os campeões ficam com
+   K mediano de 4 a 7, como com o teto 8, e o RMSE muda pouco (CT
+   0,862 contra 0,938 V; WH 50,8 contra 50,8 mV; SB 3,34 contra 3,34 mV, em
+   `one_step`). Quem limita o tamanho são as penalidades.
+2. **Sem penalidades, o AEGIS chega por conta própria às estruturas de
+   20–40 termos do E1, e supera o ajuste por QR delas no WH e no SB.** Com
+   teto 39 e
+   penalidades zeradas, K mediano 22–33. Na validação, em `simulation`:
+   - WH: 10,7 mV, contra 26,5 mV do PN_K40 (QR) e 26,1 mV com LM no E1;
+   - SB: 0,34 mV, contra 0,60 mV do PN_K40 (QR); o PN_K40 com LM no E1
+     (0,27 mV) continua melhor;
+   - CT: 0,494 V, contra 0,848 V dos campeões 1.1.0 e 1,013 V do PN_K40.
+   Os números do E1 e do E3 usam a mesma divisão e a mesma métrica.
+3. **O CT se comporta diferente do E1.** No E1, mais capacidade piorava o
+   CT. No E3 piora em `one_step` (1,146 V, 2 divergências) e melhora muito
+   em `simulation` (0,494 V). Com o teto 8 sem penalidades o CT já chega a
+   0,505 V em `simulation`: **no CT, as penalidades explicam quase todo o
+   ganho**, não o teto.
+4. **No WH e no SB, as duas mudanças contam.** Sem penalidades e com teto 8:
+   WH 32,5 mV, SB 0,84 mV (`simulation`). Com teto 39: 10,7 e 0,34 mV.
+5. **O `errorMode` `simulation` é melhor em 11 das 12
+   comparações de pares de célula** (mesmo teto e mesmas penalidades). A
+   exceção é o CT com teto 8 e penalidades padrão (0,938 → 0,947 V). A
+   maior diferença é no WH com teto 39 sem penalidades (28,2 → 10,7 mV) e no
+   CT (1,146 → 0,494 V).
+6. **Composição dos campeões (só `report.model`):**
+   - penalidades padrão: predominam expoentes inteiros (no WH em
+     `one_step`, só inteiros), e não há nenhum termo de
+     denominador em nenhuma das 120 execuções;
+   - penalidades zeradas, teto 39: 32 % (SB) a 50 % (CT) dos fatores com
+     expoente não inteiro (sempre múltiplo de 0,5), e 61–116 fatores de
+     denominador por célula de 10 execuções;
+   - ou seja, **quando a pressão é retirada, a busca usa os expoentes reais
+     e a forma racional extensivamente.** É descritivo: não mostra que eles
+     causam o ganho.
+7. **Custo:** as células com teto 39 sem penalidades levam ≈ 20–40× o tempo
+   de parede da célula padrão com teto 8 (CT 874 contra 45 s; WH 24 752
+   contra 743 s; SB 25 746 contra 615 s por execução,
+   mediana, `simulation`). O orçamento em avaliações é o mesmo; o custo por
+   avaliação cresce com K (documento 10 §3).
+
+### 7.4 O que os dados não mostram
+
+- **Atribuição causal.** "Penalidades zeradas" é um pacote: γ, δ, β, α e o
+  recozimento de γ vão a zero juntos. Os pisos de ζ do currículo
+  (1,5 / 0,8 / 1,0 / 1,0), o θ da ilha free-run (≥ 0,15) e η = 1 continuam
+  ativos. O E3 não diz qual penalidade importa.
+- **Desempenho no teste.** Nenhum dado de teste foi lido. A validação do CT
+  tem 205 amostras e uma única divisão.
+- **Generalização a outras sementes ou divisões.** Uma divisão por
+  benchmark; 10 sementes por célula.
+- **Interpretabilidade.** Modelos de 30 termos com denominador não foram
+  avaliados quanto à leitura física.
+
+### 7.5 Limitações e desvios
+
+- **Discrepância de documento, não de execução:** o parecer 07 §10.4
+  descreve as células padrão do E3 com `gammaAnnealStart` =
+  `gammaAnnealEnd`. O pré-registro §3, que governa, mantém os valores do
+  `aegis_full` (0,01 → 0,1) nas células padrão e zera ambos nas células
+  sem penalidades. O script seguiu o pré-registro.
+- **Recozimento de γ efetivamente inativo:** o recozimento usa
+  geração/`maxGenerations` com `maxGenerations` = 100 000, e as execuções
+  param pelo orçamento de avaliações muito antes. Nas células padrão, γ
+  fica perto do valor inicial.
+- **Troca de máquina no meio do E3** (§7.1).
+- O tempo de parede foi medido com a máquina compartilhada; serve só como
+  ordem de grandeza.
+
+### 7.6 Consequência para o A1
+
+Pelo pré-registro, o próximo passo é **decompor a pressão de parcimônia**
+(qual das penalidades limita o tamanho) antes de qualquer conclusão causal.
+O E3 também indica:
+- o `errorMode` `simulation` como candidato a padrão (a decidir no A1);
+- o custo por avaliação em modelos grandes como gargalo prático
+  (documentos 10 a 12).
+
+A direção do A1, a abertura do teste WH/SB e a escolha do padrão são
+decisões do usuário.

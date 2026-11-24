@@ -1,6 +1,7 @@
 # AEGIS — Documento de passagem (handoff) para continuidade por outro agente
 
-Última atualização: 2026-11-21 ~10:00 (horário local, UTC−3), após o segundo
+Última atualização: 2026-11-23 ~22:20 (UTC−3), na segunda máquina, após o fim do
+E3 da Fase 0 (§4.0b). Antes: 2026-11-21 ~10:00, após o segundo
 travamento da máquina (§4.0a). Antes: 2026-11-20 ~10:43, após a análise
 arquitetural. O registro original da auditoria é de ~09:56. Leia este arquivo inteiro antes de agir.
 Ele é autocontido; os demais documentos citados dão o detalhe.
@@ -37,7 +38,7 @@ cpp/build_phase0/phase0_tests.exe     # 11 checks
 | E1/E2 CT | concluído | E1 **não atingido**: PN_K40 1,013 V contra mediana 0,848 V dos campeões, na validação. E2 **não atingido**: mediana +4,8 %; o PN_K40 com LM diverge |
 | E1/E2 WH | concluído | E1 **atingido**: PN_K40 26,5 mV contra 50,8 mV, razão 0,52. E2 **não atingido**: mediana −1,1 %; o PN_DCE com LM diverge |
 | E1/E2 SB | concluído | E1 **atingido**: 0,60 contra 3,34 mV, razão 0,18. E2 **atingido**: −52 %. **Gates: E1 apoiado (2/3), E2 não apoiado (1/3).** Ver `experiments/phase0/PHASE0_REPORT.md` |
-| E3, triagem | **não iniciado.** A máquina travou às 18:42 durante a etapa do código original do protocolo (ver §4.0a). Aguarda decisão do usuário | — |
+| E3, triagem | **concluído** em 2026-11-23 21:59, 240/240 execuções (segunda máquina) | Critério **atingido** em `one_step` (2/3: CT 1,22 ✗, WH 0,56, SB 0,12) e em `simulation` (3/3: CT 0,52, WH 0,28, SB 0,13). Consequência pré-registrada: decompor a pressão de parcimônia. Ver `PHASE0_REPORT.md` §7 |
 
 **Resumos:**
 - `experiments/results_phase0/SUMMARY_E1E2.md`
@@ -51,8 +52,7 @@ cpp/build_phase0/phase0_tests.exe     # 11 checks
   protocolo terminar.
 
 **Falta:**
-- `experiments/phase0/PHASE0_REPORT.md`, com todas as estruturas, falhas e
-  gates;
+- ~~`PHASE0_REPORT.md`~~ feito (E1, E2 e E3, §7);
 - a decisão do usuário sobre o A1.
 
 ### 0.1 Continuação mais recente — análise arquitetural concluída
@@ -277,6 +277,28 @@ dart analyze lib test tool    # sem problemas
 
 ## 4. Processos em execução (no momento da escrita)
 
+### 4.0b Segunda máquina, estado em 2026-11-23 22:20 (LER PRIMEIRO)
+
+- **Nada roda.** Protocolo 1.1.0 completo (2026-11-21 13:43) e E3 completo
+  (2026-11-23 21:59). Detalhes em `experiments/EXPERIMENT_LOG.md`.
+- Máquina: Ryzen 5 PRO 5650G 6C/12T, 7,4 GB RAM, Windows 11 pt-BR. O
+  contador `\Processor(_Total)\% Processor Time` tem nome localizado; use
+  `Win32_PerfFormattedData_PerfOS_Processor` (`_Total`).
+- Compilador nesta máquina: `C:\SourceCode\MSYS2\ucrt64\bin` (g++ 16.1;
+  os binários congelados foram feitos com g++ 16.2 na máquina original).
+  cmake 4.4.1 do WinLibs no PATH. **Não recompilar `cpp/build` nem
+  `cpp/build_phase0`.**
+- **Testes WH/SB continuam fechados.** `analyze.dart` em WH/SB e a avaliação
+  arrow do SB aguardam decisão do usuário.
+- Arquitetura: propostas 08 (realização TDF), 09 (outro agente), 11 (outro
+  agente) e auditorias 10 e 12 em `docs/architecture/`. Ordem acordada:
+  P0 profiling → P1 otimizações exatas → P2′a/b ajuste por Gram/estatísticas
+  deslocáveis → P6 refino por erro de simulação (10 §11.4, 12 §6).
+- **P0 em preparação (autorizado pelo usuário em 2026-11-23):** cópia de
+  trabalho separada (git worktree destacado, fora do repositório) com
+  instrumentação `perf_probe.hpp` ativada só por `-DAEGIS_PROFILE`; builds
+  `build_base` e `build_prof` compilados, ainda não executados.
+
 ### 4.0a Segundo travamento, 2026-11-20 18:42 (LER PRIMEIRO)
 
 **Estado:** nada roda. **Não reinicie experimentos sem decisão do usuário.**
@@ -448,7 +470,8 @@ conferir 10 execuções em cada) — falta só analisá-las com `analyze.dart`.
 2. Abrir os SVGs gerados (`analysis/boxplot_test_freerun.svg`,
    `convergence.svg`) e verificar visualmente (rótulos, sobreposição). Paleta
    validada com o validador do skill dataviz (azul/laranja/água/violeta).
-3. Registrar no `EXPERIMENT_LOG.md` a conclusão do protocolo (horário, nº de
+3. ~~Registrar no `EXPERIMENT_LOG.md` a conclusão do protocolo~~ feito em
+   2026-11-21 (horário, nº de
    execuções completas, falhas).
 4. **Preparação do artigo IFAC-JSC**: rascunho já criado em
    `docs/paper/IFAC_JSC_PREPARACAO.md` (títulos, resumo provisório sem números,
