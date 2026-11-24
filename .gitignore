@@ -64,3 +64,4 @@ experiments/results_policy_eval/
 cpp/build_phase0/
 experiments/results_phase0/*/e3/
 experiments/transfer/
+experiments/results_perf/

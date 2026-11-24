@@ -1,0 +1,169 @@
+diff --git a/cpp/src/individual_evaluator.cpp b/cpp/src/individual_evaluator.cpp
+index 09f60a3..7e9ad06 100644
+--- a/cpp/src/individual_evaluator.cpp
++++ b/cpp/src/individual_evaluator.cpp
+@@ -3,6 +3,7 @@
+ #include "aegis/safe_power.hpp"
+ #include "aegis/overfitting_detector.hpp"
+ #include "aegis/underfitting_detector.hpp"
++#include "perf_probe.hpp"
+ #include <cmath>
+ #include <algorithm>
+ #include <numeric>
+@@ -273,6 +274,7 @@ EvalResult IndividualEvaluator::evaluate(
+     int cols, int output_col, bool refit
+ ) const {
+     EvalResult result;
++    AEGIS_PROBE_BEGIN(chrom, result.valid);
+     ++evaluations_;
+     const bool keep_coefficients = !refit &&
+         chrom.coefficients.size() == chrom.regressors.size() && !chrom.coefficients.empty();
+@@ -291,6 +293,7 @@ EvalResult IndividualEvaluator::evaluate(
+     if (!build_psi_matrix(chrom, train_data, train_rows, cols, psi_train, n_train_usable))
+         return result;
+     if (n_train_usable <= nr + 1) return result;
++    AEGIS_PROBE_MARK(PSI);
+ 
+     std::vector<double> y_train(n_train_usable);
+     double y_absmax = 0.0;
+@@ -306,6 +309,7 @@ EvalResult IndividualEvaluator::evaluate(
+         return result;
+     }
+ 
++    AEGIS_PROBE_MARK(FIT);
+     // ── One-step predictions on training ──────────────────────────────
+     DenominatorStats den_stats;
+     std::vector<double> yhat_train;
+@@ -316,11 +320,14 @@ EvalResult IndividualEvaluator::evaluate(
+     chrom.sse = sse_train;
+     const int k = nr + 1; // regressors plus intercept
+ 
++    AEGIS_PROBE_MARK(PRED);
+     // ── ERR (Ψ pseudo-linearised in place; not needed afterwards) ─────
+     if (rational) pseudo_linearize(chrom, y_train.data(), psi_train.data(), n_train_usable, nr);
+     chrom.err = compute_err_from_psi(psi_train, n_train_usable, nr, y_train.data());
++    AEGIS_PROBE_MARK(ERRF);
+     const double input_ratio = input_contribution_from_psi(chrom, psi_train, n_train_usable,
+                                                            y_train.data(), output_col);
++    AEGIS_PROBE_MARK(RATIO);
+     psi_train.clear();
+     psi_train.shrink_to_fit();
+     // ── One-step predictions on validation ────────────────────────────
+@@ -342,6 +349,7 @@ EvalResult IndividualEvaluator::evaluate(
+         }
+     }
+ 
++    AEGIS_PROBE_MARK(VAL);
+     result.metrics = Metrics::compute(
+         y_train.data(), yhat_train.data(), n_train_usable,
+         y_val_vec.empty() ? nullptr : y_val_vec.data(),
+@@ -379,6 +387,7 @@ EvalResult IndividualEvaluator::evaluate(
+             den_stats.min_abs = std::min(den_stats.min_abs, fr.den.min_abs);
+         }
+     }
++    AEGIS_PROBE_MARK(SIM);
+     result.metrics.rmse_free_run = free_run_rmse;
+ 
+     // ── Stability diagnostics ─────────────────────────────────────────
+diff --git a/cpp/src/perf_probe.hpp b/cpp/src/perf_probe.hpp
+new file mode 100644
+index 0000000..2c21b9c
+--- /dev/null
++++ b/cpp/src/perf_probe.hpp
+@@ -0,0 +1,96 @@
++// perf_probe.hpp — P0 profiling probe (docs/architecture/10_AUDITORIA_DO_09.md §11.3).
++// Compiled in only with -DAEGIS_PROFILE; otherwise every macro is empty and the
++// evaluator is byte-for-byte the frozen code path.
++//
++// Output: one text file per thread, $AEGIS_PROFILE_OUT.<tid>.tsv, one line per
++// evaluate() call:
++//   K nden nfac nnonint md ok t_psi t_fit t_pred t_err t_ratio t_val t_sim t_rest [struct]
++// Times are nanoseconds (steady_clock). With AEGIS_PROFILE_STRUCT=1 a last column
++// lists the regressors as N|D:v,d,p;v,d,p/... for the cache-hit study (P2'b).
++#pragma once
++#ifdef AEGIS_PROFILE
++#include "aegis/regressor_library.hpp"
++#include <chrono>
++#include <cstdio>
++#include <cstdlib>
++#include <cmath>
++#include <string>
++#include <thread>
++#include <functional>
++
++namespace aegis { namespace perf {
++
++enum Stage { PSI = 0, FIT, PRED, ERRF, RATIO, VAL, SIM, REST, NSTAGE };
++
++struct ThreadSink {
++    std::FILE* f = nullptr;
++    bool want_struct = false;
++    ThreadSink() {
++        const char* base = std::getenv("AEGIS_PROFILE_OUT");
++        if (!base || !*base) return;
++        const char* s = std::getenv("AEGIS_PROFILE_STRUCT");
++        want_struct = s && s[0] == '1';
++        const size_t tid = std::hash<std::thread::id>{}(std::this_thread::get_id());
++        std::string path = std::string(base) + "." + std::to_string(tid % 1000000007u) + ".tsv";
++        f = std::fopen(path.c_str(), "w");
++        if (f) std::setvbuf(f, nullptr, _IOFBF, 1 << 20);
++    }
++    ~ThreadSink() { if (f) std::fclose(f); }
++};
++
++inline ThreadSink& sink() { static thread_local ThreadSink s; return s; }
++
++struct EvalProbe {
++    using clk = std::chrono::steady_clock;
++    const Chromosome& chrom;
++    const bool& ok;
++    clk::time_point last;
++    long long t[NSTAGE] = {0};
++    EvalProbe(const Chromosome& c, const bool& valid) : chrom(c), ok(valid), last(clk::now()) {}
++    void mark(Stage s) {
++        const auto now = clk::now();
++        t[s] += std::chrono::duration_cast<std::chrono::nanoseconds>(now - last).count();
++        last = now;
++    }
++    ~EvalProbe() {
++        mark(REST);
++        ThreadSink& o = sink();
++        if (!o.f) return;
++        int nden = 0, nfac = 0, nnonint = 0;
++        for (const auto& r : chrom.regressors) {
++            if (r.is_denominator()) ++nden;
++            for (const auto& tm : r.terms) {
++                ++nfac;
++                if (std::abs(tm.exponent - std::round(tm.exponent)) > 1e-12) ++nnonint;
++            }
++        }
++        std::fprintf(o.f, "%d\t%d\t%d\t%d\t%d\t%d", chrom.num_regressors(), nden, nfac, nnonint,
++                     chrom.max_delay(), ok ? 1 : 0);
++        for (int i = 0; i < NSTAGE; ++i) std::fprintf(o.f, "\t%lld", t[i]);
++        if (o.want_struct) {
++            std::fputc('\t', o.f);
++            bool first = true;
++            for (const auto& r : chrom.regressors) {
++                if (!first) std::fputc('/', o.f);
++                first = false;
++                std::fputs(r.is_denominator() ? "D:" : "N:", o.f);
++                bool ft = true;
++                for (const auto& tm : r.terms) {
++                    if (!ft) std::fputc(';', o.f);
++                    ft = false;
++                    std::fprintf(o.f, "%d,%d,%g", tm.variable, tm.delay, tm.exponent);
++                }
++            }
++        }
++        std::fputc('\n', o.f);
++    }
++};
++
++}} // namespace aegis::perf
++
++#define AEGIS_PROBE_BEGIN(chrom, okflag) ::aegis::perf::EvalProbe aegis_probe_((chrom), (okflag))
++#define AEGIS_PROBE_MARK(stage) aegis_probe_.mark(::aegis::perf::stage)
++#else
++#define AEGIS_PROBE_BEGIN(chrom, okflag) ((void)0)
++#define AEGIS_PROBE_MARK(stage) ((void)0)
++#endif

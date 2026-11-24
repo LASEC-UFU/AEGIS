@@ -244,3 +244,28 @@ protocol below is run once; every result is reported.
   `481e277660baf95bfa2a471052b013c4d1d1ce070407116882d4f4cdbc5c722f`.
   Verified by extracting to a temporary folder and `sha256sum -c`: 1 083 OK.
   The 2026-11-21 package and its `FILES.list`/`FILES.sha256` were kept.
+
+### P0 profiling (2026-11-24)
+
+- Authorized by the user on 2026-11-23. Instrumented build of the unchanged
+  1.1.0 source (`experiments/perf/p0_probe.patch`, active only with
+  `-DAEGIS_PROFILE`), built in a separate git worktree with the MSYS2 g++ 16.1
+  of this machine (`C:\SourceCode\MSYS2\ucrt64\bin`). Frozen `cpp/build` and
+  `cpp/build_phase0` untouched.
+- Checks: `core_tests` 91/0, `api_tests` 66/0, `phase0_tests` 11/0. CT
+  `aegis_full` seed 1 with the new base build and the instrumented build:
+  `report.model`, `report.evaluations` and `report.metrics.validation`
+  bit-identical to the frozen binary (g++ 16.2). Probe overhead ≈ 2 %.
+- Runs: `experiments/perf/run_p0.sh`, E3 split and overrides, seed 21, no
+  test file, 6 processes in parallel, BelowNormal, 13:56–14:41. CT
+  `mr8_default_simulation`, `mr39_zero_simulation`, `mr39_zero_one_step` at
+  full budget; WH same cells at 3×10⁴ evaluations (deviation: 1/5 of the
+  budget, covers only the start of the search). Outputs in
+  `experiments/results_perf/` (git-ignored). Analyzer
+  `tool/experiments/p0_profile.dart` reads only times, structure counts and
+  `wallSeconds`.
+- Main numbers (K 31–40): fit 26–35 %, full ERR (unused in fitness) 25–27 %,
+  grouped ERR 21–23 %, Ψ 15–19 %, free-run simulation 0.1–1.8 %; outside
+  `evaluate()` 0.5–3 %. Simulated shift-invariant cache hit rate 50–60 %
+  with 7.8–72 million distinct keys. Analysis and recommendation:
+  `docs/architecture/13_P0_PROFILING.md`.
