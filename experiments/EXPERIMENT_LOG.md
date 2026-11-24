@@ -236,3 +236,11 @@ protocol below is run once; every result is reported.
   (the original machine never started E3). Document
   discrepancy noted in the report (parecer 07 §10.4 vs prereg §3 on gamma
   annealing in the default cells; the prereg was followed).
+- Local-state package (outside git):
+  `experiments/transfer/aegis_estado_local_2026-11-23.tar.gz`, 1 083 files
+  (frozen binaries of `cpp/build` and `cpp/build_phase0`, `experiments/data`,
+  `results`, `results_archive`, `results_policy_eval`, `bin`,
+  `results_phase0`), SHA-256
+  `481e277660baf95bfa2a471052b013c4d1d1ce070407116882d4f4cdbc5c722f`.
+  Verified by extracting to a temporary folder and `sha256sum -c`: 1 083 OK.
+  The 2026-11-21 package and its `FILES.list`/`FILES.sha256` were kept.

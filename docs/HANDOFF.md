@@ -298,6 +298,11 @@ dart analyze lib test tool    # sem problemas
   trabalho separada (git worktree destacado, fora do repositório) com
   instrumentação `perf_probe.hpp` ativada só por `-DAEGIS_PROFILE`; builds
   `build_base` e `build_prof` compilados, ainda não executados.
+- **Pacote do estado local (fora do git):**
+  `experiments/transfer/aegis_estado_local_2026-11-23.tar.gz`, 1 083 arquivos,
+  SHA-256 `481e277660baf95bfa2a471052b013c4d1d1ce070407116882d4f4cdbc5c722f`;
+  lista e hashes em `FILES_2026-11-23.list/.sha256`. Verificado por extração
+  em pasta temporária e `sha256sum -c` (1 083 OK).
 
 ### 4.0a Segundo travamento, 2026-11-20 18:42 (LER PRIMEIRO)
 
