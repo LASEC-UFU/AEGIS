@@ -391,3 +391,11 @@ protocol below is run once; every result is reported.
 - Pending 1.1.0 analysis opened after the A1 freeze, as pre-registered:
   `analyze.dart` on WH and SB (outputs in `experiments/results/<b>/analysis/`).
 - CAC T1 started 2026-11-26 after A1 (6 processes).
+- CAC T1 completed (2026-11-26, 1 450 runs, CT, validation only). Ten
+  branches (seed 43, g=400) failed with Dart VM JIT crashes (likely memory
+  pressure, 6 VMs in 7.4 GB) and one wrote an empty run file (kept as
+  .broken); all re-run. Findings: γ↑ harmful at every time point
+  (dose-dependent); β↑ the most consistent benefit on CT; δ↑/α↑ help the
+  search-end metric (δ hurts the reported metric); DE operators, restarts,
+  η and stagnationLimit within the placebo noise band; ζ inert (curriculum
+  floors). Results: `experiments/cac/T1_RESULTS.md`, doc 15 §8.

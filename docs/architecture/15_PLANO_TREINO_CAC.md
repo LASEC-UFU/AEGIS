@@ -181,3 +181,52 @@ A ramificação determinística funciona como desenhado.
     estudar `stagnationLimit`;
   - build de desenvolvimento `cpp/build_dev`.
 - **Execução:** começa quando o A1 terminar.
+
+## 8. Resultado do T1 (CT, validação; 2026-11-26)
+
+1 450 execuções (36 braços × 4 momentos × 10 sementes + 10 controles).
+Resultado completo: `experiments/cac/T1_RESULTS.md`.
+
+**Integridade:**
+- 10 execuções da semente 43 em g = 400 falharam por travamento da máquina
+  virtual do Dart, ao compilar o executor (provável falta de memória com 6
+  VMs em 7,4 GB). Não é falha do AEGIS.
+- Uma delas deixou um `run_*.json` vazio, guardado como `.broken`.
+- Todas foram refeitas e completadas.
+
+**Ruído caótico (placebos, fim da busca):** log-razão entre p5 = −0,235 e
+p95 = +0,451 (≈ −21 % a +57 % no RMSE), com mediana |d| = 0,068.
+Perturbar a trajetória já muda bastante o campeão final no CT.
+
+**Achados** (d = log RMSE do ramo / controle no fim da busca; negativo =
+melhor):
+
+| Parâmetro | Efeito medido | Leitura |
+|---|---|---|
+| `complexityPenalty` γ ↑ | **+0,09 a +0,60**; dose grande fora da faixa de ruído (pior) em 6–8 de 10; K −24 a −26 em todos os momentos | **Prejudicial sempre**, e o dano é proporcional à dose. Confirma causalmente o mecanismo que derrubou o CAC v2 |
+| `denominatorPenalty` β ↑ | **−0,07 a −0,20**, 7–9 de 10 melhores; também melhor depois do pós-processamento (−0,05 a −0,16) | **O efeito benéfico mais consistente** no CT: menos denominadores generalizam melhor na validação curta |
+| `exponentPenalty` δ ↑ | −0,03 a −0,23 no fim da busca (K −22), mas **pior depois do pós-processamento** (+0,2 a +0,6) | Discordância entre a validação da busca e a reportada (convenções diferentes, ver diário) |
+| `alpha` (BIC) ↑ | −0,10 a −0,16 em g = 50–150; nulo depois | Ajuda cedo, com K −16 |
+| `noInputPenalty` ζ | idêntico aos placebos | **Inerte:** os pisos de ζ do currículo (0,8–1,5) ficam acima dos valores testados (base 0,5 ± 0,5) |
+| `stabilityPenalty` η | dentro da faixa de ruído | Sem efeito mensurável (o veto já garante admissibilidade) |
+| Operadores do DE (F, CR, migração, imigrantes, mutação estrutural) | dentro da faixa de ruído; em g ≥ 150 o campeão quase não muda | **Efeito desprezível** no pacote A1 |
+| `triggerRestart` (30 %, cataclismo) | dentro da faixa de ruído | Sem efeito mensurável no CT |
+| `stagnationLimit` | nulo (as execuções param pelo orçamento) | Inerte com orçamento fixo |
+
+**Ressalvas:**
+- O CT sobreajusta a validação curta. Por isso as penalidades de
+  parcimônia ajudam aqui, quando no WH e no SB foi justamente zerá-las que
+  deu o ganho (E3, A1). **O mapa depende do sistema**, e o T3 (WH/SB) é
+  indispensável.
+- São 144 braços × momentos; sem correção para múltiplas comparações, os
+  efeitos isolados pequenos podem ser acaso.
+
+**Consequências para o CAC:**
+- retirar ou mascarar os parâmetros inertes no contexto (ζ abaixo do piso,
+  `stagnationLimit` com orçamento fixo);
+- tratar γ ↑ como ação proibida no pacote sem penalidades;
+- o efeito útil está nos **pesos** (β, α, δ), e com sinal que depende do
+  sistema;
+- os operadores do DE quase não importam.
+- **T2 replanejado:** dose e momento para β, α e δ (e γ como controle de
+  dano), no CT e já no WH, junto com o T3.
