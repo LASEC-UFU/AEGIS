@@ -271,6 +271,24 @@ Registro técnico detalhado (em inglês): `experiments/EXPERIMENT_LOG.md`.
 
 ---
 
+## 2026-11-26 — CAC v3: sementes 24–30 (CT, validação)
+
+- **Fim da busca** (RMSE normalizado de validação do campeão, o objetivo da
+  busca): CAC v3 melhor que sem agente em 5 de 7. Somando 21–23: **8
+  melhores, 1 empate e 1 pior em 10 sementes.**
+- **Valor final reportado** (depois da poda e do refino P6): misto. Nas
+  sementes 24–30, 2 melhores, 4 piores e 1 empate.
+- **Depois da poda e antes do refino:** 5 melhores, 3 piores e 2 empates em
+  10.
+- **Leitura:** o pós-processamento no CT (poda e refino P6) tem variância
+  grande e pode inverter o ganho da busca. Exemplo: semente 27 do CAC, 0,0625
+  no fim da busca e 0,221 depois da poda. Com 205 amostras de validação, o CT
+  não decide se o CAC ajuda.
+- **[limitação]** o efeito do CAC precisa ser medido no WH e no SB (T3/T5) e
+  com o pós-processamento controlado. A poda e o refino no CT passam a ser
+  uma fonte de variância a investigar à parte.
+- Fonte: `experiments/results_perf/cac_v3b/` (fora do git).
+
 ## Pendências e decisões do usuário (atualizado em 2026-11-26)
 
 - Resultado do A1 (em execução) e a abertura dos testes do WH e do SB

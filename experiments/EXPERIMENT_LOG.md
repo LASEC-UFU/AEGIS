@@ -363,3 +363,10 @@ protocol below is run once; every result is reported.
   first launch failed before running anything (output directory missing for
   the log redirect); relaunched 07:41. Test metrics are written but not read
   until all 30 runs finish.
+- CAC v3 dev, CT seeds 24–30 (validation only, A1 package, with/without
+  CAC): end-of-search champion validation free-run better with CAC in 5/7
+  (8/10 with seeds 21–23); final reported validation after pruning and P6
+  mixed (2 better, 4 worse, 1 tie); after pruning and before P6, 5 better,
+  3 worse, 2 ties over 21–30. Post-processing on CT adds large variance
+  (e.g. seed 27: 0.0625 at search end, 0.221 after pruning). CT validation
+  (205 samples) cannot decide; WH/SB needed (doc 15, T3/T5).
