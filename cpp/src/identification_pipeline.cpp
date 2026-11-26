@@ -74,7 +74,7 @@ static const std::set<std::string>& known_config_keys() {
         "initialDelayFraction","islandRoles","islandRegimes","enableRefiner","enablePruner",
         "webSocketPort","agentActionsEnabled","allowBudgetActions","actionCooldown",
         "outcomeHorizon","broadcastInterval","syncMode","historyStride","fitMethod",
-        "admissibilityVeto","vetoTopK","finalRefine"
+        "admissibilityVeto","vetoTopK","finalRefine","postProcessGuard"
     };
     return keys;
 }
@@ -152,6 +152,7 @@ bool PipelineConfig::from_json(const std::string& text, std::string* error,
         const std::string fr = v.string_or("finalRefine", "none");
         if (fr != "none" && fr != "simulation") { if (error) *error = "finalRefine must be \"none\" or \"simulation\""; return false; }
         final_refine_simulation = fr == "simulation";
+        post_process_guard = v.bool_or("postProcessGuard", false);
     }
     {
         const double s = v.number_or("randomSeed", 0.0);
@@ -224,6 +225,7 @@ std::string PipelineConfig::to_json() const {
       << (de.fit_method == 1 ? ",\"fitMethod\":\"normal\"" : "")
       << (de.admissibility_veto ? ",\"admissibilityVeto\":true,\"vetoTopK\":" + std::to_string(de.veto_top_k) : std::string())
       << (final_refine_simulation ? ",\"finalRefine\":\"simulation\"" : "")
+      << (post_process_guard ? ",\"postProcessGuard\":true" : "")
       << ",\"alpha\":" << num(weights.alpha) << ",\"denominatorPenalty\":" << num(weights.beta)
       << ",\"complexityPenalty\":" << num(weights.gamma) << ",\"exponentPenalty\":" << num(weights.delta)
       << ",\"stabilityPenalty\":" << num(weights.eta) << ",\"noInputPenalty\":" << num(weights.zeta)
@@ -1118,6 +1120,24 @@ void IdentificationPipeline::post_process(Chromosome& champ) {
         return free_run_admissible(c, train_data_.data(), train_rows_, vd, val_rows_, raw_cols_,
                                    cfg_.output_col, bound);
     };
+    // postProcessGuard: a post-processing change is accepted only if the
+    // validation free-run RMSE in the REPORTED convention (simulation from
+    // trainEnd - maxDelay, scored over the whole validation split) does not
+    // get worse. The search fitness scores validation from the model's own
+    // maximum delay inside the validation block, which can disagree on short,
+    // slow records (CT).
+    const bool guard = cfg_.post_process_guard && val_end_ > train_end_;
+    auto seg_val = [&](const Chromosome& c) {
+        const SegmentMetrics va = evaluate_segment(c, norm_data_.data(), raw_rows_, raw_cols_, cfg_.output_col,
+                                                   train_end_ - cfg_.de.max_delay, val_end_, train_end_, bound,
+                                                   normalizer_.get(), "validation");
+        return va.free_run_diverged ? std::numeric_limits<double>::infinity() : va.rmse_free_run;
+    };
+    auto guard_ok = [&](const Chromosome& next, const Chromosome& prev) {
+        if (!guard) return true;
+        const double a = seg_val(next), b = seg_val(prev);
+        return std::isfinite(a) && (!std::isfinite(b) || a <= b);
+    };
     Chromosome cur = champ;
     ev.evaluate(cur, train_data_.data(), train_rows_, vd, val_rows_, raw_cols_, cfg_.output_col);
     const double f0 = cur.fitness;
@@ -1132,18 +1152,20 @@ void IdentificationPipeline::post_process(Chromosome& champ) {
             << ",\"fitnessBefore\":" << num(pr.fitness_before)
             << ",\"fitnessAfter\":" << num(pr.fitness_after)
             << ",\"evaluations\":" << pr.evaluations;
-        bool vetoed = false;
+        bool vetoed = false, guarded = false;
         if (pr.pruned_chromosome.evaluated && pr.fitness_after <= cur.fitness) {
             if (veto && !admissible(pr.pruned_chromosome)) vetoed = true;
+            else if (!guard_ok(pr.pruned_chromosome, cur)) guarded = true;
             else cur = pr.pruned_chromosome;
         }
         if (veto) log << ",\"vetoed\":" << json::boolean(vetoed);
+        if (guard) log << ",\"guarded\":" << json::boolean(guarded);
         log << "}";
     }
     if (cfg_.enable_refiner && cur.evaluated && cur.is_rational()) {
         LocalRefiner refiner(cfg_.refine);
         RefineResult rr = refiner.refine(cur, train_data_.data(), train_rows_, raw_cols_, cfg_.output_col);
-        bool accepted = false, vetoed = false;
+        bool accepted = false, vetoed = false, guarded = false;
         if (rr.coefficients.size() == cur.coefficients.size()) {
             Chromosome trial = cur;
             trial.coefficients = rr.coefficients;
@@ -1151,6 +1173,7 @@ void IdentificationPipeline::post_process(Chromosome& champ) {
                         /*refit=*/false);
             if (trial.evaluated && trial.fitness < cur.fitness) {
                 if (veto && !admissible(trial)) vetoed = true;
+                else if (!guard_ok(trial, cur)) guarded = true;
                 else { cur = trial; accepted = true; }
             }
         }
@@ -1158,6 +1181,7 @@ void IdentificationPipeline::post_process(Chromosome& champ) {
             << ",\"sseBefore\":" << num(rr.initial_sse) << ",\"sseAfter\":" << num(rr.final_sse)
             << ",\"accepted\":" << json::boolean(accepted);
         if (veto) log << ",\"vetoed\":" << json::boolean(vetoed);
+        if (guard) log << ",\"guarded\":" << json::boolean(guarded);
         log << "}";
     }
     // P6: final refinement of the champion by free-run simulation error, with
@@ -1169,14 +1193,17 @@ void IdentificationPipeline::post_process(Chromosome& champ) {
         } else {
             const SimRefineResult sr = refine_by_simulation(cur, norm_data_.data(), raw_cols_, cfg_.output_col,
                                                             train_end_, val_end_, cfg_.de.max_delay, bound);
-            bool applied = false;
+            bool applied = false, guarded = false;
             if (sr.ran && sr.chosen_iterate > 0) {
                 Chromosome trial = cur;
                 trial.coefficients = sr.coefficients;
                 trial.intercept = sr.intercept;
                 ev.evaluate(trial, train_data_.data(), train_rows_, vd, val_rows_, raw_cols_, cfg_.output_col,
                             /*refit=*/false);
-                if (trial.evaluated && (!veto || admissible(trial))) { cur = trial; applied = true; }
+                if (trial.evaluated && (!veto || admissible(trial))) {
+                    if (guard_ok(trial, cur)) { cur = trial; applied = true; }
+                    else guarded = true;
+                }
             }
             log << "\"status\":" << str(sr.status) << ",\"iterations\":" << sr.iterations
                 << ",\"accepted\":" << sr.accepted << ",\"admissibleIterates\":" << sr.admissible_iterates
@@ -1184,7 +1211,9 @@ void IdentificationPipeline::post_process(Chromosome& champ) {
                 << ",\"rmseTrain\":[" << num(sr.train0) << "," << num(sr.train) << "]"
                 << ",\"rmseValA\":[" << num(sr.va0) << "," << num(sr.va) << "]"
                 << ",\"rmseValB\":[" << num(sr.vb0) << "," << num(sr.vb) << "]"
-                << ",\"seconds\":" << num(sr.seconds) << ",\"applied\":" << json::boolean(applied) << "}";
+                << ",\"seconds\":" << num(sr.seconds) << ",\"applied\":" << json::boolean(applied);
+            if (guard) log << ",\"guarded\":" << json::boolean(guarded);
+            log << "}";
         }
     }
     log << ",\"finalFitness\":" << num(cur.fitness);

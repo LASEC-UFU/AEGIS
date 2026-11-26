@@ -121,7 +121,7 @@ Future<void> main(List<String> args) async {
       phaseStagnationLimit: (config['phaseStagnationLimit'] as num?)?.toInt() ?? 150,
     );
   } else if (agentSpec.startsWith('script:')) {
-    agent = ScriptedAgent.parse(agentSpec.substring(7),
+    agent = ScriptedAgent.parse(agentSpec.substring(7), actionSchema: service.getActionSchema,
         phaseStagnationLimit: (config['phaseStagnationLimit'] as num?)?.toInt() ?? 150);
   } else if (agentSpec == 'cac' || agentSpec.startsWith('cac:')) {
     agent = AdaptiveConvergenceController(

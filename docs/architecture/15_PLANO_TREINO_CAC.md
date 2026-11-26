@@ -159,3 +159,25 @@ CT, semente 41, pacote A1, validação:
   até a geração 150 e diferente a partir da 151, quando a ação é aplicada.
 
 A ramificação determinística funciona como desenhado.
+
+## 7. Medida principal e preparação do T1 (2026-11-26)
+
+- **Medida principal do T1–T3:** RMSE normalizado de simulação livre na
+  validação do **campeão no fim da busca** (último ponto do histórico,
+  `freeRunValFull`), antes de qualquer pós-processamento. Medidas também nos
+  horizontes g + 25, 50, 100 e 200, pelo histórico.
+- **Motivo:** no desenvolvimento do CAC v3 (CT, sementes 21–30), o
+  pós-processamento (poda e refino P6) tem variância grande e pode inverter o
+  efeito da busca (diário, 2026-11-26). A medida pós-processamento é
+  reportada como secundária.
+- **Agente roteirizado:**
+  - aceita ações relativas ao valor vigente em g (`param+=passo@g`), com
+    corte na faixa do esquema;
+  - registra a situação (variáveis fuzzy, fase, K, validação) no instante da
+    ação.
+- **Script:** `experiments/cac/run_t1.sh`, que pode ser retomado.
+  - 36 braços × 4 momentos × 10 sementes + 10 controles = 1 450 execuções;
+  - `allowBudgetActions` = true em todas, inclusive no controle, para
+    estudar `stagnationLimit`;
+  - build de desenvolvimento `cpp/build_dev`.
+- **Execução:** começa quando o A1 terminar.
