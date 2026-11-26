@@ -230,3 +230,29 @@ melhor):
 - os operadores do DE quase não importam.
 - **T2 replanejado:** dose e momento para β, α e δ (e γ como controle de
   dano), no CT e já no WH, junto com o T3.
+
+## 9. T2+T3: dose e momento dos pesos, no CT, WH e SB (registrado antes de rodar)
+
+Script: `experiments/cac/run_t2.sh <benchmark>`. Só validação, pacote A1,
+build `cpp/build_dev`, 5 processos (os travamentos de memória do Dart no T1
+ocorreram com 6).
+
+| | CT | WH | SB |
+|---|---|---|---|
+| Orçamento | 3×10⁵ | 3×10⁴ | 3×10⁴ |
+| Sementes | 51–60 | 61–65 | 61–65 |
+| Momentos g | 25, 100, 400, 1200 | 10, 25, 60, 150 | 10, 25, 60, 150 |
+
+**Braços:**
+- β: +0,025, +0,05 e +0,25;
+- α: +0,05 e +0,25;
+- δ: +0,02 e +0,1;
+- γ: +0,002 e +0,005 (doses mínimas, controle de dano);
+- placebo: θ + 0,5.
+
+**Medida principal:** campeão no fim da busca (como no T1).
+
+**Pergunta:**
+- o sinal do efeito de β, α e δ é o mesmo no CT, no WH e no SB?
+- a partir de que momento o efeito deixa de existir?
+- existe dose de γ que não prejudica?

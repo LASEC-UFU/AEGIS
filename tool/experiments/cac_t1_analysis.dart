@@ -82,7 +82,9 @@ String f(double x, [int d = 3]) => x.isFinite ? x.toStringAsFixed(d) : '—';
 
 void main(List<String> args) {
   final root = args.isNotEmpty ? args[0] : 'experiments/results_cac/t1';
-  final seeds = List.generate(10, (i) => 41 + i);
+  final seeds = Directory('$root/control').listSync().whereType<File>()
+      .map((f) => RegExp(r'run_(\d+)\.json$').firstMatch(f.path)).whereType<RegExpMatch>()
+      .map((m) => int.parse(m[1]!)).toList()..sort();
   final ctrl = {for (final s in seeds) s: load('$root/control', s)};
   final arms = Directory(root).listSync().whereType<Directory>()
       .map((d) => d.path.split(Platform.pathSeparator).last.split('/').last)
