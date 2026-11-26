@@ -269,3 +269,34 @@ protocol below is run once; every result is reported.
   `evaluate()` 0.5–3 %. Simulated shift-invariant cache hit rate 50–60 %
   with 7.8–72 million distinct keys. Analysis and recommendation:
   `docs/architecture/13_P0_PROFILING.md`.
+
+### P1, P2'a and P6 (2026-11-25)
+
+- P1 (exact optimizations; patch `experiments/perf/p1_p2a_p6.patch`): full
+  ERR only in the canonical evaluator, cached factor series with row-wise Ψ,
+  row-major Householder sweep. Unit tests pass. Bit-identity check
+  (`experiments/perf/check_bitid.sh`, whole run JSON except time/path
+  fields): 7/7 identical (CT aegis_full seed 1 with CT test vs frozen
+  output; CT E3 mr39_zero_simulation seed 21 vs E3 run; WH mr39_zero
+  simulation and one_step 3e4 evaluations vs P0 runs; SB 1e4 new vs frozen;
+  CT powerMode signed and legacy 5e4 new vs frozen). Wall time 1.8–2.6×
+  faster.
+- P2'a (`fitMethod` = `normal`, island evaluators only; default `qr` stays
+  bit-identical, checked on CT aegis_full seed 1). Pre-registration
+  `experiments/perf/P2A_PREREG.md` committed before quality runs. Audit (CT
+  6e4, WH 5e3 evaluations): fast path 100 % (2 fallbacks in 60 015), rank
+  decisions identical, p99 relative SSE difference ≤ 4.7e-9. Speed (seed 21,
+  mr39_zero_simulation): CT 134 s vs 936 s before P1; WH 3e4 evaluations
+  314 s vs 2 628 s.
+- P6: pre-registration `experiments/p6/P6_PREREG.md` committed before any
+  run. Tool `aegis_p6` (selftest: sensitivities vs central differences
+  6e-10, LM recovers a rational model to loss 1e-31).
+  - **Aborted first launch (tool defect):** the simulator flagged a model as
+    non-differentiable whenever a factor with exponent < 1 met x = 0, also
+    for the INPUT u, which does not depend on θ and needs no derivative. All
+    WH models stopped at iteration 0. Fixed so that only factors of the
+    simulated output are checked (the derivative is only taken for them).
+    No refinement result was used to make the fix (only the status
+    `init_not_differentiable_or_diverged`). Partial output archived in
+    `experiments/results_archive/p6_aborted_2026-11-25_input_zero_flag/`;
+    P6 restarted from scratch.

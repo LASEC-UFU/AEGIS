@@ -724,10 +724,10 @@ index 1413332..a99685b 100644
          for (int i = 0; i < len; ++i) dot += v[i] * Qb[row + i];
 diff --git a/cpp/tools/p6_core.hpp b/cpp/tools/p6_core.hpp
 new file mode 100644
-index 0000000..377b28d
+index 0000000..e427dbf
 --- /dev/null
 +++ b/cpp/tools/p6_core.hpp
-@@ -0,0 +1,227 @@
+@@ -0,0 +1,229 @@
 +// p6_core.hpp — P6 (experiments/p6/P6_PREREG.md): free-run simulation of
 +// RATIONAL models with the core's conventions (RationalModel::simulate),
 +// exact forward sensitivities for numerator and denominator coefficients,
@@ -795,7 +795,9 @@ index 0000000..377b28d
 +            double v = 1.0;
 +            for (const Term& t : reg.terms) {
 +                const double x = buf[static_cast<size_t>(k - t.delay) * s.cols + t.variable];
-+                if (t.exponent < 1.0 && std::abs(x) < 1e-12 && !aegis::is_integer_exponent(t.exponent))
++                // Only factors of the simulated output need d/dx (inputs do not depend on θ).
++                if (t.variable == s.out && t.exponent < 1.0 && std::abs(x) < 1e-12 &&
++                    !aegis::is_integer_exponent(t.exponent))
 +                    r.nondiff = true;
 +                v *= aegis::power_basis(x, t.exponent, PowerMode::Hybrid);
 +            }
