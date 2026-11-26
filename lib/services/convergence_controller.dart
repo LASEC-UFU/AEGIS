@@ -45,7 +45,7 @@ class AdaptiveConvergenceController extends OptimizationAgent {
     this.priorScale = 0.4,
     this.priorVariance = 0.01,
     this.nonePrior = 0.25,
-    this.driftPenalty = 0.15,
+    this.driftPenalty = 0.5,
     this.anchorPrior = 0.1,
     int seed = 1,
     Map<String, dynamic>? table,
@@ -178,7 +178,9 @@ class AdaptiveConvergenceController extends OptimizationAgent {
     var bestDraw = -double.infinity;
     for (final e in arms.entries) {
       final key = e.key.key;
-      final p0 = (prior[key] ?? 0.0) + e.value.priorAdj + (key == 'none' ? nonePrior : 0.0);
+      // v3: the expert fuzzy prior applies to DE operators only, not to fitness weights.
+      final fz = anchors.containsKey(e.value.param) ? 0.0 : (prior[key] ?? 0.0);
+      final p0 = fz + e.value.priorAdj + (key == 'none' ? nonePrior : 0.0);
       final draw = _draw(key, situation, p0);
       if (draw > bestDraw) { bestDraw = draw; best = key; }
     }
@@ -251,7 +253,9 @@ class AdaptiveConvergenceController extends OptimizationAgent {
       final weight = kind == 'weight';
       if (weight) anchors.putIfAbsent(name, () => cur);
       final anchor = anchors[name];
-      var step = maxStep / 2;
+      // v3: fitness weights move in tenths of the max step (one γ step of 0.05
+      // collapsed every CT model to K = 3, irreversibly); DE parameters in halves.
+      var step = weight ? maxStep / 10 : maxStep / 2;
       if (integer) step = math.max(1, step.roundToDouble());
       for (final dir in const [1, -1]) {
         var v = (cur + dir * step).clamp(lo, hi).toDouble();

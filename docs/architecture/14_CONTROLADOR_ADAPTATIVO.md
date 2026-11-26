@@ -228,3 +228,44 @@ validação):
   seguinte;
 - avaliação nas sementes 21–23, com a tabela treinada congelada e sem
   tabela, comparadas ao A1 sem agente das mesmas sementes.
+
+## 12. Versão 3 (2026-11-26)
+
+**Resultado da v2** (CT, validação, sementes 21–23): ainda pior que sem
+agente. **Mecanismo encontrado:**
+- a regra fuzzy R6 ("validação ≫ treino → parcimônia") dispara no CT, onde
+  essa diferença é normal;
+- um único passo de `complexityPenalty` 0 → 0,06 faz a seleção descartar os
+  modelos grandes de toda a população, e o campeão cai para K = 3 com
+  validação pior;
+- voltar o peso à âncora não recupera nada, porque os modelos grandes já
+  sumiram: o dano é **irreversível**;
+- a tabela treinada não ajudou, porque a recompensa mede só o horizonte h e
+  não vê esse dano de longo prazo.
+
+**Mudanças da v3:**
+- pesos do fitness andam em **décimos** do passo máximo (operadores do DE
+  continuam em metades);
+- custo de afastamento da âncora 0,5 por passo;
+- o prior das regras fuzzy vale **só para operadores do DE**, não para
+  pesos. As regras especialistas foram escritas para a dinâmica do 1.1.0.
+- Todos os parâmetros continuam disponíveis.
+
+**Desenvolvimento** (CT, validação, sementes 21–23, sem tabela): RMSE
+normalizado de simulação na validação do campeão no fim da busca, antes do
+pós-processamento:
+
+| Semente | A1 sem agente | v1 | v2 | v3 |
+|---|---|---|---|---|
+| 21 | 0,109 (K 33) | 0,070 (K 4) | 0,093 (K 4) | 0,082 (K 30) |
+| 22 | 0,105 (K 15) | 0,125 (K 4) | 0,067 (K 3) | 0,098 (K 24) |
+| 23 | 0,082 (K 33) | 0,089 (K 4) | 0,104 (K 3) | 0,060 (K 25) |
+
+**Achado sobre o A1, não sobre o CAC:**
+- na semente 23 da v3, o refino final (P6) escolheu a iteração 3 por V_A
+  (0,187 → 0,139), e V_B explodiu (0,105 → 1,11). O RMSE de validação
+  reportado foi 2,82 V.
+- É o risco do P6 no CT, onde cada metade da validação tem ≈ 100 amostras,
+  já apontado no `P6_REPORT.md`.
+- O A1 está congelado com o refino ligado. No CT é desfecho secundário, e o
+  caso será reportado.
