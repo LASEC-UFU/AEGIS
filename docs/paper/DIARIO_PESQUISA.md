@@ -347,12 +347,49 @@ Registro técnico detalhado (em inglês): `experiments/EXPERIMENT_LOG.md`.
 - Fontes: `experiments/a1/A1_REPORT.md`, `A1_RESULTS.md`;
   `experiments/results/{wiener_hammerstein,silverbox}/analysis/SUMMARY.md`.
 
-&
+## 2026-11-26 — CAC T1: mapa causal de impacto dos 16 parâmetros (CT)
+
+- 1 450 execuções com ramificação determinística (10 sementes × 4 momentos ×
+  36 braços + controles), só validação.
+- **[artigo]** Medição causal do efeito de cada hiperparâmetro sobre o
+  campeão (fim da busca):
+  - **γ ↑ é prejudicial sempre**, proporcional à dose (até +60 % log no RMSE;
+    K −25);
+  - **β ↑ é o efeito benéfico mais consistente no CT** (−7 a −20 %, 7–9 de 10
+    sementes, também depois do pós-processamento);
+  - δ ↑ e α ↑ ajudam no fim da busca, mas δ piora o valor reportado;
+  - os operadores do DE, o reinício/cataclismo, η e `stagnationLimit` ficam
+    dentro do ruído;
+  - ζ é **inerte** (pisos do currículo acima dos valores testados): o T1
+    achou um parâmetro sem efeito sem que ninguém precisasse dizer.
+- **Ruído caótico** (placebos): −21 % a +57 % no RMSE final.
+- **[limitação]** o CT sobreajusta a validação, e por isso a parcimônia ajuda
+  aqui; no WH e no SB foi o contrário (A1). O mapa depende do sistema; o T3
+  (WH/SB) é necessário. Sem correção para múltiplas comparações.
+- **Desvio:** 10 execuções falharam por travamento da VM do Dart (memória) e
+  foram refeitas.
+- Fonte: `docs/architecture/15_PLANO_TREINO_CAC.md` §8;
+  `experiments/cac/T1_RESULTS.md` (`2e87dd4`).
+
+## 2026-11-26 — CAC T2+T3 iniciado
+
+- Pedido do usuário: "pode continuar".
+- Desenho registrado antes de rodar (doc 15 §9, `5c8754f`): dose e momento
+  de β, α e δ, mais γ em doses mínimas e um placebo, no CT (10 sementes,
+  orçamento completo), WH e SB (5 sementes, 3×10⁴ avaliações). Só validação.
+- A análise do T1 foi generalizada para descobrir as sementes, e reproduz o
+  resultado do T1 idêntico.
+- **Correção deste diário:** um `sed` com `\&` na entrada do A1 apagou o
+  cabeçalho de pendências, e com isso a entrada do T1 não foi inserida. Ambos
+  foram restaurados à mão nesta data.
+
+---
+
+## Pendências e decisões do usuário (atualizado em 2026-11-26)
 
 - ~~Resultado do A1 e abertura dos testes do WH e do SB~~ feitos em 2026-11-26.
 - Estratégia do artigo à luz do A1 (gate atingido no WH e no SB; CT pior).
-  (logo depois).
-- CAC: sementes 24–30 da v3 em execução; T1–T5 depois do A1.
-- Correção do refino final no CT (exigir V_A e V_B sem piora): candidata
-  para depois do A1.
-- Estratégia do artigo, licenças dos dados WH/SB, agente LLM pago.
+- CAC: T2+T3 em execução; depois T4 (modelo de impacto → CAC v4) e T5.
+- A2 candidato: alinhar a validação da busca com a reportada e proteger o
+  pós-processamento (problema do CT).
+- Licenças dos dados WH/SB, agente LLM pago.
