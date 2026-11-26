@@ -3,7 +3,7 @@
 //   dart run tool/experiments/run_agent_experiment.dart \
 //     --dll cpp/build/aegis_core.dll --data est.csv [--data-test test.csv] \
 //     --config experiments/configs/conditions/aegis_full.json [--set key=value ...] \
-//     --agent none|ucb1|fuzzy|fuzzy:<rulebase.json>|cac|cac:<table.json>|llm --seed 1 --output <dir> [--label name]
+//     --agent none|ucb1|fuzzy|fuzzy:<rulebase.json>|cac|cac:<table.json>|script:<p=v@g;...>|llm --seed 1 --output <dir> [--label name]
 //     [--llm-model claude-opus-5-5] [--llm-effort medium] [--consult-every 50] [--max-cost 5]
 //
 // Each generation: step(1) → snapshot → agent.consult() (awaited) → proposed
@@ -22,6 +22,7 @@ import 'package:aegis/ffi/aegis_ffi_service_native.dart';
 import 'package:aegis/ffi/aegis_library_native.dart';
 import 'package:aegis/services/fuzzy_policy_agent.dart';
 import 'package:aegis/services/convergence_controller.dart';
+import 'package:aegis/services/scripted_agent.dart';
 import 'package:aegis/services/llm_agent_native.dart';
 import 'package:aegis/services/local_adaptive_agent.dart';
 import 'package:aegis/services/optimization_agent.dart';
@@ -119,6 +120,9 @@ Future<void> main(List<String> args) async {
       id: 'fuzzy-${rb.name}',
       phaseStagnationLimit: (config['phaseStagnationLimit'] as num?)?.toInt() ?? 150,
     );
+  } else if (agentSpec.startsWith('script:')) {
+    agent = ScriptedAgent.parse(agentSpec.substring(7),
+        phaseStagnationLimit: (config['phaseStagnationLimit'] as num?)?.toInt() ?? 150);
   } else if (agentSpec == 'cac' || agentSpec.startsWith('cac:')) {
     agent = AdaptiveConvergenceController(
       actionSchema: service.getActionSchema,
