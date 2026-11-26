@@ -10,13 +10,14 @@ OUTR="$ROOT/experiments/results_perf/p2a_quality"; mkdir -p "$OUTR"
 printf '{"time":"%s","prereg_sha256":"%s","binary_sha256":"%s"}\n' "$(date -Iseconds)" \
   "$(sha256sum "$ROOT/experiments/perf/P2A_PREREG.md" | cut -c1-64)" "$(sha256sum "$BIN" | cut -c1-64)" >> "$OUTR/MANIFEST.jsonl"
 bench() {
-  local B="$1" TE VE BUDGET; case "$B" in cascaded_tanks) TE=819; VE=1024; BUDGET=300000 ;; *) TE=16000; VE=20000; BUDGET=150000 ;; esac
+  local B="$1" J="${2:-1}" TE VE BUDGET; case "$B" in cascaded_tanks) TE=819; VE=1024; BUDGET=300000 ;; *) TE=16000; VE=20000; BUDGET=150000 ;; esac
   local OUT="$OUTR/$B"; mkdir -p "$OUT"
   "$ROOT/experiments/phase0/lowprio.sh" "$BIN" --data "$ROOT/experiments/data/processed/$B/est.csv" --config "$CFG" \
     --set "trainEndRow=$TE" --set "valEndRow=$VE" --set "testStartRow=$VE" --set "maxEvaluations=$BUDGET" \
     --set maxRegressors=39 --set errorMode=simulation --set freeRunHorizon=0 "${ZERO[@]}" --set fitMethod=normal \
-    --runs 10 --seed-start 21 --jobs 1 --label p2a_mr39_zero_simulation --output "$OUT" > "$OUT/batch.log" 2>&1
+    --runs 10 --seed-start 21 --jobs "$J" --label p2a_mr39_zero_simulation --output "$OUT" > "$OUT/batch.log" 2>&1
   echo "$B $(tail -1 "$OUT/batch.log") $(date -Iseconds)"
 }
+if [ $# -ge 2 ]; then bench "$2" "${3:-1}"; exit; fi
 for b in cascaded_tanks wiener_hammerstein silverbox; do bench $b & done
 wait

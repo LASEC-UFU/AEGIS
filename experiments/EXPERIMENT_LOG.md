@@ -305,3 +305,12 @@ protocol below is run once; every result is reported.
   itself). Pre-registered criterion (cell mr39_zero_simulation, V_B ratio):
   CT 1.000 not met, WH 0.873 met, SB 0.841 met → met (2/3). Report
   `experiments/p6/P6_REPORT.md`.
+- P2'a quality (pre-registered §3) completed 2026-11-26 00:36: CT 22:30–22:52
+  (1 at a time), WH 22:33–00:14 (3 in parallel), SB 22:33–00:36 (2 in
+  parallel). Operational deviation: WH and SB were first launched one run at
+  a time and stopped after 3 minutes with no output, then relaunched with
+  3 and 2 in parallel; no parameter changed. Result vs E3 (median validation
+  RMSE ratio): CT 1.000, WH 1.010, SB 0.965; 0 divergences; identical
+  champion in 10/10, 5/10, 4/10 seeds. Equivalence criterion met. Median wall
+  time 134/1704/1484 s vs E3 874/24752/25746 s (parallelism differs, see
+  `experiments/perf/PERF_REPORT.md`).

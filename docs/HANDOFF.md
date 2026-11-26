@@ -1,6 +1,7 @@
 # AEGIS — Documento de passagem (handoff) para continuidade por outro agente
 
-Última atualização: 2026-11-23 ~22:20 (UTC−3), na segunda máquina, após o fim do
+Última atualização: 2026-11-26 ~00:45 (UTC−3), após P1, P2′a e P6 (§4.0b). Antes:
+2026-11-23 ~22:20, na segunda máquina, após o fim do
 E3 da Fase 0 (§4.0b). Antes: 2026-11-21 ~10:00, após o segundo
 travamento da máquina (§4.0a). Antes: 2026-11-20 ~10:43, após a análise
 arquitetural. O registro original da auditoria é de ~09:56. Leia este arquivo inteiro antes de agir.
@@ -294,7 +295,12 @@ dart analyze lib test tool    # sem problemas
   agente) e auditorias 10 e 12 em `docs/architecture/`. Ordem acordada:
   P0 profiling → P1 otimizações exatas → P2′a/b ajuste por Gram/estatísticas
   deslocáveis → P6 refino por erro de simulação (10 §11.4, 12 §6).
-- **P0 em preparação (autorizado pelo usuário em 2026-11-23):** cópia de
+- **P0, P1, P2′a e P6 concluídos (2026-11-24 a 26):** ver `docs/architecture/13_P0_PROFILING.md`,
+  `experiments/perf/PERF_REPORT.md` e `experiments/p6/P6_REPORT.md`. P1 é idêntico bit a
+  bit (1,8–2,6×); P2′a (`fitMethod: "normal"`) é equivalente em qualidade e 6–17× mais
+  rápido; P6 atingiu o critério em 2 de 3 (WH, SB). Código só no patch
+  `experiments/perf/p1_p2a_p6.patch` (worktree no scratchpad da sessão; reaplicar com
+  `git apply` num worktree novo). Histórico do P0: cópia de
   trabalho separada (git worktree destacado, fora do repositório) com
   instrumentação `perf_probe.hpp` ativada só por `-DAEGIS_PROFILE`; builds
   `build_base` e `build_prof` compilados, ainda não executados.
