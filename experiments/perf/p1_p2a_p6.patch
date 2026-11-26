@@ -1,0 +1,1278 @@
+diff --git a/cpp/CMakeLists.txt b/cpp/CMakeLists.txt
+index 1be93ee..26af3f2 100644
+--- a/cpp/CMakeLists.txt
++++ b/cpp/CMakeLists.txt
+@@ -147,6 +147,14 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
+     aegis_static_runtime(${p0})
+   endforeach()
+   add_test(NAME phase0_tests COMMAND phase0_tests)
++
++  # P6 (experiments/p6/P6_PREREG.md): simulation-error refinement of rational
++  # champions with admissibility veto. Separate executable.
++  add_executable(aegis_p6 tools/p6_refine.cpp)
++  target_link_libraries(aegis_p6 PRIVATE aegis_static)
++  target_compile_definitions(aegis_p6 PRIVATE AEGIS_EXPORTS)
++  aegis_set_options(aegis_p6)
++  aegis_static_runtime(aegis_p6)
+ endif()
+ 
+ # ── WASM target (Emscripten only) ────────────────────────────────
+diff --git a/cpp/include/aegis/de_optimizer.hpp b/cpp/include/aegis/de_optimizer.hpp
+index 85f3739..843aa69 100644
+--- a/cpp/include/aegis/de_optimizer.hpp
++++ b/cpp/include/aegis/de_optimizer.hpp
+@@ -66,6 +66,7 @@ struct DEConfig {
+ 
+     // Threading
+     int    num_threads       = 0;     // 0 = one thread per island; 1 = sequential
++    int    fit_method        = 0;     // P2'a: 0 = QR (default), 1 = Gram/Cholesky in the island inner loop
+     uint64_t random_seed     = 0;     // 0 = time-based seed (pipeline records the effective seed)
+ };
+ 
+diff --git a/cpp/include/aegis/individual_evaluator.hpp b/cpp/include/aegis/individual_evaluator.hpp
+index 1fb229a..81405af 100644
+--- a/cpp/include/aegis/individual_evaluator.hpp
++++ b/cpp/include/aegis/individual_evaluator.hpp
+@@ -128,6 +128,17 @@ public:
+     const FitnessWeights& weights() const noexcept { return weights_; }
+ 
+     /** Number of objective-function evaluations performed by this evaluator. */
++    /** P1: the full ERR (chrom.err) does not enter the fitness; inner-loop
++     *  evaluators may skip it. Default on, so every reporting path keeps it. */
++    void set_compute_full_err(bool on) noexcept { full_err_ = on; }
++    bool compute_full_err() const noexcept { return full_err_; }
++
++    /** P2'a: 0 = Householder QR (default, exact), 1 = centred Gram matrix with
++     *  Cholesky and K×K grouped ERR, falling back to QR when ill-conditioned.
++     *  Used only by the island (inner-loop) evaluators. */
++    void set_fit_method(int m) noexcept { fit_method_ = m; }
++    int fit_method() const noexcept { return fit_method_; }
++
+     long long evaluations() const noexcept { return evaluations_; }
+     void reset_evaluations() noexcept { evaluations_ = 0; }
+ 
+@@ -137,6 +148,8 @@ public:
+ private:
+     FitnessWeights  weights_;
+     mutable long long evaluations_ = 0;
++    bool            full_err_ = true;
++    int             fit_method_ = 0;
+ 
+     double compute_complexity_penalty(const Chromosome& chrom) const noexcept;
+     double compute_exponent_penalty(const Chromosome& chrom) const noexcept;
+@@ -147,6 +160,10 @@ private:
+         const double* data, int rows, int cols, int output_col, int max_delay
+     ) const noexcept;
+     void assemble_fitness(Chromosome& chrom, int output_col) const;
++    bool fast_fit_and_ratio(Chromosome& chrom, const std::vector<double>& psi, int n, const double* y,
++                            int output_col, double& input_ratio, int& reason) const;
++    void p2a_audit(const Chromosome& chrom, const std::vector<double>& psi, int n, const double* y,
++                   int output_col, bool fast, int reason, double ratio_fast) const;
+ };
+ 
+ } // namespace aegis
+diff --git a/cpp/src/de_optimizer.cpp b/cpp/src/de_optimizer.cpp
+index 9d78660..e50615c 100644
+--- a/cpp/src/de_optimizer.cpp
++++ b/cpp/src/de_optimizer.cpp
+@@ -88,6 +88,8 @@ Island::Island(int id, const DEConfig& cfg, uint64_t seed,
+       cols_(cols),             output_col_(output_col),
+       mu_f_(cfg.mu_f),         mu_cr_(cfg.mu_cr)
+ {
++    evaluator_.set_compute_full_err(false); // P1: champion is re-evaluated canonically
++    evaluator_.set_fit_method(cfg_.fit_method);
+     pop_.reserve(cfg_.population_size);
+     for (int i = 0; i < cfg_.population_size; ++i)
+         pop_.push_back(random_chromosome());
+diff --git a/cpp/src/identification_pipeline.cpp b/cpp/src/identification_pipeline.cpp
+index 7e47c53..d435198 100644
+--- a/cpp/src/identification_pipeline.cpp
++++ b/cpp/src/identification_pipeline.cpp
+@@ -72,7 +72,7 @@ static const std::set<std::string>& known_config_keys() {
+         "curriculum","gammaAnnealStart","gammaAnnealEnd","phaseStagnationLimit","initialPmax",
+         "initialDelayFraction","islandRoles","islandRegimes","enableRefiner","enablePruner",
+         "webSocketPort","agentActionsEnabled","allowBudgetActions","actionCooldown",
+-        "outcomeHorizon","broadcastInterval","syncMode","historyStride"
++        "outcomeHorizon","broadcastInterval","syncMode","historyStride","fitMethod"
+     };
+     return keys;
+ }
+@@ -139,6 +139,11 @@ bool PipelineConfig::from_json(const std::string& text, std::string* error,
+     de.reinit_interval   = v.int_or("reinitInterval", 25);
+     de.hypermutation     = v.bool_or("hypermutation", true);
+     de.num_threads       = v.int_or("numThreads", 0);
++    {
++        const std::string fm = v.string_or("fitMethod", "qr");
++        if (fm != "qr" && fm != "normal") { if (error) *error = "fitMethod must be \"qr\" or \"normal\""; return false; }
++        de.fit_method = fm == "normal" ? 1 : 0;
++    }
+     {
+         const double s = v.number_or("randomSeed", 0.0);
+         de.random_seed = (std::isfinite(s) && s > 0) ? static_cast<uint64_t>(s) : 0;
+@@ -207,6 +212,7 @@ std::string PipelineConfig::to_json() const {
+       << ",\"reinitializationRatio\":" << num(de.reinit_ratio) << ",\"reinitInterval\":" << de.reinit_interval
+       << ",\"hypermutation\":" << json::boolean(de.hypermutation)
+       << ",\"numThreads\":" << de.num_threads << ",\"randomSeed\":" << de.random_seed
++      << (de.fit_method == 1 ? ",\"fitMethod\":\"normal\"" : "")
+       << ",\"alpha\":" << num(weights.alpha) << ",\"denominatorPenalty\":" << num(weights.beta)
+       << ",\"complexityPenalty\":" << num(weights.gamma) << ",\"exponentPenalty\":" << num(weights.delta)
+       << ",\"stabilityPenalty\":" << num(weights.eta) << ",\"noInputPenalty\":" << num(weights.zeta)
+diff --git a/cpp/src/individual_evaluator.cpp b/cpp/src/individual_evaluator.cpp
+index 09f60a3..ee5c6ce 100644
+--- a/cpp/src/individual_evaluator.cpp
++++ b/cpp/src/individual_evaluator.cpp
+@@ -3,6 +3,12 @@
+ #include "aegis/safe_power.hpp"
+ #include "aegis/overfitting_detector.hpp"
+ #include "aegis/underfitting_detector.hpp"
++#include "perf_probe.hpp"
++#include <cstdio>
++#include <cstdlib>
++#include <functional>
++#include <string>
++#include <thread>
+ #include <cmath>
+ #include <algorithm>
+ #include <numeric>
+@@ -264,6 +270,208 @@ std::vector<double> IndividualEvaluator::compute_err(
+     return compute_err_from_psi(psi, usable, nr, y.data());
+ }
+ 
++// ── P2'a: fit and grouped ERR from the centred Gram matrix ────────────────
++//
++// Same least-squares problem as fit_from_psi (pseudo-linearised columns,
++// intercept) and the same greedy grouped ERR as compute_err_grouped, solved
++// in the K×K space: one pass for the means, one pass for the centred Gram
++// matrix (½·N·K² multiply-adds, contiguous), then Cholesky with columns
++// dropped in order (as the QR drops dependent columns) and the greedy ERR by
++// rank-one updates of the Gram matrix. Not bit-identical to the QR path.
++// Fallback (returns false) when a pivot or an ERR residual falls in the zone
++// the Gram matrix cannot resolve: reason 1 = fit pivot, 2 = ERR residual,
++// 3 = non-finite result.
++namespace {
++constexpr double kDropRel     = 1e-12; // ≤ → column dependent (same threshold as compute_err_grouped)
++constexpr double kAmbiguousRel = 1e-8; // (kDropRel, kAmbiguousRel) → Gram cannot decide → fallback
++}
++
++bool IndividualEvaluator::fast_fit_and_ratio(
++    Chromosome& chrom, const std::vector<double>& psi, int n, const double* y, int output_col,
++    double& input_ratio, int& reason
++) const {
++    const int nr = chrom.num_regressors();
++    reason = 0;
++    std::vector<char> is_den(nr, 0);
++    for (int j = 0; j < nr; ++j) is_den[j] = chrom.regressors[j].is_denominator() ? 1 : 0;
++
++    // Pass 1: means of the pseudo-linearised columns and of y.
++    std::vector<double> m(nr, 0.0);
++    double ym = 0.0;
++    for (int i = 0; i < n; ++i) {
++        const double* row = psi.data() + static_cast<size_t>(i) * nr;
++        const double yi = y[i];
++        ym += yi;
++        for (int j = 0; j < nr; ++j) m[j] += is_den[j] ? -yi * row[j] : row[j];
++    }
++    for (int j = 0; j < nr; ++j) m[j] /= n;
++    ym /= n;
++
++    // Pass 2: centred Gram (upper triangle), cross terms with y, Σ yc².
++    std::vector<double> G(static_cast<size_t>(nr) * nr, 0.0), cy(nr, 0.0), r(nr);
++    double syy = 0.0;
++    for (int i = 0; i < n; ++i) {
++        const double* row = psi.data() + static_cast<size_t>(i) * nr;
++        const double yi = y[i];
++        const double yc = yi - ym;
++        syy += yc * yc;
++        for (int j = 0; j < nr; ++j) r[j] = (is_den[j] ? -yi * row[j] : row[j]) - m[j];
++        for (int j = 0; j < nr; ++j) {
++            const double rj = r[j];
++            cy[j] += rj * yc;
++            double* Gj = G.data() + static_cast<size_t>(j) * nr;
++            for (int k = j; k < nr; ++k) Gj[k] += rj * r[k];
++        }
++    }
++    for (int j = 0; j < nr; ++j)
++        for (int k = 0; k < j; ++k) G[static_cast<size_t>(j) * nr + k] = G[static_cast<size_t>(k) * nr + j];
++
++    // Fit: Cholesky in column order; dependent columns get θ = 0.
++    std::vector<double> L(static_cast<size_t>(nr) * nr, 0.0);
++    std::vector<int> acc;
++    acc.reserve(nr);
++    for (int j = 0; j < nr; ++j) {
++        const double gjj = G[static_cast<size_t>(j) * nr + j];
++        double d = gjj;
++        for (int k : acc) { const double l = L[static_cast<size_t>(j) * nr + k]; d -= l * l; }
++        if (!(gjj > 0.0) || d <= kDropRel * gjj) continue;          // dependent: dropped
++        if (d < kAmbiguousRel * gjj) { reason = 1; return false; }    // unresolvable
++        const double ljj = std::sqrt(d);
++        L[static_cast<size_t>(j) * nr + j] = ljj;
++        for (int i = j + 1; i < nr; ++i) {
++            double s = G[static_cast<size_t>(i) * nr + j];
++            for (int k : acc) s -= L[static_cast<size_t>(i) * nr + k] * L[static_cast<size_t>(j) * nr + k];
++            L[static_cast<size_t>(i) * nr + j] = s / ljj;
++        }
++        acc.push_back(j);
++    }
++    std::vector<double> z(nr, 0.0), theta(nr, 0.0);
++    for (size_t a = 0; a < acc.size(); ++a) {
++        const int j = acc[a];
++        double s = cy[j];
++        for (size_t b = 0; b < a; ++b) s -= L[static_cast<size_t>(j) * nr + acc[b]] * z[acc[b]];
++        z[j] = s / L[static_cast<size_t>(j) * nr + j];
++    }
++    for (size_t a = acc.size(); a-- > 0;) {
++        const int j = acc[a];
++        double s = z[j];
++        for (size_t b = a + 1; b < acc.size(); ++b) s -= L[static_cast<size_t>(acc[b]) * nr + j] * theta[acc[b]];
++        theta[j] = s / L[static_cast<size_t>(j) * nr + j];
++    }
++    double c0 = ym;
++    for (int j = 0; j < nr; ++j) c0 -= m[j] * theta[j];
++    for (double v : theta) if (!std::isfinite(v)) { reason = 3; return false; }
++    if (!std::isfinite(c0) || acc.empty()) { reason = 3; return false; }
++
++    // Grouped ERR on the centred Gram matrix (same greedy rule as compute_err_grouped).
++    double ratio = 0.0;
++    std::vector<int> group(nr, 0);
++    bool any_input = false;
++    for (int j = 0; j < nr; ++j)
++        for (const auto& t : chrom.regressors[j].terms)
++            if (t.variable != output_col) { group[j] = 1; any_input = true; break; }
++    if (any_input && n > 1 && syy >= 1e-30) {
++        std::vector<double> C = G, c = cy, err(nr, 0.0), norm0(nr);
++        for (int j = 0; j < nr; ++j) norm0[j] = G[static_cast<size_t>(j) * nr + j];
++        std::vector<char> active(nr, 1);
++        for (int step = 0; step < 2 * nr + 1; ++step) {
++            int cur_group = std::numeric_limits<int>::max();
++            for (int j = 0; j < nr; ++j) if (active[j]) cur_group = std::min(cur_group, group[j]);
++            int best = -1;
++            double best_err = -1.0;
++            for (int j = 0; j < nr; ++j) {
++                if (!active[j] || group[j] != cur_group) continue;
++                const double ww = C[static_cast<size_t>(j) * nr + j], wy = c[j];
++                const double ref = std::max(norm0[j], 1e-300);
++                if (ww <= kDropRel * ref) { active[j] = 0; continue; }
++                if (ww < kAmbiguousRel * ref) { reason = 2; return false; }
++                const double e = (wy * wy) / (ww * syy);
++                if (e > best_err) { best_err = e; best = j; }
++            }
++            if (best < 0) {
++                bool any = false;
++                for (int j = 0; j < nr; ++j) any = any || active[j];
++                if (!any) break;
++                continue;
++            }
++            err[best] = std::max(0.0, best_err);
++            active[best] = 0;
++            const double qq = C[static_cast<size_t>(best) * nr + best];
++            if (qq < 1e-300) continue;
++            const double cb = c[best];
++            std::vector<double> col(nr);
++            for (int j = 0; j < nr; ++j) col[j] = C[static_cast<size_t>(j) * nr + best];
++            for (int j = 0; j < nr; ++j) {
++                if (!active[j]) continue;
++                const double a = col[j] / qq;
++                c[j] -= a * cb;
++                double* Cj = C.data() + static_cast<size_t>(j) * nr;
++                for (int k = 0; k < nr; ++k) if (active[k]) Cj[k] -= a * col[k];
++            }
++        }
++        double ar = 0.0, in = 0.0;
++        for (int j = 0; j < nr; ++j) (group[j] ? in : ar) += err[j];
++        const double remaining = 1.0 - ar;
++        ratio = remaining < 1e-12 ? 0.0 : clamp(in / remaining, 0.0, 1.0);
++    }
++    if (!std::isfinite(ratio)) { reason = 3; return false; }
++
++    chrom.coefficients = std::move(theta);
++    chrom.intercept = c0;
++    input_ratio = ratio;
++    return true;
++}
++
++// P2'a audit (only when AEGIS_P2A_AUDIT is set): one line per inner-loop
++// candidate with the fallback reason and, when the fast path was used, its
++// agreement with the exact Householder path on the same candidate.
++void IndividualEvaluator::p2a_audit(
++    const Chromosome& chrom, const std::vector<double>& psi, int n, const double* y, int output_col,
++    bool fast, int reason, double ratio_fast
++) const {
++    struct Sink {
++        std::FILE* f = nullptr;
++        Sink() {
++            const char* base = std::getenv("AEGIS_P2A_AUDIT");
++            if (!base || !*base) return;
++            const size_t tid = std::hash<std::thread::id>{}(std::this_thread::get_id());
++            f = std::fopen((std::string(base) + "." + std::to_string(tid % 1000000007u) + ".tsv").c_str(), "w");
++        }
++        ~Sink() { if (f) std::fclose(f); }
++    };
++    static thread_local Sink sink;
++    if (!sink.f) return;
++    const int nr = chrom.num_regressors();
++    int nden = 0;
++    for (const auto& rg : chrom.regressors) nden += rg.is_denominator() ? 1 : 0;
++    if (!fast) {
++        std::fprintf(sink.f, "%d\t%d\t0\t%d\n", nr + 1, nden, reason);
++        return;
++    }
++    Chromosome q = chrom;
++    std::vector<double> psi_q = psi;
++    if (!RationalModel::fit_from_psi(q, psi_q, n, y)) {
++        std::fprintf(sink.f, "%d\t%d\t1\t0\tqr_failed\n", nr + 1, nden);
++        return;
++    }
++    double cmax = std::abs(q.intercept), dmax = std::abs(q.intercept - chrom.intercept);
++    int zq = 0, zn = 0;
++    for (int j = 0; j < nr; ++j) {
++        cmax = std::max(cmax, std::abs(q.coefficients[j]));
++        dmax = std::max(dmax, std::abs(q.coefficients[j] - chrom.coefficients[j]));
++        zq += q.coefficients[j] == 0.0;
++        zn += chrom.coefficients[j] == 0.0;
++    }
++    std::vector<double> yq, yn;
++    RationalModel::predict_from_psi(q, psi, n, yq, nullptr);
++    RationalModel::predict_from_psi(chrom, psi, n, yn, nullptr);
++    const double sq = Metrics::sse(y, yq.data(), n), sn = Metrics::sse(y, yn.data(), n);
++    if (chrom.is_rational()) pseudo_linearize(chrom, y, psi_q.data(), n, nr);
++    const double rq = input_contribution_from_psi(chrom, psi_q, n, y, output_col);
++    std::fprintf(sink.f, "%d\t%d\t1\t0\t%.3e\t%.3e\t%.3e\t%d\t%d\n", nr + 1, nden,
++                 dmax / std::max(cmax, 1e-300), (sn - sq) / std::max(sq, 1e-300), ratio_fast - rq, zq, zn);
++}
++
+ // ── evaluate ──────────────────────────────────────────────────────────────
+ 
+ EvalResult IndividualEvaluator::evaluate(
+@@ -273,6 +481,7 @@ EvalResult IndividualEvaluator::evaluate(
+     int cols, int output_col, bool refit
+ ) const {
+     EvalResult result;
++    AEGIS_PROBE_BEGIN(chrom, result.valid);
+     ++evaluations_;
+     const bool keep_coefficients = !refit &&
+         chrom.coefficients.size() == chrom.regressors.size() && !chrom.coefficients.empty();
+@@ -291,6 +500,7 @@ EvalResult IndividualEvaluator::evaluate(
+     if (!build_psi_matrix(chrom, train_data, train_rows, cols, psi_train, n_train_usable))
+         return result;
+     if (n_train_usable <= nr + 1) return result;
++    AEGIS_PROBE_MARK(PSI);
+ 
+     std::vector<double> y_train(n_train_usable);
+     double y_absmax = 0.0;
+@@ -300,12 +510,24 @@ EvalResult IndividualEvaluator::evaluate(
+     }
+     const double bound = kDivergenceFactor * std::max(y_absmax, 1e-6);
+ 
+-    if (!keep_coefficients &&
++    // P2'a: in the island inner loop (fit_method_ == 1) the fit and the
++    // grouped ERR come from the centred Gram matrix; ill-conditioned
++    // candidates fall back to the exact Householder path below.
++    bool fast_done = false;
++    double input_ratio = 0.0;
++    if (fit_method_ == 1 && !keep_coefficients && !full_err_) {
++        int reason = 0;
++        fast_done = fast_fit_and_ratio(chrom, psi_train, n_train_usable, y_train.data(), output_col,
++                                       input_ratio, reason);
++        p2a_audit(chrom, psi_train, n_train_usable, y_train.data(), output_col, fast_done, reason, input_ratio);
++    }
++    if (!fast_done && !keep_coefficients &&
+         !RationalModel::fit_from_psi(chrom, psi_train, n_train_usable, y_train.data())) {
+         result.has_nan_inf = true;
+         return result;
+     }
+ 
++    AEGIS_PROBE_MARK(FIT);
+     // ── One-step predictions on training ──────────────────────────────
+     DenominatorStats den_stats;
+     std::vector<double> yhat_train;
+@@ -316,11 +538,19 @@ EvalResult IndividualEvaluator::evaluate(
+     chrom.sse = sse_train;
+     const int k = nr + 1; // regressors plus intercept
+ 
++    AEGIS_PROBE_MARK(PRED);
+     // ── ERR (Ψ pseudo-linearised in place; not needed afterwards) ─────
+-    if (rational) pseudo_linearize(chrom, y_train.data(), psi_train.data(), n_train_usable, nr);
+-    chrom.err = compute_err_from_psi(psi_train, n_train_usable, nr, y_train.data());
+-    const double input_ratio = input_contribution_from_psi(chrom, psi_train, n_train_usable,
+-                                                           y_train.data(), output_col);
++    if (fast_done) {
++        chrom.err.clear();
++    } else {
++        if (rational) pseudo_linearize(chrom, y_train.data(), psi_train.data(), n_train_usable, nr);
++        if (full_err_) chrom.err = compute_err_from_psi(psi_train, n_train_usable, nr, y_train.data());
++        else chrom.err.clear();
++        AEGIS_PROBE_MARK(ERRF);
++        input_ratio = input_contribution_from_psi(chrom, psi_train, n_train_usable,
++                                                  y_train.data(), output_col);
++    }
++    AEGIS_PROBE_MARK(RATIO);
+     psi_train.clear();
+     psi_train.shrink_to_fit();
+     // ── One-step predictions on validation ────────────────────────────
+@@ -342,6 +572,7 @@ EvalResult IndividualEvaluator::evaluate(
+         }
+     }
+ 
++    AEGIS_PROBE_MARK(VAL);
+     result.metrics = Metrics::compute(
+         y_train.data(), yhat_train.data(), n_train_usable,
+         y_val_vec.empty() ? nullptr : y_val_vec.data(),
+@@ -379,6 +610,7 @@ EvalResult IndividualEvaluator::evaluate(
+             den_stats.min_abs = std::min(den_stats.min_abs, fr.den.min_abs);
+         }
+     }
++    AEGIS_PROBE_MARK(SIM);
+     result.metrics.rmse_free_run = free_run_rmse;
+ 
+     // ── Stability diagnostics ─────────────────────────────────────────
+diff --git a/cpp/src/perf_probe.hpp b/cpp/src/perf_probe.hpp
+new file mode 100644
+index 0000000..2c21b9c
+--- /dev/null
++++ b/cpp/src/perf_probe.hpp
+@@ -0,0 +1,96 @@
++// perf_probe.hpp — P0 profiling probe (docs/architecture/10_AUDITORIA_DO_09.md §11.3).
++// Compiled in only with -DAEGIS_PROFILE; otherwise every macro is empty and the
++// evaluator is byte-for-byte the frozen code path.
++//
++// Output: one text file per thread, $AEGIS_PROFILE_OUT.<tid>.tsv, one line per
++// evaluate() call:
++//   K nden nfac nnonint md ok t_psi t_fit t_pred t_err t_ratio t_val t_sim t_rest [struct]
++// Times are nanoseconds (steady_clock). With AEGIS_PROFILE_STRUCT=1 a last column
++// lists the regressors as N|D:v,d,p;v,d,p/... for the cache-hit study (P2'b).
++#pragma once
++#ifdef AEGIS_PROFILE
++#include "aegis/regressor_library.hpp"
++#include <chrono>
++#include <cstdio>
++#include <cstdlib>
++#include <cmath>
++#include <string>
++#include <thread>
++#include <functional>
++
++namespace aegis { namespace perf {
++
++enum Stage { PSI = 0, FIT, PRED, ERRF, RATIO, VAL, SIM, REST, NSTAGE };
++
++struct ThreadSink {
++    std::FILE* f = nullptr;
++    bool want_struct = false;
++    ThreadSink() {
++        const char* base = std::getenv("AEGIS_PROFILE_OUT");
++        if (!base || !*base) return;
++        const char* s = std::getenv("AEGIS_PROFILE_STRUCT");
++        want_struct = s && s[0] == '1';
++        const size_t tid = std::hash<std::thread::id>{}(std::this_thread::get_id());
++        std::string path = std::string(base) + "." + std::to_string(tid % 1000000007u) + ".tsv";
++        f = std::fopen(path.c_str(), "w");
++        if (f) std::setvbuf(f, nullptr, _IOFBF, 1 << 20);
++    }
++    ~ThreadSink() { if (f) std::fclose(f); }
++};
++
++inline ThreadSink& sink() { static thread_local ThreadSink s; return s; }
++
++struct EvalProbe {
++    using clk = std::chrono::steady_clock;
++    const Chromosome& chrom;
++    const bool& ok;
++    clk::time_point last;
++    long long t[NSTAGE] = {0};
++    EvalProbe(const Chromosome& c, const bool& valid) : chrom(c), ok(valid), last(clk::now()) {}
++    void mark(Stage s) {
++        const auto now = clk::now();
++        t[s] += std::chrono::duration_cast<std::chrono::nanoseconds>(now - last).count();
++        last = now;
++    }
++    ~EvalProbe() {
++        mark(REST);
++        ThreadSink& o = sink();
++        if (!o.f) return;
++        int nden = 0, nfac = 0, nnonint = 0;
++        for (const auto& r : chrom.regressors) {
++            if (r.is_denominator()) ++nden;
++            for (const auto& tm : r.terms) {
++                ++nfac;
++                if (std::abs(tm.exponent - std::round(tm.exponent)) > 1e-12) ++nnonint;
++            }
++        }
++        std::fprintf(o.f, "%d\t%d\t%d\t%d\t%d\t%d", chrom.num_regressors(), nden, nfac, nnonint,
++                     chrom.max_delay(), ok ? 1 : 0);
++        for (int i = 0; i < NSTAGE; ++i) std::fprintf(o.f, "\t%lld", t[i]);
++        if (o.want_struct) {
++            std::fputc('\t', o.f);
++            bool first = true;
++            for (const auto& r : chrom.regressors) {
++                if (!first) std::fputc('/', o.f);
++                first = false;
++                std::fputs(r.is_denominator() ? "D:" : "N:", o.f);
++                bool ft = true;
++                for (const auto& tm : r.terms) {
++                    if (!ft) std::fputc(';', o.f);
++                    ft = false;
++                    std::fprintf(o.f, "%d,%d,%g", tm.variable, tm.delay, tm.exponent);
++                }
++            }
++        }
++        std::fputc('\n', o.f);
++    }
++};
++
++}} // namespace aegis::perf
++
++#define AEGIS_PROBE_BEGIN(chrom, okflag) ::aegis::perf::EvalProbe aegis_probe_((chrom), (okflag))
++#define AEGIS_PROBE_MARK(stage) aegis_probe_.mark(::aegis::perf::stage)
++#else
++#define AEGIS_PROBE_BEGIN(chrom, okflag) ((void)0)
++#define AEGIS_PROBE_MARK(stage) ((void)0)
++#endif
+diff --git a/cpp/src/regressor_library.cpp b/cpp/src/regressor_library.cpp
+index 1413332..a99685b 100644
+--- a/cpp/src/regressor_library.cpp
++++ b/cpp/src/regressor_library.cpp
+@@ -9,6 +9,97 @@
+ 
+ namespace aegis {
+ 
++// ── factor-series cache (P1) ─────────────────────────────────────────────
++//
++// A factor column of Ψ is g_p(x_v(k − d)): the same series g_p(x_v) shifted.
++// Each thread keeps, per data block (pointer, rows, cols, content
++// fingerprint), the series g_p(x_v(r)) for r = 0..rows−1, computed with
++// exactly the expression build_psi_matrix used before. The fingerprint is
++// recomputed on every call, so a reused pointer with different content can
++// never serve stale values.
++namespace detail {
++
++struct SeriesBlock {
++    const double* data = nullptr;
++    int rows = 0, cols = 0;
++    uint64_t fp = 0, last_use = 0, call = 0;
++    struct Entry { int var; uint64_t pbits; int mode; std::vector<double> v; uint64_t used; };
++    std::vector<Entry> entries;
++    static constexpr size_t kMaxEntries = 96;
++
++    const double* series(int var, double p, PowerMode mode) {
++        uint64_t pbits;
++        std::memcpy(&pbits, &p, sizeof pbits);
++        const int m = static_cast<int>(mode);
++        for (auto& e : entries)
++            if (e.var == var && e.pbits == pbits && e.mode == m) { e.used = call; return e.v.data(); }
++        if (entries.size() >= kMaxEntries) {
++            // Evict least recently used entries not needed by the current call.
++            std::vector<size_t> idx;
++            for (size_t i = 0; i < entries.size(); ++i) if (entries[i].used < call) idx.push_back(i);
++            std::sort(idx.begin(), idx.end(), [&](size_t a, size_t b) { return entries[a].used < entries[b].used; });
++            const size_t drop = std::min(idx.size(), entries.size() - kMaxEntries / 2);
++            std::vector<char> kill(entries.size(), 0);
++            for (size_t i = 0; i < drop; ++i) kill[idx[i]] = 1;
++            size_t w = 0;
++            for (size_t i = 0; i < entries.size(); ++i)
++                if (!kill[i]) { if (w != i) entries[w] = std::move(entries[i]); ++w; }
++            entries.resize(w);
++        }
++        Entry e{var, pbits, m, std::vector<double>(static_cast<size_t>(rows)), call};
++        int n_int = 0;
++        const bool is_int = is_integer_exponent(p, &n_int);
++        const double* col = data + var;
++        for (int r = 0; r < rows; ++r) {
++            const double x = col[static_cast<size_t>(r) * cols];
++            double v;
++            if (mode != PowerMode::Legacy && p == 1.0) v = x;
++            else if (mode == PowerMode::Hybrid && is_int) v = int_power(x, n_int);
++            else v = power_basis(x, p, mode);
++            e.v[r] = v;
++        }
++        entries.push_back(std::move(e));
++        return entries.back().v.data();
++    }
++};
++
++static uint64_t block_fingerprint(const double* data, size_t n) noexcept {
++    uint64_t h = 1469598103934665603ULL ^ n;
++    for (size_t i = 0; i < n; ++i) {
++        uint64_t w;
++        std::memcpy(&w, data + i, sizeof w);
++        h = (h ^ w) * 1099511628211ULL;
++        h ^= h >> 29;
++    }
++    return h;
++}
++
++SeriesBlock& series_block(const double* data, int rows, int cols) {
++    thread_local std::vector<SeriesBlock> blocks;
++    thread_local uint64_t clock = 0;
++    ++clock;
++    const uint64_t fp = block_fingerprint(data, static_cast<size_t>(rows) * cols);
++    for (auto& b : blocks) {
++        if (b.data == data && b.rows == rows && b.cols == cols) {
++            if (b.fp != fp) { b.entries.clear(); b.fp = fp; }
++            b.last_use = clock;
++            ++b.call;
++            return b;
++        }
++    }
++    if (blocks.size() >= 4) {
++        auto it = std::min_element(blocks.begin(), blocks.end(),
++            [](const SeriesBlock& a, const SeriesBlock& b) { return a.last_use < b.last_use; });
++        blocks.erase(it);
++    }
++    blocks.emplace_back();
++    SeriesBlock& b = blocks.back();
++    b.data = data; b.rows = rows; b.cols = cols; b.fp = fp; b.last_use = clock; b.call = 1;
++    return b;
++}
++
++} // namespace detail
++
+ // ── hashing helpers ───────────────────────────────────────────────────────
+ 
+ static inline uint64_t mix64(uint64_t h, uint64_t v) noexcept {
+@@ -142,27 +233,39 @@ bool build_psi_matrix(
+ 
+     if (usable_rows <= 0 || nr == 0) return false;
+ 
+-    psi.assign(static_cast<size_t>(usable_rows) * nr, 1.0);
+-
+-    // Column-wise construction: one pass per factor, so integer exponents
+-    // and the identity exponent avoid std::pow entirely.
++    // P1 (docs/architecture/13_P0_PROFILING.md): every factor value comes from
++    // a cached series g_p(x_v(r)) over all rows r of this data block, computed
++    // by the same expression as before; Ψ is then filled row by row with the
++    // factors multiplied in the same order (1.0·v1·v2…). Bit-identical to the
++    // former column-wise construction, without recomputing powers per
++    // candidate and without strided writes.
++    struct Factor { const double* s; int off; };
++    std::vector<Factor> fac;
++    std::vector<int> first(nr + 1, 0);
++    detail::SeriesBlock& blk = detail::series_block(data, rows, cols);
+     for (int j = 0; j < nr; ++j) {
+-        const auto& reg = chrom.regressors[j];
+-        for (const auto& t : reg.terms) {
++        first[j] = static_cast<int>(fac.size());
++        for (const auto& t : chrom.regressors[j].terms) {
+             const int off = md - t.delay; // row offset of x(k - delay) for k = i + md
+             if (off < 0) return false;
+-            const double* col = data + t.variable;
+-            const double p = t.exponent;
+-            int n_int = 0;
+-            const bool is_int = is_integer_exponent(p, &n_int);
+-            for (int i = 0; i < usable_rows; ++i) {
+-                const double x = col[static_cast<size_t>(i + off) * cols];
+-                double v;
+-                if (chrom.power_mode != PowerMode::Legacy && p == 1.0) v = x;
+-                else if (chrom.power_mode == PowerMode::Hybrid && is_int) v = int_power(x, n_int);
+-                else v = power_basis(x, p, chrom.power_mode);
+-                psi[static_cast<size_t>(i) * nr + j] *= v;
+-            }
++            fac.push_back({nullptr, off});
++        }
++    }
++    first[nr] = static_cast<int>(fac.size());
++    {
++        int f = 0;
++        for (int j = 0; j < nr; ++j)
++            for (const auto& t : chrom.regressors[j].terms)
++                fac[f++].s = blk.series(t.variable, t.exponent, chrom.power_mode);
++    }
++
++    psi.resize(static_cast<size_t>(usable_rows) * nr);
++    double* out = psi.data();
++    for (int i = 0; i < usable_rows; ++i) {
++        for (int j = 0; j < nr; ++j) {
++            double val = 1.0;
++            for (int f = first[j]; f < first[j + 1]; ++f) val *= fac[f].s[i + fac[f].off];
++            *out++ = val;
+         }
+     }
+     return true;
+@@ -203,6 +306,7 @@ bool qr_solve(const double* A, int m, int n, const double* b, double* x, int* ra
+     std::vector<int> accepted;       // accepted column indices, in row order
+     accepted.reserve(n);
+     std::vector<double> v(m);
++    std::vector<double> dots(n);
+ 
+     int row = 0; // next free row of R
+     for (int j = 0; j < n && row < m; ++j) {
+@@ -228,11 +332,21 @@ bool qr_solve(const double* A, int m, int n, const double* b, double* x, int* ra
+             continue;
+         }
+         const double beta = 2.0 / vnorm2;
+-        for (int k = j; k < n; ++k) {
+-            double dot = 0.0;
+-            for (int i = 0; i < len; ++i) dot += v[i] * R[static_cast<size_t>(row + i) * n + k];
+-            dot *= beta;
+-            for (int i = 0; i < len; ++i) R[static_cast<size_t>(row + i) * n + k] -= dot * v[i];
++        // P1: row-major sweep. For every column k the products are summed in
++        // the same order (i ascending from 0.0) and each update is the same
++        // expression, so the result is bit-identical to the former
++        // column-by-column loop, with contiguous memory access.
++        for (int k = j; k < n; ++k) dots[k] = 0.0;
++        for (int i = 0; i < len; ++i) {
++            const double vi = v[i];
++            const double* Ri = R.data() + static_cast<size_t>(row + i) * n;
++            for (int k = j; k < n; ++k) dots[k] += vi * Ri[k];
++        }
++        for (int k = j; k < n; ++k) dots[k] *= beta;
++        for (int i = 0; i < len; ++i) {
++            const double vi = v[i];
++            double* Ri = R.data() + static_cast<size_t>(row + i) * n;
++            for (int k = j; k < n; ++k) Ri[k] -= dots[k] * vi;
+         }
+         double dot = 0.0;
+         for (int i = 0; i < len; ++i) dot += v[i] * Qb[row + i];
+diff --git a/cpp/tools/p6_core.hpp b/cpp/tools/p6_core.hpp
+new file mode 100644
+index 0000000..377b28d
+--- /dev/null
++++ b/cpp/tools/p6_core.hpp
+@@ -0,0 +1,227 @@
++// p6_core.hpp — P6 (experiments/p6/P6_PREREG.md): free-run simulation of
++// RATIONAL models with the core's conventions (RationalModel::simulate),
++// exact forward sensitivities for numerator and denominator coefficients,
++// and Levenberg–Marquardt on the training free-run SSE that records every
++// accepted iterate (the caller applies the admissibility veto and chooses on
++// V_A). Hybrid power basis only.
++#pragma once
++#include "aegis/regressor_library.hpp"
++#include "aegis/safe_power.hpp"
++#include "phase0_core.hpp"   // dpower_hybrid, cholesky_solve, pack/unpack, LMSettings
++
++#include <cmath>
++#include <limits>
++#include <vector>
++
++namespace p6 {
++
++using aegis::Chromosome;
++using aegis::PowerMode;
++using aegis::Regressor;
++using aegis::Term;
++
++constexpr double kMinDen = 1e-12; // RationalModel kMinDenominator
++
++/** A contiguous block of normalized data. Rows before the model's maximum
++ *  delay are measured context; scoring windows are given in block rows. */
++struct Seg {
++    const double* data = nullptr;
++    int rows = 0, cols = 0, out = 1;
++    double bound = 10.0;
++};
++
++struct Sim {
++    std::vector<double> yhat;  // block length; measured values before md
++    std::vector<double> den;   // raw D(k) (rational only), NaN before md
++    bool diverged = false;     // stopped at the first divergent step
++    bool clamped = false;      // |D| < kMinDen happened (non-differentiable)
++    bool nondiff = false;      // non-integer p < 1 at |x| < 1e-12
++    double min_abs_den = std::numeric_limits<double>::infinity();
++    int sign_changes = 0;
++    double sse(int a, int b, const double* data, int cols, int out, int& n) const {
++        double s = 0.0; n = 0;
++        for (int k = a; k < b; ++k) {
++            const double e = data[static_cast<size_t>(k) * cols + out] - yhat[k];
++            s += e * e; ++n;
++        }
++        return s;
++    }
++};
++
++/** Same arithmetic order as RationalModel::num_den_at / Regressor::evaluate. */
++inline Sim simulate(const Chromosome& c, const std::vector<double>& th, const Seg& s) {
++    Sim r;
++    const int md = c.max_delay();
++    const bool rational = c.is_rational();
++    r.yhat.assign(static_cast<size_t>(s.rows), 0.0);
++    r.den.assign(static_cast<size_t>(s.rows), std::numeric_limits<double>::quiet_NaN());
++    std::vector<double> buf(s.data, s.data + static_cast<size_t>(s.rows) * s.cols);
++    for (int k = 0; k < std::min(md, s.rows); ++k) r.yhat[k] = buf[static_cast<size_t>(k) * s.cols + s.out];
++    double prev = std::numeric_limits<double>::quiet_NaN();
++    for (int k = md; k < s.rows; ++k) {
++        double num = th[0], den = 1.0;
++        for (size_t j = 0; j < c.regressors.size(); ++j) {
++            const Regressor& reg = c.regressors[j];
++            double v = 1.0;
++            for (const Term& t : reg.terms) {
++                const double x = buf[static_cast<size_t>(k - t.delay) * s.cols + t.variable];
++                if (t.exponent < 1.0 && std::abs(x) < 1e-12 && !aegis::is_integer_exponent(t.exponent))
++                    r.nondiff = true;
++                v *= aegis::power_basis(x, t.exponent, PowerMode::Hybrid);
++            }
++            if (reg.is_denominator()) den += th[1 + j] * v;
++            else                      num += th[1 + j] * v;
++        }
++        if (rational) {
++            r.den[k] = den;
++            r.min_abs_den = std::min(r.min_abs_den, std::abs(den));
++            if (std::isfinite(prev) && ((prev > 0) != (den > 0))) ++r.sign_changes;
++            prev = den;
++        }
++        if (std::abs(den) < kMinDen) { den = std::copysign(kMinDen, den); r.clamped = true; }
++        const double y = num / den;
++        if (!std::isfinite(y) || std::abs(y) > s.bound) { r.diverged = true; return r; }
++        r.yhat[k] = y;
++        buf[static_cast<size_t>(k) * s.cols + s.out] = y;
++    }
++    return r;
++}
++
++/** Forward sensitivities S[k*q + i] = d yhat(k) / d theta_i, theta = [c, θ_1..θ_K].
++ *  yhat(k) = N(k)/D(k); dN and dD include the dependence through past
++ *  simulated outputs. Rows before md are zero (measured context). */
++inline bool sensitivities(const Chromosome& c, const std::vector<double>& th, const Seg& s,
++                          const Sim& sim, std::vector<double>& S) {
++    const int md = c.max_delay();
++    const int q = static_cast<int>(th.size());
++    S.assign(static_cast<size_t>(s.rows) * q, 0.0);
++    auto x_at = [&](int row, int var) {
++        return var == s.out ? sim.yhat[row] : s.data[static_cast<size_t>(row) * s.cols + var];
++    };
++    bool ok = true;
++    std::vector<double> vals, gN(q), gD(q);
++    for (int k = md; k < s.rows; ++k) {
++        std::fill(gN.begin(), gN.end(), 0.0);
++        std::fill(gD.begin(), gD.end(), 0.0);
++        gN[0] = 1.0;
++        double den = 1.0;
++        for (size_t j = 0; j < c.regressors.size(); ++j) {
++            const Regressor& reg = c.regressors[j];
++            const bool isd = reg.is_denominator();
++            const size_t nt = reg.terms.size();
++            vals.assign(nt, 0.0);
++            double phi = 1.0;
++            for (size_t f = 0; f < nt; ++f) {
++                const Term& t = reg.terms[f];
++                vals[f] = aegis::power_basis(x_at(k - t.delay, t.variable), t.exponent, PowerMode::Hybrid);
++                phi *= vals[f];
++            }
++            if (isd) { gD[1 + j] += phi; den += th[1 + j] * phi; }
++            else     { gN[1 + j] += phi; }
++            std::vector<double>& g = isd ? gD : gN;
++            for (size_t f = 0; f < nt; ++f) {
++                const Term& t = reg.terms[f];
++                if (t.variable != s.out) continue;
++                const int src = k - t.delay;
++                if (src < md) continue;
++                double others = 1.0;
++                for (size_t h = 0; h < nt; ++h) if (h != f) others *= vals[h];
++                const double w = th[1 + j] * phase0::dpower_hybrid(x_at(src, t.variable), t.exponent, ok) * others;
++                if (w == 0.0) continue;
++                const double* ss = &S[static_cast<size_t>(src) * q];
++                for (int i = 0; i < q; ++i) g[i] += w * ss[i];
++            }
++        }
++        if (std::abs(den) < kMinDen) return false;
++        const double y = sim.yhat[k];
++        double* sk = &S[static_cast<size_t>(k) * q];
++        for (int i = 0; i < q; ++i) sk[i] = (gN[i] - y * gD[i]) / den;
++    }
++    return ok;
++}
++
++struct LMOut {
++    std::vector<std::vector<double>> accepted; // iterate 0 first, then each accepted step
++    std::string status;
++    int iterations = 0, rejected = 0;
++    double loss0 = std::numeric_limits<double>::quiet_NaN(), loss = loss0;
++};
++
++/** LM on the training free-run SSE, scored on block rows [score, rows).
++ *  Same settings and step rule as phase0::levenberg_marquardt (E2). */
++inline LMOut levenberg_marquardt(const Chromosome& c, std::vector<double> theta, const Seg& s, int score,
++                                 const phase0::LMSettings& st = {}) {
++    LMOut res;
++    res.accepted.push_back(theta);
++    auto ok_sim = [](const Sim& m) { return !m.diverged && !m.clamped && !m.nondiff; };
++    auto loss_of = [&](const Sim& m) { int n; return m.sse(score, s.rows, s.data, s.cols, s.out, n); };
++    Sim sim = simulate(c, theta, s);
++    if (!ok_sim(sim)) { res.status = "init_not_differentiable_or_diverged"; return res; }
++    std::vector<double> S;
++    if (!sensitivities(c, theta, s, sim, S)) { res.status = "init_not_differentiable"; return res; }
++    res.loss0 = res.loss = loss_of(sim);
++    const int q = static_cast<int>(theta.size());
++    double lambda = st.lambda0;
++    std::vector<double> A(static_cast<size_t>(q) * q), g(q), M, delta;
++    for (int it = 0; it < st.max_iter; ++it) {
++        res.iterations = it + 1;
++        std::fill(A.begin(), A.end(), 0.0);
++        std::fill(g.begin(), g.end(), 0.0);
++        for (int k = score; k < s.rows; ++k) {
++            const double* sk = &S[static_cast<size_t>(k) * q];
++            const double r = s.data[static_cast<size_t>(k) * s.cols + s.out] - sim.yhat[k];
++            for (int i = 0; i < q; ++i) {
++                g[i] += sk[i] * r;
++                for (int j = 0; j <= i; ++j) A[static_cast<size_t>(i) * q + j] += sk[i] * sk[j];
++            }
++        }
++        double dmax = 0.0;
++        for (int i = 0; i < q; ++i) {
++            for (int j = 0; j < i; ++j) A[static_cast<size_t>(j) * q + i] = A[static_cast<size_t>(i) * q + j];
++            dmax = std::max(dmax, A[static_cast<size_t>(i) * q + i]);
++        }
++        int consecutive = 0;
++        double rel = 0.0, step_norm = 0.0;
++        for (;;) {
++            M = A;
++            for (int i = 0; i < q; ++i)
++                M[static_cast<size_t>(i) * q + i] += lambda * std::max(A[static_cast<size_t>(i) * q + i], 1e-12 * std::max(dmax, 1e-300));
++            bool ok = phase0::cholesky_solve(M, g, q, delta);
++            Sim trial;
++            std::vector<double> tt;
++            double tl = 0.0;
++            if (ok) {
++                tt = res.accepted.back();
++                step_norm = 0.0;
++                for (int i = 0; i < q; ++i) { tt[i] += delta[i]; step_norm += delta[i] * delta[i]; }
++                step_norm = std::sqrt(step_norm);
++                trial = simulate(c, tt, s);
++                ok = ok_sim(trial);
++                if (ok) { tl = loss_of(trial); ok = std::isfinite(tl) && tl < res.loss; }
++            }
++            if (!ok) {
++                ++res.rejected;
++                lambda *= st.up;
++                if (++consecutive >= st.max_consecutive_rejects) { res.status = "max_rejects"; return res; }
++                continue;
++            }
++            rel = (res.loss - tl) / std::max(res.loss, 1e-300);
++            res.loss = tl;
++            res.accepted.push_back(tt);
++            sim = std::move(trial);
++            lambda /= st.down;
++            break;
++        }
++        double tn = 0.0;
++        for (double v : res.accepted.back()) tn += v * v;
++        if (rel < st.rel_loss_tol || step_norm <= st.step_tol * (std::sqrt(tn) + st.step_tol)) {
++            res.status = "converged";
++            return res;
++        }
++        if (!sensitivities(c, res.accepted.back(), s, sim, S)) { res.status = "not_differentiable"; return res; }
++    }
++    res.status = "max_iter";
++    return res;
++}
++
++} // namespace p6
+diff --git a/cpp/tools/p6_refine.cpp b/cpp/tools/p6_refine.cpp
+new file mode 100644
+index 0000000..b8e4af8
+--- /dev/null
++++ b/cpp/tools/p6_refine.cpp
+@@ -0,0 +1,315 @@
++// p6_refine.cpp — P6 (experiments/p6/P6_PREREG.md): simulation-error
++// refinement of E3 champions with admissibility veto and choice on V_A.
++//
++//   aegis_p6 --selftest
++//   aegis_p6 --bench <name> --data <est.csv> --config <aegis_full.json>
++//            --train-end N --val-end M --cell <name> --runs <dir with run_*.json>
++//            --output <file.jsonl>
++//
++// Reads only report.model of each run file. No test file is ever opened.
++#include "aegis/aegis_api.h"
++#include "aegis/json_lite.hpp"
++#include "aegis/model_io.hpp"
++#include "p6_core.hpp"
++
++#include <algorithm>
++#include <chrono>
++#include <filesystem>
++#include <fstream>
++#include <iostream>
++#include <random>
++#include <regex>
++#include <sstream>
++
++using aegis::json::Value;
++namespace fs = std::filesystem;
++
++static std::string take(char* p) {
++    if (!p) return std::string();
++    std::string s(p);
++    aegis_free_string(p);
++    return s;
++}
++static std::string read_file(const std::string& path) {
++    std::ifstream f(path);
++    return std::string(std::istreambuf_iterator<char>(f), {});
++}
++static bool read_csv(const std::string& path, std::vector<double>& data, int& rows, int& cols) {
++    std::ifstream f(path);
++    if (!f.is_open()) return false;
++    std::string line;
++    data.clear(); rows = 0; cols = 0;
++    while (std::getline(f, line)) {
++        if (!line.empty() && line.back() == '\r') line.pop_back();
++        if (line.empty()) continue;
++        std::vector<double> row;
++        std::istringstream ss(line);
++        std::string tok;
++        bool ok = true;
++        while (std::getline(ss, tok, ',')) {
++            char* end = nullptr;
++            const double v = std::strtod(tok.c_str(), &end);
++            if (tok.empty() || !end || *end) { ok = false; break; }
++            row.push_back(v);
++        }
++        if (!ok || row.empty()) continue;
++        if (cols == 0) cols = static_cast<int>(row.size());
++        if (static_cast<int>(row.size()) != cols) return false;
++        data.insert(data.end(), row.begin(), row.end());
++        ++rows;
++    }
++    return rows > 0;
++}
++static std::string num(double v) { return aegis::json::num(v); }
++
++// ── self test: sensitivities vs central differences on a rational model ──────
++static int selftest() {
++    std::mt19937_64 rng(41);
++    std::uniform_real_distribution<double> U(-1.0, 1.0);
++    const int rows = 400, cols = 2, out = 1;
++    std::vector<double> data(static_cast<size_t>(rows) * cols);
++    for (int k = 0; k < rows; ++k) data[static_cast<size_t>(k) * cols] = U(rng);
++    // y(k) = (0.3 y(k-1) + 0.4 u(k-1) + 0.1 u(k-2)^1.5) / (1 + 0.2 y(k-1)^2 + 0.1 |u(k-1)|^0.5 y(k-2))
++    for (int k = 0; k < rows; ++k) {
++        double y = 0.0;
++        if (k >= 2) {
++            const double y1 = data[(k - 1) * 2 + 1], y2 = data[(k - 2) * 2 + 1];
++            const double u1 = data[(k - 1) * 2], u2 = data[(k - 2) * 2];
++            const double n = 0.3 * y1 + 0.4 * u1 + 0.1 * aegis::power_basis(u2, 1.5, aegis::PowerMode::Hybrid);
++            const double d = 1.0 + 0.2 * y1 * y1 + 0.1 * aegis::power_basis(u1, 0.5, aegis::PowerMode::Hybrid) * y2;
++            y = n / d;
++        }
++        data[static_cast<size_t>(k) * cols + 1] = y;
++    }
++    aegis::Chromosome c;
++    c.power_mode = aegis::PowerMode::Hybrid;
++    auto reg = [](std::vector<aegis::Term> t) { aegis::Regressor r; r.terms = std::move(t); return r; };
++    c.regressors = {
++        reg({{1, 1, 1.0, false}}), reg({{0, 1, 1.0, false}}), reg({{0, 2, 1.5, false}}),
++        reg({{1, 1, 2.0, true}}), reg({{0, 1, 0.5, true}, {1, 2, 1.0, true}}),
++        reg({{1, 2, 1.5, false}, {0, 1, 2.0, false}})};
++    std::vector<double> th = {0.01, 0.28, 0.42, 0.09, 0.18, 0.12, 0.05};
++    p6::Seg s{data.data(), rows, cols, out, 10.0};
++    const p6::Sim sim = p6::simulate(c, th, s);
++    std::vector<double> S;
++    if (sim.diverged || !p6::sensitivities(c, th, s, sim, S)) { std::cout << "selftest: simulate/sensitivities failed\n"; return 1; }
++    const int q = static_cast<int>(th.size());
++    double worst = 0.0;
++    for (double h : {1e-4, 1e-5, 1e-6}) {
++        double maxrel = 0.0;
++        for (int i = 0; i < q; ++i) {
++            auto tp = th, tm = th;
++            tp[i] += h; tm[i] -= h;
++            const p6::Sim a = p6::simulate(c, tp, s), b = p6::simulate(c, tm, s);
++            for (int k : {50, 150, 399}) {
++                const double fd = (a.yhat[k] - b.yhat[k]) / (2 * h);
++                const double an = S[static_cast<size_t>(k) * q + i];
++                maxrel = std::max(maxrel, std::abs(fd - an) / std::max(1e-8, std::abs(fd) + std::abs(an)));
++            }
++        }
++        std::cout << "selftest: h=" << h << " max rel diff " << maxrel << "\n";
++        worst = (h == 1e-4) ? maxrel : std::min(worst, maxrel);
++    }
++    // LM from perturbed coefficients must reduce the training loss.
++    std::vector<double> t0 = {0.0, 0.3, 0.4, 0.1, 0.2, 0.1, 0.0}; // true model, then perturbed
++    for (size_t i = 0; i < t0.size(); ++i) t0[i] = t0[i] * 1.2 + 0.01;
++    const auto lm = p6::levenberg_marquardt(c, t0, s, 10);
++    std::cout << "selftest: LM " << lm.status << " loss " << lm.loss0 << " -> " << lm.loss << "\n";
++    const bool ok = worst < 1e-6 && lm.loss < 1e-12;
++    std::cout << (ok ? "selftest: PASS\n" : "selftest: FAIL\n");
++    return ok ? 0 : 1;
++}
++
++// ── data variant (pipeline + normalized copy), as in phase0_fixed.cpp ────────
++struct Variant {
++    std::vector<double> raw, norm;
++    int rows = 0, cols = 0, out = 1, train_end = 0, val_end = 0;
++    double bound = 10.0, out_scale = 1.0; // original units = normalized × out_scale
++    void* pipe = nullptr;
++    bool init(const std::string& base_cfg, std::string& err) {
++        Value cfg;
++        if (!aegis::json::parse(base_cfg, cfg) || !cfg.is_object()) { err = "invalid base config"; return false; }
++        cfg.set("trainEndRow", Value::make_number(train_end));
++        cfg.set("valEndRow", Value::make_number(val_end));
++        cfg.set("testStartRow", Value::make_number(rows));
++        cfg.set("outputCol", Value::make_number(out));
++        cfg.set("webSocketPort", Value::make_number(0));
++        cfg.set("syncMode", Value::make_bool(true));
++        cfg.set("powerMode", Value::make_string("hybrid"));
++        cfg.set("numThreads", Value::make_number(1));
++        pipe = aegis_create_pipeline();
++        if (aegis_load_data(pipe, raw.data(), rows, cols) != 0 || aegis_configure(pipe, cfg.dump().c_str()) != 0) {
++            err = "pipeline: " + take(aegis_get_last_error(pipe));
++            return false;
++        }
++        norm.assign(raw.size(), 0.0);
++        for (int c = 0; c < cols; ++c) {
++            double lo = 1e300, hi = -1e300;
++            for (int r = 0; r < train_end; ++r) {
++                lo = std::min(lo, raw[static_cast<size_t>(r) * cols + c]);
++                hi = std::max(hi, raw[static_cast<size_t>(r) * cols + c]);
++            }
++            const double rng = hi - lo;
++            if (c == out) out_scale = rng / 2.0;
++            for (int r = 0; r < rows; ++r)
++                norm[static_cast<size_t>(r) * cols + c] =
++                    rng < 1e-30 ? 0.0 : -1.0 + 2.0 * (raw[static_cast<size_t>(r) * cols + c] - lo) / rng;
++        }
++        double m = 0.0;
++        for (int r = 0; r < train_end; ++r) m = std::max(m, std::abs(norm[static_cast<size_t>(r) * cols + out]));
++        bound = 10.0 * std::max(m, 1e-6);
++        return true;
++    }
++    Value evaluate(const std::string& model) const {
++        Value v;
++        if (!aegis::json::parse(take(aegis_evaluate_model(pipe, model.c_str(), 0)), v)) v = Value::make_object();
++        return v;
++    }
++};
++
++static double core_seg(const Value& ev, const char* seg, const char* key) {
++    const Value* m = ev.get("metrics");
++    const Value* s = m ? m->get(seg) : nullptr;
++    return s ? s->number_or(key, NAN) : NAN;
++}
++
++struct Scores {
++    bool admissible_traj = false; // no divergence, no clamp
++    double train = NAN, va = NAN, vb = NAN, val = NAN; // RMSE, normalized
++    double min_abs_den = NAN;
++    int sign_changes = 0;
++};
++
++static Scores score(const aegis::Chromosome& c, const std::vector<double>& th, const p6::Seg& tr,
++                    const p6::Seg& va, int split) {
++    Scores r;
++    const int md = c.max_delay();
++    const p6::Sim a = p6::simulate(c, th, tr);
++    const p6::Sim b = p6::simulate(c, th, va);
++    r.admissible_traj = !a.diverged && !b.diverged && !a.clamped && !b.clamped;
++    if (!r.admissible_traj) return r;
++    int n;
++    const int s0 = std::max(40, md);
++    r.train = std::sqrt(a.sse(s0, tr.rows, tr.data, tr.cols, tr.out, n) / n);
++    r.va = std::sqrt(b.sse(40, split, va.data, va.cols, va.out, n) / n);
++    r.vb = std::sqrt(b.sse(split, va.rows, va.data, va.cols, va.out, n) / n);
++    r.val = std::sqrt(b.sse(40, va.rows, va.data, va.cols, va.out, n) / n);
++    if (c.is_rational()) {
++        r.min_abs_den = std::min(a.min_abs_den, b.min_abs_den);
++        r.sign_changes = a.sign_changes + b.sign_changes;
++    }
++    return r;
++}
++
++int main(int argc, char** argv) {
++    std::string bench, data_path, cfg_path, cell, runs_dir, out_path;
++    int train_end = 0, val_end = 0;
++    for (int i = 1; i < argc; ++i) {
++        const std::string a = argv[i];
++        auto next = [&]() -> std::string { return i + 1 < argc ? argv[++i] : ""; };
++        if (a == "--selftest") return selftest();
++        else if (a == "--bench") bench = next();
++        else if (a == "--data") data_path = next();
++        else if (a == "--config") cfg_path = next();
++        else if (a == "--cell") cell = next();
++        else if (a == "--runs") runs_dir = next();
++        else if (a == "--output") out_path = next();
++        else if (a == "--train-end") train_end = std::stoi(next());
++        else if (a == "--val-end") val_end = std::stoi(next());
++        else { std::cerr << "unknown option " << a << "\n"; return 2; }
++    }
++    std::string fname = fs::path(data_path).filename().string();
++    std::transform(fname.begin(), fname.end(), fname.begin(), ::tolower);
++    if (fname.find("test") != std::string::npos) { std::cerr << "refusing a test file\n"; return 2; }
++    Variant V;
++    if (!read_csv(data_path, V.raw, V.rows, V.cols) || V.cols != 2) { std::cerr << "cannot read data\n"; return 1; }
++    if (val_end != V.rows || train_end <= 40 || train_end >= val_end) { std::cerr << "bad split\n"; return 2; }
++    V.train_end = train_end; V.val_end = val_end;
++    std::string err;
++    if (!V.init(read_file(cfg_path), err)) { std::cerr << err << "\n"; return 1; }
++    const int vstart = train_end - 40;
++    const p6::Seg tr{V.norm.data(), train_end, V.cols, V.out, V.bound};
++    const p6::Seg va{V.norm.data() + static_cast<size_t>(vstart) * V.cols, val_end - vstart, V.cols, V.out, V.bound};
++    const int split = 40 + (val_end - train_end) / 2; // block row where V_B starts
++    std::ofstream of(out_path, std::ios::app);
++    if (!of) { std::cerr << "cannot write output\n"; return 1; }
++
++    std::vector<std::pair<int, fs::path>> files;
++    for (const auto& e : fs::directory_iterator(runs_dir)) {
++        std::smatch m;
++        const std::string nm = e.path().filename().string();
++        if (std::regex_match(nm, m, std::regex(R"(run_(\d+)\.json)"))) files.push_back({std::stoi(m[1]), e.path()});
++    }
++    std::sort(files.begin(), files.end());
++    for (const auto& [seed, path] : files) {
++        Value v;
++        if (!aegis::json::parse(read_file(path.string()), v)) continue;
++        const Value* rep = v.get("report");
++        const Value* model = rep ? rep->get("model") : nullptr;
++        std::ostringstream L;
++        L << "{\"bench\":" << aegis::json::str(bench) << ",\"cell\":" << aegis::json::str(cell) << ",\"seed\":" << seed;
++        aegis::Chromosome c;
++        if (!model || !aegis::chromosome_from_json(*model, c, aegis::PowerMode::Hybrid) ||
++            c.coefficients.size() != c.regressors.size()) {
++            L << ",\"error\":\"model not readable\"}";
++            of << L.str() << "\n" << std::flush;
++            continue;
++        }
++        int nden = 0;
++        for (const auto& r : c.regressors) nden += r.is_denominator() ? 1 : 0;
++        L << ",\"K\":" << c.num_regressors() + 1 << ",\"nDen\":" << nden << ",\"maxDelay\":" << c.max_delay();
++        const Value core = V.evaluate(model->dump());
++        const std::vector<double> th0 = phase0::pack(c);
++        const Scores s0 = score(c, th0, tr, va, split);
++        // Consistency with the core evaluator (iteration 0, normalized free-run RMSE).
++        const double ct = core_seg(core, "train", "rmseFreeRun"), cv = core_seg(core, "validation", "rmseFreeRun");
++        const double rt = std::abs(s0.train - ct) / std::max(std::abs(ct), 1e-300);
++        const double rv = std::abs(s0.val - cv) / std::max(std::abs(cv), 1e-300);
++        const bool consistent = s0.admissible_traj && rt <= 1e-9 && rv <= 1e-9;
++        L << ",\"consistency\":{\"relTrain\":" << num(rt) << ",\"relVal\":" << num(rv)
++          << ",\"ok\":" << aegis::json::boolean(consistent) << "}";
++        L << ",\"original\":{\"trajOk\":" << aegis::json::boolean(s0.admissible_traj)
++          << ",\"train\":" << num(s0.train * V.out_scale) << ",\"vA\":" << num(s0.va * V.out_scale)
++          << ",\"vB\":" << num(s0.vb * V.out_scale) << ",\"val\":" << num(s0.val * V.out_scale)
++          << ",\"minAbsDen\":" << num(s0.min_abs_den) << ",\"signChanges\":" << s0.sign_changes << "}";
++        if (!consistent) {
++            L << ",\"status\":\"inconsistent_or_inadmissible_original\"}";
++            of << L.str() << "\n" << std::flush;
++            std::cout << bench << " " << cell << " seed " << seed << ": skipped (consistency)\n" << std::flush;
++            continue;
++        }
++        const double tau = c.is_rational() ? std::min(0.01, 0.5 * s0.min_abs_den) : 0.0;
++        const auto t0 = std::chrono::steady_clock::now();
++        const auto lm = p6::levenberg_marquardt(c, th0, tr, std::max(40, c.max_delay()));
++        // Veto and choice on V_A among iterate 0 and every accepted iterate.
++        int best = 0, n_adm = 0;
++        Scores sb = s0;
++        for (size_t it = 0; it < lm.accepted.size(); ++it) {
++            const Scores si = it == 0 ? s0 : score(c, lm.accepted[it], tr, va, split);
++            bool adm = si.admissible_traj;
++            if (adm && c.is_rational()) adm = si.sign_changes <= s0.sign_changes && si.min_abs_den >= tau;
++            if (!adm) continue;
++            ++n_adm;
++            if (si.va < sb.va) { sb = si; best = static_cast<int>(it); }
++        }
++        const double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
++        aegis::Chromosome cr = c;
++        phase0::unpack(lm.accepted[best], cr);
++        const Value core_r = V.evaluate(aegis::chromosome_structure_json(cr));
++        const double cvr = core_seg(core_r, "validation", "rmseFreeRun");
++        L << ",\"lm\":{\"status\":" << aegis::json::str(lm.status) << ",\"iterations\":" << lm.iterations
++          << ",\"accepted\":" << lm.accepted.size() - 1 << ",\"rejected\":" << lm.rejected
++          << ",\"loss0\":" << num(lm.loss0) << ",\"loss\":" << num(lm.loss) << ",\"seconds\":" << num(secs) << "}"
++          << ",\"tau\":" << num(tau) << ",\"admissibleIterates\":" << n_adm << ",\"chosenIterate\":" << best
++          << ",\"refined\":{\"train\":" << num(sb.train * V.out_scale) << ",\"vA\":" << num(sb.va * V.out_scale)
++          << ",\"vB\":" << num(sb.vb * V.out_scale) << ",\"val\":" << num(sb.val * V.out_scale)
++          << ",\"minAbsDen\":" << num(sb.min_abs_den) << ",\"signChanges\":" << sb.sign_changes
++          << ",\"coreValRelDiff\":" << num(std::abs(sb.val - cvr) / std::max(std::abs(cvr), 1e-300))
++          << ",\"model\":" << aegis::chromosome_structure_json(cr) << "}"
++          << ",\"ratioVB\":" << num(sb.vb / s0.vb) << "}";
++        of << L.str() << "\n" << std::flush;
++        std::cout << bench << " " << cell << " seed " << seed << ": " << lm.status << ", iterate " << best
++                  << ", " << secs << " s\n" << std::flush;
++    }
++    return 0;
++}
