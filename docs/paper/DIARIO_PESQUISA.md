@@ -289,6 +289,35 @@ Registro técnico detalhado (em inglês): `experiments/EXPERIMENT_LOG.md`.
   uma fonte de variância a investigar à parte.
 - Fonte: `experiments/results_perf/cac_v3b/` (fora do git).
 
+## 2026-11-26 — Causa da variância do pós-processamento e proteção `postProcessGuard`
+
+- **Causa encontrada [artigo]:** a poda aceita remoções quando o fitness
+  não piora, mas o fitness mede a validação simulando dentro do bloco de
+  validação, com os primeiros ≈ 40 pontos medidos. O valor reportado simula
+  desde 40 amostras antes e pontua a validação inteira, transitório incluído.
+  No CT (lento, 205 amostras) as duas medidas divergem, e a poda pode
+  piorar o valor reportado. O refino P6 escolhe por uma metade só.
+- **Proteção** (`postProcessGuard`, desligada por padrão; o A1 congelado não
+  muda): poda, refino de um passo e refino P6 só são aceitos se a validação
+  na convenção reportada não piorar.
+- **Ablação** (CT, validação, sementes 21–30; a busca é idêntica com e sem
+  proteção, conferido):
+  - sem agente, mediana final 0,464 → **0,424 V**: 6 melhores, 4 iguais,
+    nenhuma pior;
+  - CAC v3, 0,432 → **0,405 V**: 6 melhores, 2 piores, 2 iguais; o caso
+    catastrófico da semente 23 (2,82 V) cai para 0,50 V;
+  - as 2 pioras vêm de a proteção ser gulosa passo a passo: bloquear a poda
+    muda o modelo que o refino recebe.
+- **CAC v3 contra sem agente, ambos com proteção:** 5 melhores, 4 piores e 1
+  empate; mediana 0,405 contra 0,424 V. **Inconclusivo no CT.**
+- **[limitação] Achado de desenho:** a busca otimiza uma validação com
+  convenção de início diferente da reportada. Alinhar as duas é uma mudança
+  candidata para depois do A1.
+- **Desvio:** a recompilação de `cpp/build_a1` durante o A1 falhou no link
+  (executável em uso). O executável do A1 foi conferido pelo hash e está
+  intacto. O desenvolvimento passou a usar `cpp/build_dev`.
+- Fontes: `586a3b7`; `experiments/perf/guard_ablation.sh`.
+
 ## Pendências e decisões do usuário (atualizado em 2026-11-26)
 
 - Resultado do A1 (em execução) e a abertura dos testes do WH e do SB

@@ -370,3 +370,10 @@ protocol below is run once; every result is reported.
   3 worse, 2 ties over 21–30. Post-processing on CT adds large variance
   (e.g. seed 27: 0.0625 at search end, 0.221 after pruning). CT validation
   (205 samples) cannot decide; WH/SB needed (doc 15, T3/T5).
+- postProcessGuard ablation (CT, validation only, seeds 21–30, build_dev;
+  guard-off reproduction of seed 21 identical; search identical with and
+  without guard): no agent, median final validation 0.464 → 0.424 V (6
+  better, 4 equal, 0 worse); CAC v3 0.432 → 0.405 V (6 better, 2 worse, 2
+  equal; seed 23 2.82 → 0.50 V). CAC v3 vs no agent, both guarded: 5 better,
+  4 worse, 1 tie — inconclusive on CT. Root cause: the search fitness scores
+  validation with a different start convention than the reported metric.
