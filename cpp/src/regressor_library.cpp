@@ -9,6 +9,97 @@
 
 namespace aegis {
 
+// ── factor-series cache (P1) ─────────────────────────────────────────────
+//
+// A factor column of Ψ is g_p(x_v(k − d)): the same series g_p(x_v) shifted.
+// Each thread keeps, per data block (pointer, rows, cols, content
+// fingerprint), the series g_p(x_v(r)) for r = 0..rows−1, computed with
+// exactly the expression build_psi_matrix used before. The fingerprint is
+// recomputed on every call, so a reused pointer with different content can
+// never serve stale values.
+namespace detail {
+
+struct SeriesBlock {
+    const double* data = nullptr;
+    int rows = 0, cols = 0;
+    uint64_t fp = 0, last_use = 0, call = 0;
+    struct Entry { int var; uint64_t pbits; int mode; std::vector<double> v; uint64_t used; };
+    std::vector<Entry> entries;
+    static constexpr size_t kMaxEntries = 96;
+
+    const double* series(int var, double p, PowerMode mode) {
+        uint64_t pbits;
+        std::memcpy(&pbits, &p, sizeof pbits);
+        const int m = static_cast<int>(mode);
+        for (auto& e : entries)
+            if (e.var == var && e.pbits == pbits && e.mode == m) { e.used = call; return e.v.data(); }
+        if (entries.size() >= kMaxEntries) {
+            // Evict least recently used entries not needed by the current call.
+            std::vector<size_t> idx;
+            for (size_t i = 0; i < entries.size(); ++i) if (entries[i].used < call) idx.push_back(i);
+            std::sort(idx.begin(), idx.end(), [&](size_t a, size_t b) { return entries[a].used < entries[b].used; });
+            const size_t drop = std::min(idx.size(), entries.size() - kMaxEntries / 2);
+            std::vector<char> kill(entries.size(), 0);
+            for (size_t i = 0; i < drop; ++i) kill[idx[i]] = 1;
+            size_t w = 0;
+            for (size_t i = 0; i < entries.size(); ++i)
+                if (!kill[i]) { if (w != i) entries[w] = std::move(entries[i]); ++w; }
+            entries.resize(w);
+        }
+        Entry e{var, pbits, m, std::vector<double>(static_cast<size_t>(rows)), call};
+        int n_int = 0;
+        const bool is_int = is_integer_exponent(p, &n_int);
+        const double* col = data + var;
+        for (int r = 0; r < rows; ++r) {
+            const double x = col[static_cast<size_t>(r) * cols];
+            double v;
+            if (mode != PowerMode::Legacy && p == 1.0) v = x;
+            else if (mode == PowerMode::Hybrid && is_int) v = int_power(x, n_int);
+            else v = power_basis(x, p, mode);
+            e.v[r] = v;
+        }
+        entries.push_back(std::move(e));
+        return entries.back().v.data();
+    }
+};
+
+static uint64_t block_fingerprint(const double* data, size_t n) noexcept {
+    uint64_t h = 1469598103934665603ULL ^ n;
+    for (size_t i = 0; i < n; ++i) {
+        uint64_t w;
+        std::memcpy(&w, data + i, sizeof w);
+        h = (h ^ w) * 1099511628211ULL;
+        h ^= h >> 29;
+    }
+    return h;
+}
+
+SeriesBlock& series_block(const double* data, int rows, int cols) {
+    thread_local std::vector<SeriesBlock> blocks;
+    thread_local uint64_t clock = 0;
+    ++clock;
+    const uint64_t fp = block_fingerprint(data, static_cast<size_t>(rows) * cols);
+    for (auto& b : blocks) {
+        if (b.data == data && b.rows == rows && b.cols == cols) {
+            if (b.fp != fp) { b.entries.clear(); b.fp = fp; }
+            b.last_use = clock;
+            ++b.call;
+            return b;
+        }
+    }
+    if (blocks.size() >= 4) {
+        auto it = std::min_element(blocks.begin(), blocks.end(),
+            [](const SeriesBlock& a, const SeriesBlock& b) { return a.last_use < b.last_use; });
+        blocks.erase(it);
+    }
+    blocks.emplace_back();
+    SeriesBlock& b = blocks.back();
+    b.data = data; b.rows = rows; b.cols = cols; b.fp = fp; b.last_use = clock; b.call = 1;
+    return b;
+}
+
+} // namespace detail
+
 // ── hashing helpers ───────────────────────────────────────────────────────
 
 static inline uint64_t mix64(uint64_t h, uint64_t v) noexcept {
@@ -142,27 +233,39 @@ bool build_psi_matrix(
 
     if (usable_rows <= 0 || nr == 0) return false;
 
-    psi.assign(static_cast<size_t>(usable_rows) * nr, 1.0);
-
-    // Column-wise construction: one pass per factor, so integer exponents
-    // and the identity exponent avoid std::pow entirely.
+    // P1 (docs/architecture/13_P0_PROFILING.md): every factor value comes from
+    // a cached series g_p(x_v(r)) over all rows r of this data block, computed
+    // by the same expression as before; Ψ is then filled row by row with the
+    // factors multiplied in the same order (1.0·v1·v2…). Bit-identical to the
+    // former column-wise construction, without recomputing powers per
+    // candidate and without strided writes.
+    struct Factor { const double* s; int off; };
+    std::vector<Factor> fac;
+    std::vector<int> first(nr + 1, 0);
+    detail::SeriesBlock& blk = detail::series_block(data, rows, cols);
     for (int j = 0; j < nr; ++j) {
-        const auto& reg = chrom.regressors[j];
-        for (const auto& t : reg.terms) {
+        first[j] = static_cast<int>(fac.size());
+        for (const auto& t : chrom.regressors[j].terms) {
             const int off = md - t.delay; // row offset of x(k - delay) for k = i + md
             if (off < 0) return false;
-            const double* col = data + t.variable;
-            const double p = t.exponent;
-            int n_int = 0;
-            const bool is_int = is_integer_exponent(p, &n_int);
-            for (int i = 0; i < usable_rows; ++i) {
-                const double x = col[static_cast<size_t>(i + off) * cols];
-                double v;
-                if (chrom.power_mode != PowerMode::Legacy && p == 1.0) v = x;
-                else if (chrom.power_mode == PowerMode::Hybrid && is_int) v = int_power(x, n_int);
-                else v = power_basis(x, p, chrom.power_mode);
-                psi[static_cast<size_t>(i) * nr + j] *= v;
-            }
+            fac.push_back({nullptr, off});
+        }
+    }
+    first[nr] = static_cast<int>(fac.size());
+    {
+        int f = 0;
+        for (int j = 0; j < nr; ++j)
+            for (const auto& t : chrom.regressors[j].terms)
+                fac[f++].s = blk.series(t.variable, t.exponent, chrom.power_mode);
+    }
+
+    psi.resize(static_cast<size_t>(usable_rows) * nr);
+    double* out = psi.data();
+    for (int i = 0; i < usable_rows; ++i) {
+        for (int j = 0; j < nr; ++j) {
+            double val = 1.0;
+            for (int f = first[j]; f < first[j + 1]; ++f) val *= fac[f].s[i + fac[f].off];
+            *out++ = val;
         }
     }
     return true;
@@ -203,6 +306,7 @@ bool qr_solve(const double* A, int m, int n, const double* b, double* x, int* ra
     std::vector<int> accepted;       // accepted column indices, in row order
     accepted.reserve(n);
     std::vector<double> v(m);
+    std::vector<double> dots(n);
 
     int row = 0; // next free row of R
     for (int j = 0; j < n && row < m; ++j) {
@@ -228,11 +332,21 @@ bool qr_solve(const double* A, int m, int n, const double* b, double* x, int* ra
             continue;
         }
         const double beta = 2.0 / vnorm2;
-        for (int k = j; k < n; ++k) {
-            double dot = 0.0;
-            for (int i = 0; i < len; ++i) dot += v[i] * R[static_cast<size_t>(row + i) * n + k];
-            dot *= beta;
-            for (int i = 0; i < len; ++i) R[static_cast<size_t>(row + i) * n + k] -= dot * v[i];
+        // P1: row-major sweep. For every column k the products are summed in
+        // the same order (i ascending from 0.0) and each update is the same
+        // expression, so the result is bit-identical to the former
+        // column-by-column loop, with contiguous memory access.
+        for (int k = j; k < n; ++k) dots[k] = 0.0;
+        for (int i = 0; i < len; ++i) {
+            const double vi = v[i];
+            const double* Ri = R.data() + static_cast<size_t>(row + i) * n;
+            for (int k = j; k < n; ++k) dots[k] += vi * Ri[k];
+        }
+        for (int k = j; k < n; ++k) dots[k] *= beta;
+        for (int i = 0; i < len; ++i) {
+            const double vi = v[i];
+            double* Ri = R.data() + static_cast<size_t>(row + i) * n;
+            for (int k = j; k < n; ++k) Ri[k] -= dots[k] * vi;
         }
         double dot = 0.0;
         for (int i = 0; i < len; ++i) dot += v[i] * Qb[row + i];

@@ -147,6 +147,14 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     aegis_static_runtime(${p0})
   endforeach()
   add_test(NAME phase0_tests COMMAND phase0_tests)
+
+  # P6 (experiments/p6/P6_PREREG.md): simulation-error refinement of rational
+  # champions with admissibility veto. Separate executable.
+  add_executable(aegis_p6 tools/p6_refine.cpp)
+  target_link_libraries(aegis_p6 PRIVATE aegis_static)
+  target_compile_definitions(aegis_p6 PRIVATE AEGIS_EXPORTS)
+  aegis_set_options(aegis_p6)
+  aegis_static_runtime(aegis_p6)
 endif()
 
 # ── WASM target (Emscripten only) ────────────────────────────────

@@ -66,6 +66,7 @@ struct DEConfig {
 
     // Threading
     int    num_threads       = 0;     // 0 = one thread per island; 1 = sequential
+    int    fit_method        = 0;     // P2'a: 0 = QR (default), 1 = Gram/Cholesky in the island inner loop
     uint64_t random_seed     = 0;     // 0 = time-based seed (pipeline records the effective seed)
 };
 

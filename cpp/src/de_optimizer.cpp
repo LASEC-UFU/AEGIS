@@ -88,6 +88,8 @@ Island::Island(int id, const DEConfig& cfg, uint64_t seed,
       cols_(cols),             output_col_(output_col),
       mu_f_(cfg.mu_f),         mu_cr_(cfg.mu_cr)
 {
+    evaluator_.set_compute_full_err(false); // P1: champion is re-evaluated canonically
+    evaluator_.set_fit_method(cfg_.fit_method);
     pop_.reserve(cfg_.population_size);
     for (int i = 0; i < cfg_.population_size; ++i)
         pop_.push_back(random_chromosome());

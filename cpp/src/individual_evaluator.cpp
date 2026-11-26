@@ -3,6 +3,12 @@
 #include "aegis/safe_power.hpp"
 #include "aegis/overfitting_detector.hpp"
 #include "aegis/underfitting_detector.hpp"
+#include "perf_probe.hpp"
+#include <cstdio>
+#include <cstdlib>
+#include <functional>
+#include <string>
+#include <thread>
 #include <cmath>
 #include <algorithm>
 #include <numeric>
@@ -264,6 +270,208 @@ std::vector<double> IndividualEvaluator::compute_err(
     return compute_err_from_psi(psi, usable, nr, y.data());
 }
 
+// ── P2'a: fit and grouped ERR from the centred Gram matrix ────────────────
+//
+// Same least-squares problem as fit_from_psi (pseudo-linearised columns,
+// intercept) and the same greedy grouped ERR as compute_err_grouped, solved
+// in the K×K space: one pass for the means, one pass for the centred Gram
+// matrix (½·N·K² multiply-adds, contiguous), then Cholesky with columns
+// dropped in order (as the QR drops dependent columns) and the greedy ERR by
+// rank-one updates of the Gram matrix. Not bit-identical to the QR path.
+// Fallback (returns false) when a pivot or an ERR residual falls in the zone
+// the Gram matrix cannot resolve: reason 1 = fit pivot, 2 = ERR residual,
+// 3 = non-finite result.
+namespace {
+constexpr double kDropRel     = 1e-12; // ≤ → column dependent (same threshold as compute_err_grouped)
+constexpr double kAmbiguousRel = 1e-8; // (kDropRel, kAmbiguousRel) → Gram cannot decide → fallback
+}
+
+bool IndividualEvaluator::fast_fit_and_ratio(
+    Chromosome& chrom, const std::vector<double>& psi, int n, const double* y, int output_col,
+    double& input_ratio, int& reason
+) const {
+    const int nr = chrom.num_regressors();
+    reason = 0;
+    std::vector<char> is_den(nr, 0);
+    for (int j = 0; j < nr; ++j) is_den[j] = chrom.regressors[j].is_denominator() ? 1 : 0;
+
+    // Pass 1: means of the pseudo-linearised columns and of y.
+    std::vector<double> m(nr, 0.0);
+    double ym = 0.0;
+    for (int i = 0; i < n; ++i) {
+        const double* row = psi.data() + static_cast<size_t>(i) * nr;
+        const double yi = y[i];
+        ym += yi;
+        for (int j = 0; j < nr; ++j) m[j] += is_den[j] ? -yi * row[j] : row[j];
+    }
+    for (int j = 0; j < nr; ++j) m[j] /= n;
+    ym /= n;
+
+    // Pass 2: centred Gram (upper triangle), cross terms with y, Σ yc².
+    std::vector<double> G(static_cast<size_t>(nr) * nr, 0.0), cy(nr, 0.0), r(nr);
+    double syy = 0.0;
+    for (int i = 0; i < n; ++i) {
+        const double* row = psi.data() + static_cast<size_t>(i) * nr;
+        const double yi = y[i];
+        const double yc = yi - ym;
+        syy += yc * yc;
+        for (int j = 0; j < nr; ++j) r[j] = (is_den[j] ? -yi * row[j] : row[j]) - m[j];
+        for (int j = 0; j < nr; ++j) {
+            const double rj = r[j];
+            cy[j] += rj * yc;
+            double* Gj = G.data() + static_cast<size_t>(j) * nr;
+            for (int k = j; k < nr; ++k) Gj[k] += rj * r[k];
+        }
+    }
+    for (int j = 0; j < nr; ++j)
+        for (int k = 0; k < j; ++k) G[static_cast<size_t>(j) * nr + k] = G[static_cast<size_t>(k) * nr + j];
+
+    // Fit: Cholesky in column order; dependent columns get θ = 0.
+    std::vector<double> L(static_cast<size_t>(nr) * nr, 0.0);
+    std::vector<int> acc;
+    acc.reserve(nr);
+    for (int j = 0; j < nr; ++j) {
+        const double gjj = G[static_cast<size_t>(j) * nr + j];
+        double d = gjj;
+        for (int k : acc) { const double l = L[static_cast<size_t>(j) * nr + k]; d -= l * l; }
+        if (!(gjj > 0.0) || d <= kDropRel * gjj) continue;          // dependent: dropped
+        if (d < kAmbiguousRel * gjj) { reason = 1; return false; }    // unresolvable
+        const double ljj = std::sqrt(d);
+        L[static_cast<size_t>(j) * nr + j] = ljj;
+        for (int i = j + 1; i < nr; ++i) {
+            double s = G[static_cast<size_t>(i) * nr + j];
+            for (int k : acc) s -= L[static_cast<size_t>(i) * nr + k] * L[static_cast<size_t>(j) * nr + k];
+            L[static_cast<size_t>(i) * nr + j] = s / ljj;
+        }
+        acc.push_back(j);
+    }
+    std::vector<double> z(nr, 0.0), theta(nr, 0.0);
+    for (size_t a = 0; a < acc.size(); ++a) {
+        const int j = acc[a];
+        double s = cy[j];
+        for (size_t b = 0; b < a; ++b) s -= L[static_cast<size_t>(j) * nr + acc[b]] * z[acc[b]];
+        z[j] = s / L[static_cast<size_t>(j) * nr + j];
+    }
+    for (size_t a = acc.size(); a-- > 0;) {
+        const int j = acc[a];
+        double s = z[j];
+        for (size_t b = a + 1; b < acc.size(); ++b) s -= L[static_cast<size_t>(acc[b]) * nr + j] * theta[acc[b]];
+        theta[j] = s / L[static_cast<size_t>(j) * nr + j];
+    }
+    double c0 = ym;
+    for (int j = 0; j < nr; ++j) c0 -= m[j] * theta[j];
+    for (double v : theta) if (!std::isfinite(v)) { reason = 3; return false; }
+    if (!std::isfinite(c0) || acc.empty()) { reason = 3; return false; }
+
+    // Grouped ERR on the centred Gram matrix (same greedy rule as compute_err_grouped).
+    double ratio = 0.0;
+    std::vector<int> group(nr, 0);
+    bool any_input = false;
+    for (int j = 0; j < nr; ++j)
+        for (const auto& t : chrom.regressors[j].terms)
+            if (t.variable != output_col) { group[j] = 1; any_input = true; break; }
+    if (any_input && n > 1 && syy >= 1e-30) {
+        std::vector<double> C = G, c = cy, err(nr, 0.0), norm0(nr);
+        for (int j = 0; j < nr; ++j) norm0[j] = G[static_cast<size_t>(j) * nr + j];
+        std::vector<char> active(nr, 1);
+        for (int step = 0; step < 2 * nr + 1; ++step) {
+            int cur_group = std::numeric_limits<int>::max();
+            for (int j = 0; j < nr; ++j) if (active[j]) cur_group = std::min(cur_group, group[j]);
+            int best = -1;
+            double best_err = -1.0;
+            for (int j = 0; j < nr; ++j) {
+                if (!active[j] || group[j] != cur_group) continue;
+                const double ww = C[static_cast<size_t>(j) * nr + j], wy = c[j];
+                const double ref = std::max(norm0[j], 1e-300);
+                if (ww <= kDropRel * ref) { active[j] = 0; continue; }
+                if (ww < kAmbiguousRel * ref) { reason = 2; return false; }
+                const double e = (wy * wy) / (ww * syy);
+                if (e > best_err) { best_err = e; best = j; }
+            }
+            if (best < 0) {
+                bool any = false;
+                for (int j = 0; j < nr; ++j) any = any || active[j];
+                if (!any) break;
+                continue;
+            }
+            err[best] = std::max(0.0, best_err);
+            active[best] = 0;
+            const double qq = C[static_cast<size_t>(best) * nr + best];
+            if (qq < 1e-300) continue;
+            const double cb = c[best];
+            std::vector<double> col(nr);
+            for (int j = 0; j < nr; ++j) col[j] = C[static_cast<size_t>(j) * nr + best];
+            for (int j = 0; j < nr; ++j) {
+                if (!active[j]) continue;
+                const double a = col[j] / qq;
+                c[j] -= a * cb;
+                double* Cj = C.data() + static_cast<size_t>(j) * nr;
+                for (int k = 0; k < nr; ++k) if (active[k]) Cj[k] -= a * col[k];
+            }
+        }
+        double ar = 0.0, in = 0.0;
+        for (int j = 0; j < nr; ++j) (group[j] ? in : ar) += err[j];
+        const double remaining = 1.0 - ar;
+        ratio = remaining < 1e-12 ? 0.0 : clamp(in / remaining, 0.0, 1.0);
+    }
+    if (!std::isfinite(ratio)) { reason = 3; return false; }
+
+    chrom.coefficients = std::move(theta);
+    chrom.intercept = c0;
+    input_ratio = ratio;
+    return true;
+}
+
+// P2'a audit (only when AEGIS_P2A_AUDIT is set): one line per inner-loop
+// candidate with the fallback reason and, when the fast path was used, its
+// agreement with the exact Householder path on the same candidate.
+void IndividualEvaluator::p2a_audit(
+    const Chromosome& chrom, const std::vector<double>& psi, int n, const double* y, int output_col,
+    bool fast, int reason, double ratio_fast
+) const {
+    struct Sink {
+        std::FILE* f = nullptr;
+        Sink() {
+            const char* base = std::getenv("AEGIS_P2A_AUDIT");
+            if (!base || !*base) return;
+            const size_t tid = std::hash<std::thread::id>{}(std::this_thread::get_id());
+            f = std::fopen((std::string(base) + "." + std::to_string(tid % 1000000007u) + ".tsv").c_str(), "w");
+        }
+        ~Sink() { if (f) std::fclose(f); }
+    };
+    static thread_local Sink sink;
+    if (!sink.f) return;
+    const int nr = chrom.num_regressors();
+    int nden = 0;
+    for (const auto& rg : chrom.regressors) nden += rg.is_denominator() ? 1 : 0;
+    if (!fast) {
+        std::fprintf(sink.f, "%d\t%d\t0\t%d\n", nr + 1, nden, reason);
+        return;
+    }
+    Chromosome q = chrom;
+    std::vector<double> psi_q = psi;
+    if (!RationalModel::fit_from_psi(q, psi_q, n, y)) {
+        std::fprintf(sink.f, "%d\t%d\t1\t0\tqr_failed\n", nr + 1, nden);
+        return;
+    }
+    double cmax = std::abs(q.intercept), dmax = std::abs(q.intercept - chrom.intercept);
+    int zq = 0, zn = 0;
+    for (int j = 0; j < nr; ++j) {
+        cmax = std::max(cmax, std::abs(q.coefficients[j]));
+        dmax = std::max(dmax, std::abs(q.coefficients[j] - chrom.coefficients[j]));
+        zq += q.coefficients[j] == 0.0;
+        zn += chrom.coefficients[j] == 0.0;
+    }
+    std::vector<double> yq, yn;
+    RationalModel::predict_from_psi(q, psi, n, yq, nullptr);
+    RationalModel::predict_from_psi(chrom, psi, n, yn, nullptr);
+    const double sq = Metrics::sse(y, yq.data(), n), sn = Metrics::sse(y, yn.data(), n);
+    if (chrom.is_rational()) pseudo_linearize(chrom, y, psi_q.data(), n, nr);
+    const double rq = input_contribution_from_psi(chrom, psi_q, n, y, output_col);
+    std::fprintf(sink.f, "%d\t%d\t1\t0\t%.3e\t%.3e\t%.3e\t%d\t%d\n", nr + 1, nden,
+                 dmax / std::max(cmax, 1e-300), (sn - sq) / std::max(sq, 1e-300), ratio_fast - rq, zq, zn);
+}
+
 // ── evaluate ──────────────────────────────────────────────────────────────
 
 EvalResult IndividualEvaluator::evaluate(
@@ -273,6 +481,7 @@ EvalResult IndividualEvaluator::evaluate(
     int cols, int output_col, bool refit
 ) const {
     EvalResult result;
+    AEGIS_PROBE_BEGIN(chrom, result.valid);
     ++evaluations_;
     const bool keep_coefficients = !refit &&
         chrom.coefficients.size() == chrom.regressors.size() && !chrom.coefficients.empty();
@@ -291,6 +500,7 @@ EvalResult IndividualEvaluator::evaluate(
     if (!build_psi_matrix(chrom, train_data, train_rows, cols, psi_train, n_train_usable))
         return result;
     if (n_train_usable <= nr + 1) return result;
+    AEGIS_PROBE_MARK(PSI);
 
     std::vector<double> y_train(n_train_usable);
     double y_absmax = 0.0;
@@ -300,12 +510,24 @@ EvalResult IndividualEvaluator::evaluate(
     }
     const double bound = kDivergenceFactor * std::max(y_absmax, 1e-6);
 
-    if (!keep_coefficients &&
+    // P2'a: in the island inner loop (fit_method_ == 1) the fit and the
+    // grouped ERR come from the centred Gram matrix; ill-conditioned
+    // candidates fall back to the exact Householder path below.
+    bool fast_done = false;
+    double input_ratio = 0.0;
+    if (fit_method_ == 1 && !keep_coefficients && !full_err_) {
+        int reason = 0;
+        fast_done = fast_fit_and_ratio(chrom, psi_train, n_train_usable, y_train.data(), output_col,
+                                       input_ratio, reason);
+        p2a_audit(chrom, psi_train, n_train_usable, y_train.data(), output_col, fast_done, reason, input_ratio);
+    }
+    if (!fast_done && !keep_coefficients &&
         !RationalModel::fit_from_psi(chrom, psi_train, n_train_usable, y_train.data())) {
         result.has_nan_inf = true;
         return result;
     }
 
+    AEGIS_PROBE_MARK(FIT);
     // ── One-step predictions on training ──────────────────────────────
     DenominatorStats den_stats;
     std::vector<double> yhat_train;
@@ -316,11 +538,19 @@ EvalResult IndividualEvaluator::evaluate(
     chrom.sse = sse_train;
     const int k = nr + 1; // regressors plus intercept
 
+    AEGIS_PROBE_MARK(PRED);
     // ── ERR (Ψ pseudo-linearised in place; not needed afterwards) ─────
-    if (rational) pseudo_linearize(chrom, y_train.data(), psi_train.data(), n_train_usable, nr);
-    chrom.err = compute_err_from_psi(psi_train, n_train_usable, nr, y_train.data());
-    const double input_ratio = input_contribution_from_psi(chrom, psi_train, n_train_usable,
-                                                           y_train.data(), output_col);
+    if (fast_done) {
+        chrom.err.clear();
+    } else {
+        if (rational) pseudo_linearize(chrom, y_train.data(), psi_train.data(), n_train_usable, nr);
+        if (full_err_) chrom.err = compute_err_from_psi(psi_train, n_train_usable, nr, y_train.data());
+        else chrom.err.clear();
+        AEGIS_PROBE_MARK(ERRF);
+        input_ratio = input_contribution_from_psi(chrom, psi_train, n_train_usable,
+                                                  y_train.data(), output_col);
+    }
+    AEGIS_PROBE_MARK(RATIO);
     psi_train.clear();
     psi_train.shrink_to_fit();
     // ── One-step predictions on validation ────────────────────────────
@@ -342,6 +572,7 @@ EvalResult IndividualEvaluator::evaluate(
         }
     }
 
+    AEGIS_PROBE_MARK(VAL);
     result.metrics = Metrics::compute(
         y_train.data(), yhat_train.data(), n_train_usable,
         y_val_vec.empty() ? nullptr : y_val_vec.data(),
@@ -379,6 +610,7 @@ EvalResult IndividualEvaluator::evaluate(
             den_stats.min_abs = std::min(den_stats.min_abs, fr.den.min_abs);
         }
     }
+    AEGIS_PROBE_MARK(SIM);
     result.metrics.rmse_free_run = free_run_rmse;
 
     // ── Stability diagnostics ─────────────────────────────────────────

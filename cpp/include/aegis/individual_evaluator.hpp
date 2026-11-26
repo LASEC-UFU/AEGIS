@@ -128,6 +128,17 @@ public:
     const FitnessWeights& weights() const noexcept { return weights_; }
 
     /** Number of objective-function evaluations performed by this evaluator. */
+    /** P1: the full ERR (chrom.err) does not enter the fitness; inner-loop
+     *  evaluators may skip it. Default on, so every reporting path keeps it. */
+    void set_compute_full_err(bool on) noexcept { full_err_ = on; }
+    bool compute_full_err() const noexcept { return full_err_; }
+
+    /** P2'a: 0 = Householder QR (default, exact), 1 = centred Gram matrix with
+     *  Cholesky and K×K grouped ERR, falling back to QR when ill-conditioned.
+     *  Used only by the island (inner-loop) evaluators. */
+    void set_fit_method(int m) noexcept { fit_method_ = m; }
+    int fit_method() const noexcept { return fit_method_; }
+
     long long evaluations() const noexcept { return evaluations_; }
     void reset_evaluations() noexcept { evaluations_ = 0; }
 
@@ -137,6 +148,8 @@ public:
 private:
     FitnessWeights  weights_;
     mutable long long evaluations_ = 0;
+    bool            full_err_ = true;
+    int             fit_method_ = 0;
 
     double compute_complexity_penalty(const Chromosome& chrom) const noexcept;
     double compute_exponent_penalty(const Chromosome& chrom) const noexcept;
@@ -147,6 +160,10 @@ private:
         const double* data, int rows, int cols, int output_col, int max_delay
     ) const noexcept;
     void assemble_fitness(Chromosome& chrom, int output_col) const;
+    bool fast_fit_and_ratio(Chromosome& chrom, const std::vector<double>& psi, int n, const double* y,
+                            int output_col, double& input_ratio, int& reason) const;
+    void p2a_audit(const Chromosome& chrom, const std::vector<double>& psi, int n, const double* y,
+                   int output_col, bool fast, int reason, double ratio_fast) const;
 };
 
 } // namespace aegis

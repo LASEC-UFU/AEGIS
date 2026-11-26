@@ -72,7 +72,7 @@ static const std::set<std::string>& known_config_keys() {
         "curriculum","gammaAnnealStart","gammaAnnealEnd","phaseStagnationLimit","initialPmax",
         "initialDelayFraction","islandRoles","islandRegimes","enableRefiner","enablePruner",
         "webSocketPort","agentActionsEnabled","allowBudgetActions","actionCooldown",
-        "outcomeHorizon","broadcastInterval","syncMode","historyStride"
+        "outcomeHorizon","broadcastInterval","syncMode","historyStride","fitMethod"
     };
     return keys;
 }
@@ -139,6 +139,11 @@ bool PipelineConfig::from_json(const std::string& text, std::string* error,
     de.reinit_interval   = v.int_or("reinitInterval", 25);
     de.hypermutation     = v.bool_or("hypermutation", true);
     de.num_threads       = v.int_or("numThreads", 0);
+    {
+        const std::string fm = v.string_or("fitMethod", "qr");
+        if (fm != "qr" && fm != "normal") { if (error) *error = "fitMethod must be \"qr\" or \"normal\""; return false; }
+        de.fit_method = fm == "normal" ? 1 : 0;
+    }
     {
         const double s = v.number_or("randomSeed", 0.0);
         de.random_seed = (std::isfinite(s) && s > 0) ? static_cast<uint64_t>(s) : 0;
@@ -207,6 +212,7 @@ std::string PipelineConfig::to_json() const {
       << ",\"reinitializationRatio\":" << num(de.reinit_ratio) << ",\"reinitInterval\":" << de.reinit_interval
       << ",\"hypermutation\":" << json::boolean(de.hypermutation)
       << ",\"numThreads\":" << de.num_threads << ",\"randomSeed\":" << de.random_seed
+      << (de.fit_method == 1 ? ",\"fitMethod\":\"normal\"" : "")
       << ",\"alpha\":" << num(weights.alpha) << ",\"denominatorPenalty\":" << num(weights.beta)
       << ",\"complexityPenalty\":" << num(weights.gamma) << ",\"exponentPenalty\":" << num(weights.delta)
       << ",\"stabilityPenalty\":" << num(weights.eta) << ",\"noInputPenalty\":" << num(weights.zeta)
