@@ -1,6 +1,7 @@
 # AEGIS — Documento de passagem (handoff) para continuidade por outro agente
 
-Última atualização: 2026-11-26 ~00:45 (UTC−3), após P1, P2′a e P6 (§4.0b). Antes:
+Última atualização: 2026-11-26 (UTC−3), após aplicar P1/P2′a e acrescentar veto e refino
+final ao núcleo (§4.0b). Antes: 2026-11-26 ~00:45, após P1, P2′a e P6. Antes:
 2026-11-23 ~22:20, na segunda máquina, após o fim do
 E3 da Fase 0 (§4.0b). Antes: 2026-11-21 ~10:00, após o segundo
 travamento da máquina (§4.0a). Antes: 2026-11-20 ~10:43, após a análise
@@ -295,6 +296,11 @@ dart analyze lib test tool    # sem problemas
   agente) e auditorias 10 e 12 em `docs/architecture/`. Ordem acordada:
   P0 profiling → P1 otimizações exatas → P2′a/b ajuste por Gram/estatísticas
   deslocáveis → P6 refino por erro de simulação (10 §11.4, 12 §6).
+- **Núcleo atualizado (2026-11-26, `0af456d` e `f2d6bf7`):** P1 e P2′a aplicados ao código;
+  opções novas `fitMethod` (`qr`/`normal`), `admissibilityVeto` + `vetoTopK` e `finalRefine`
+  (`none`/`simulation`), todas desligadas por padrão (saída padrão idêntica ao 1.1.0).
+  Build novo em `cpp/build_a1`; `cpp/build` e `cpp/build_phase0` seguem congelados (fonte
+  `adc1ee9`). Os binários de `cpp/build` NÃO correspondem mais ao HEAD.
 - **P0, P1, P2′a e P6 concluídos (2026-11-24 a 26):** ver `docs/architecture/13_P0_PROFILING.md`,
   `experiments/perf/PERF_REPORT.md` e `experiments/p6/P6_REPORT.md`. P1 é idêntico bit a
   bit (1,8–2,6×); P2′a (`fitMethod: "normal"`) é equivalente em qualidade e 6–17× mais
