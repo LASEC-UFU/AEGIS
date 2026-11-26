@@ -377,3 +377,17 @@ protocol below is run once; every result is reported.
   equal; seed 23 2.82 → 0.50 V). CAC v3 vs no agent, both guarded: 5 better,
   4 worse, 1 tie — inconclusive on CT. Root cause: the search fitness scores
   validation with a different start convention than the reported metric.
+
+### A1 completed and analysed (2026-11-26)
+
+- 30/30 runs (CT 07:41–07:45, SB until 09:55, WH until 10:00). Manifest with
+  hashes committed (`5d1c5b8`) before the analysis; analysis run once
+  (`4953ee1`). Pre-registered gate MET: WH test 9.32 vs 46.1 mV (ratio 0.20),
+  SB multisine 0.349 vs 3.78 mV (0.09), both p Holm 0.002 (10/10 seeds).
+  CT secondary: 0.712 vs 0.661 V (1.08), 3 test divergences for A1.
+- SB arrow (no refit, `cpp/build_dev/aegis_evaluate_models.exe`, reproduction
+  of the multisine metric of A1 run 1 exact): A1 median 0.507 mV vs 1.1.0
+  7.56 mV, no divergences. Outputs in `experiments/results_a1/arrow/`.
+- Pending 1.1.0 analysis opened after the A1 freeze, as pre-registered:
+  `analyze.dart` on WH and SB (outputs in `experiments/results/<b>/analysis/`).
+- CAC T1 started 2026-11-26 after A1 (6 processes).

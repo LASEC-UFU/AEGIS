@@ -290,7 +290,7 @@ dart analyze lib test tool    # sem problemas
   os binários congelados foram feitos com g++ 16.2 na máquina original).
   cmake 4.4.1 do WinLibs no PATH. **Não recompilar `cpp/build` nem
   `cpp/build_phase0`.**
-- **Testes WH/SB continuam fechados.** `analyze.dart` em WH/SB e a avaliação
+- **Testes WH/SB abertos em 2026-11-26, depois do congelamento do A1** (A1_REPORT.md; `analyze.dart` em WH/SB feito; arrow do SB feito). Texto antigo: `analyze.dart` em WH/SB e a avaliação
   arrow do SB aguardam decisão do usuário.
 - Arquitetura: propostas 08 (realização TDF), 09 (outro agente), 11 (outro
   agente) e auditorias 10 e 12 em `docs/architecture/`. Ordem acordada:

@@ -318,9 +318,39 @@ Registro técnico detalhado (em inglês): `experiments/EXPERIMENT_LOG.md`.
   intacto. O desenvolvimento passou a usar `cpp/build_dev`.
 - Fontes: `586a3b7`; `experiments/perf/guard_ablation.sh`.
 
-## Pendências e decisões do usuário (atualizado em 2026-11-26)
+## 2026-11-26 — A1: resultado (teste aberto uma vez) e abertura do protocolo 1.1.0
 
-- Resultado do A1 (em execução) e a abertura dos testes do WH e do SB
+- 30/30 execuções completas; manifesto com hashes no git (`5d1c5b8`) antes
+  da análise; script e pré-registro inalterados desde `f51b8a7`.
+- **Gate primário atingido [artigo]:**
+
+| | A1 | 1.1.0 | Razão | p Holm |
+|---|---|---|---|---|
+| WH (teste) | 9,32 mV | 46,1 mV | 0,20 | 0,002 |
+| SB multisine (teste) | 0,349 mV | 3,78 mV | 0,09 | 0,002 |
+| SB arrow (extrapolação) | 0,507 mV | 7,56 mV | 0,07 | — |
+| CT (teste, secundário) | 0,712 V | 0,661 V | 1,08 | — |
+
+- No WH e no SB, o A1 vence nas **10 sementes**, sem divergências.
+- **CT [limitação]:** a validação melhora (0,83 → 0,43 V), mas o teste piora
+  8 %, com 3 divergências. É sobreajuste à validação curta, coerente com o
+  E1 e com a investigação do pós-processamento.
+- **Contexto na literatura (descritivo):**
+  - no WH, o A1 fica abaixo dos NARX (pNARX 30,5, GP-NARX 12,8 mV) e da
+    programação genética com gramática (23,5 mV), mas atrás das redes
+    recorrentes e dos modelos em espaço de estados;
+  - no SB, fica no nível dos melhores NARX e do SUBNET.
+- **Protocolo 1.1.0 aberto** (`analyze.dart` em WH e SB): no WH, o melhor do
+  1.1.0 foi o `aegis_sim` (37,6 mV) e a linha de base FROLS 12,5 mV; no SB,
+  FROLS 2,10, `legacy_head` 2,89 e `aegis_full` 3,78 mV. Agentes no WH:
+  UCB1 37,9 e fuzzy 53,8 mV (sem ganho).
+- Fontes: `experiments/a1/A1_REPORT.md`, `A1_RESULTS.md`;
+  `experiments/results/{wiener_hammerstein,silverbox}/analysis/SUMMARY.md`.
+
+&
+
+- ~~Resultado do A1 e abertura dos testes do WH e do SB~~ feitos em 2026-11-26.
+- Estratégia do artigo à luz do A1 (gate atingido no WH e no SB; CT pior).
   (logo depois).
 - CAC: sementes 24–30 da v3 em execução; T1–T5 depois do A1.
 - Correção do refino final no CT (exigir V_A e V_B sem piora): candidata
