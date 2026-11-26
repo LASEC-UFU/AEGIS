@@ -300,3 +300,8 @@ protocol below is run once; every result is reported.
     `init_not_differentiable_or_diverged`). Partial output archived in
     `experiments/results_archive/p6_aborted_2026-11-25_input_zero_flag/`;
     P6 restarted from scratch.
+- P6 completed (2026-11-25): 240 E3 champions, 233 used, 7 excluded (CT
+  champions whose free-run diverges on TRAINING, flagged by the core
+  itself). Pre-registered criterion (cell mr39_zero_simulation, V_B ratio):
+  CT 1.000 not met, WH 0.873 met, SB 0.841 met → met (2/3). Report
+  `experiments/p6/P6_REPORT.md`.
