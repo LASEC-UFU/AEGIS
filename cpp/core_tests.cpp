@@ -10,6 +10,7 @@
 #include "aegis/automatic_pruner.hpp"
 #include "aegis/json_lite.hpp"
 #include "aegis/model_io.hpp"
+#include "aegis/sim_refiner.hpp"
 
 #include <cmath>
 #include <cstdio>
@@ -483,6 +484,40 @@ bool test_model_io() {
     return true;
 }
 
+// M9 veto and P6 final refinement (sim_refiner): a rational model with
+// perturbed coefficients is pulled back towards the truth by the free-run
+// refinement; a divergent model is rejected by the veto.
+bool test_sim_refiner() {
+    const int rows = 600, cols = 2, out = 1;
+    const auto u = make_input(rows, 41);
+    std::vector<double> data(static_cast<size_t>(rows) * cols, 0.0);
+    for (int k = 0; k < rows; ++k) data[static_cast<size_t>(k) * cols] = u[k];
+    for (int k = 2; k < rows; ++k) {
+        const double y1 = data[(k - 1) * 2 + 1], y2 = data[(k - 2) * 2 + 1];
+        const double u1 = data[(k - 1) * 2], u2 = data[(k - 2) * 2];
+        const double n = 0.3 * y1 + 0.4 * u1 + 0.1 * power_basis(u2, 1.5, PowerMode::Hybrid);
+        const double d = 1.0 + 0.2 * y1 * y1 + 0.1 * power_basis(u1, 0.5, PowerMode::Hybrid) * y2;
+        data[static_cast<size_t>(k) * cols + 1] = n / d;
+    }
+    Chromosome c;
+    c.power_mode = PowerMode::Hybrid;
+    c.regressors = {R({T(1, 1)}), R({T(0, 1)}), R({T(0, 2, 1.5)}), R({T(1, 1, 2.0, true)}),
+                    R({T(0, 1, 0.5, true), T(1, 2, 1.0, true)})};
+    c.intercept = 0.01;
+    c.coefficients = {0.36, 0.48, 0.12, 0.24, 0.12}; // truth ×1.2
+    const int train_end = 400, val_end = 600, ctx = 10;
+    expect(free_run_admissible(c, data.data(), train_end, data.data() + (train_end - ctx) * cols,
+                               val_end - train_end + ctx, cols, out, 10.0), "perturbed model admissible");
+    const SimRefineResult r = refine_by_simulation(c, data.data(), cols, out, train_end, val_end, ctx, 10.0);
+    expect(r.ran && r.chosen_iterate > 0, "simulation refinement runs and moves");
+    expect(r.vb < 0.1 * r.vb0 && r.train < 0.1 * r.train0, "refinement reduces free-run error on train and V_B");
+    expect(approx(r.coefficients[0], 0.3, 1e-3) && approx(r.coefficients[3], 0.2, 1e-3), "coefficients recovered");
+    Chromosome bad = c;
+    bad.coefficients = {1.6, 0.4, 0.1, 0.0, 0.0}; // y(k) = 1.6 y(k-1) + … diverges
+    expect(!free_run_admissible(bad, data.data(), train_end, nullptr, 0, cols, out, 10.0), "divergent model vetoed");
+    return true;
+}
+
 } // namespace
 
 int main() {
@@ -498,6 +533,7 @@ int main() {
     test_pruner();
     test_json();
     test_model_io();
+    test_sim_refiner();
     std::printf("%d checks, %d failures\n", g_checks, g_failures);
     if (g_failures == 0) std::puts("All C++ core tests passed.");
     return g_failures == 0 ? 0 : 1;

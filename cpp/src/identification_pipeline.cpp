@@ -1,6 +1,7 @@
 #include "aegis/identification_pipeline.hpp"
 #include "aegis/metrics.hpp"
 #include "aegis/rational_model.hpp"
+#include "aegis/sim_refiner.hpp"
 #include "aegis/json_lite.hpp"
 #include <sstream>
 #include <iomanip>
@@ -72,7 +73,8 @@ static const std::set<std::string>& known_config_keys() {
         "curriculum","gammaAnnealStart","gammaAnnealEnd","phaseStagnationLimit","initialPmax",
         "initialDelayFraction","islandRoles","islandRegimes","enableRefiner","enablePruner",
         "webSocketPort","agentActionsEnabled","allowBudgetActions","actionCooldown",
-        "outcomeHorizon","broadcastInterval","syncMode","historyStride","fitMethod"
+        "outcomeHorizon","broadcastInterval","syncMode","historyStride","fitMethod",
+        "admissibilityVeto","vetoTopK","finalRefine"
     };
     return keys;
 }
@@ -144,6 +146,13 @@ bool PipelineConfig::from_json(const std::string& text, std::string* error,
         if (fm != "qr" && fm != "normal") { if (error) *error = "fitMethod must be \"qr\" or \"normal\""; return false; }
         de.fit_method = fm == "normal" ? 1 : 0;
     }
+    de.admissibility_veto = v.bool_or("admissibilityVeto", false);
+    de.veto_top_k = std::max(1, v.int_or("vetoTopK", 5));
+    {
+        const std::string fr = v.string_or("finalRefine", "none");
+        if (fr != "none" && fr != "simulation") { if (error) *error = "finalRefine must be \"none\" or \"simulation\""; return false; }
+        final_refine_simulation = fr == "simulation";
+    }
     {
         const double s = v.number_or("randomSeed", 0.0);
         de.random_seed = (std::isfinite(s) && s > 0) ? static_cast<uint64_t>(s) : 0;
@@ -213,6 +222,8 @@ std::string PipelineConfig::to_json() const {
       << ",\"hypermutation\":" << json::boolean(de.hypermutation)
       << ",\"numThreads\":" << de.num_threads << ",\"randomSeed\":" << de.random_seed
       << (de.fit_method == 1 ? ",\"fitMethod\":\"normal\"" : "")
+      << (de.admissibility_veto ? ",\"admissibilityVeto\":true,\"vetoTopK\":" + std::to_string(de.veto_top_k) : std::string())
+      << (final_refine_simulation ? ",\"finalRefine\":\"simulation\"" : "")
       << ",\"alpha\":" << num(weights.alpha) << ",\"denominatorPenalty\":" << num(weights.beta)
       << ",\"complexityPenalty\":" << num(weights.gamma) << ",\"exponentPenalty\":" << num(weights.delta)
       << ",\"stabilityPenalty\":" << num(weights.eta) << ",\"noInputPenalty\":" << num(weights.zeta)
@@ -1101,10 +1112,17 @@ void IdentificationPipeline::post_process(Chromosome& champ) {
     const FitnessWeights w = de_->current_weights();
     IndividualEvaluator ev(w);
     const double* vd = val_rows_ > 0 ? val_data_.data() : nullptr;
+    const bool veto = cfg_.de.admissibility_veto;
+    const double bound = divergence_bound();
+    auto admissible = [&](const Chromosome& c) {
+        return free_run_admissible(c, train_data_.data(), train_rows_, vd, val_rows_, raw_cols_,
+                                   cfg_.output_col, bound);
+    };
     Chromosome cur = champ;
     ev.evaluate(cur, train_data_.data(), train_rows_, vd, val_rows_, raw_cols_, cfg_.output_col);
     const double f0 = cur.fitness;
     log << "{\"initialFitness\":" << num(f0);
+    if (veto) log << ",\"initialAdmissible\":" << json::boolean(cur.evaluated && admissible(cur));
 
     if (cfg_.enable_pruner && cur.evaluated) {
         AutomaticPruner pruner(cfg_.prune);
@@ -1113,25 +1131,65 @@ void IdentificationPipeline::post_process(Chromosome& champ) {
         log << ",\"pruner\":{\"removed\":" << pr.removed_indices.size()
             << ",\"fitnessBefore\":" << num(pr.fitness_before)
             << ",\"fitnessAfter\":" << num(pr.fitness_after)
-            << ",\"evaluations\":" << pr.evaluations << "}";
-        if (pr.pruned_chromosome.evaluated && pr.fitness_after <= cur.fitness) cur = pr.pruned_chromosome;
+            << ",\"evaluations\":" << pr.evaluations;
+        bool vetoed = false;
+        if (pr.pruned_chromosome.evaluated && pr.fitness_after <= cur.fitness) {
+            if (veto && !admissible(pr.pruned_chromosome)) vetoed = true;
+            else cur = pr.pruned_chromosome;
+        }
+        if (veto) log << ",\"vetoed\":" << json::boolean(vetoed);
+        log << "}";
     }
     if (cfg_.enable_refiner && cur.evaluated && cur.is_rational()) {
         LocalRefiner refiner(cfg_.refine);
         RefineResult rr = refiner.refine(cur, train_data_.data(), train_rows_, raw_cols_, cfg_.output_col);
-        bool accepted = false;
+        bool accepted = false, vetoed = false;
         if (rr.coefficients.size() == cur.coefficients.size()) {
             Chromosome trial = cur;
             trial.coefficients = rr.coefficients;
             ev.evaluate(trial, train_data_.data(), train_rows_, vd, val_rows_, raw_cols_, cfg_.output_col,
                         /*refit=*/false);
-            if (trial.evaluated && trial.fitness < cur.fitness) { cur = trial; accepted = true; }
+            if (trial.evaluated && trial.fitness < cur.fitness) {
+                if (veto && !admissible(trial)) vetoed = true;
+                else { cur = trial; accepted = true; }
+            }
         }
         log << ",\"refiner\":{\"iterations\":" << rr.iterations
             << ",\"sseBefore\":" << num(rr.initial_sse) << ",\"sseAfter\":" << num(rr.final_sse)
-            << ",\"accepted\":" << json::boolean(accepted) << "}";
+            << ",\"accepted\":" << json::boolean(accepted);
+        if (veto) log << ",\"vetoed\":" << json::boolean(vetoed);
+        log << "}";
     }
-    log << ",\"finalFitness\":" << num(cur.fitness) << "}";
+    // P6: final refinement of the champion by free-run simulation error, with
+    // the admissibility veto on every iterate and the choice on V_A.
+    if (cfg_.final_refine_simulation && cur.evaluated) {
+        log << ",\"simulationRefine\":{";
+        if (veto && !admissible(cur)) {
+            log << "\"status\":\"skipped_champion_inadmissible\"}";
+        } else {
+            const SimRefineResult sr = refine_by_simulation(cur, norm_data_.data(), raw_cols_, cfg_.output_col,
+                                                            train_end_, val_end_, cfg_.de.max_delay, bound);
+            bool applied = false;
+            if (sr.ran && sr.chosen_iterate > 0) {
+                Chromosome trial = cur;
+                trial.coefficients = sr.coefficients;
+                trial.intercept = sr.intercept;
+                ev.evaluate(trial, train_data_.data(), train_rows_, vd, val_rows_, raw_cols_, cfg_.output_col,
+                            /*refit=*/false);
+                if (trial.evaluated && (!veto || admissible(trial))) { cur = trial; applied = true; }
+            }
+            log << "\"status\":" << str(sr.status) << ",\"iterations\":" << sr.iterations
+                << ",\"accepted\":" << sr.accepted << ",\"admissibleIterates\":" << sr.admissible_iterates
+                << ",\"chosenIterate\":" << sr.chosen_iterate << ",\"tau\":" << num(sr.tau)
+                << ",\"rmseTrain\":[" << num(sr.train0) << "," << num(sr.train) << "]"
+                << ",\"rmseValA\":[" << num(sr.va0) << "," << num(sr.va) << "]"
+                << ",\"rmseValB\":[" << num(sr.vb0) << "," << num(sr.vb) << "]"
+                << ",\"seconds\":" << num(sr.seconds) << ",\"applied\":" << json::boolean(applied) << "}";
+        }
+    }
+    log << ",\"finalFitness\":" << num(cur.fitness);
+    if (veto) log << ",\"finalAdmissible\":" << json::boolean(cur.evaluated && admissible(cur));
+    log << "}";
     if (cur.evaluated) {
         cur.contexts_survived = champ.contexts_survived;
         cur.worst_fitness_seen = champ.worst_fitness_seen;

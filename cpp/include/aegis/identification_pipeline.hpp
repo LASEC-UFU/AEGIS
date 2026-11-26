@@ -60,6 +60,7 @@ struct PipelineConfig {
     // Post-processing
     RefineConfig   refine;
     bool           enable_refiner  = true;
+    bool           final_refine_simulation = false; // P6: final champion refinement by free-run error
     bool           enable_pruner   = true;
     AutomaticPruner::Config prune;
 

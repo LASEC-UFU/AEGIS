@@ -1,5 +1,6 @@
 #include "aegis/de_optimizer.hpp"
 #include "aegis/safe_power.hpp"
+#include "aegis/rational_model.hpp"
 #include <algorithm>
 #include <numeric>
 #include <cmath>
@@ -556,7 +557,66 @@ Chromosome DifferentialEvolutionOptimizer::canonical_evaluate_locked(const Chrom
     return copy;
 }
 
+bool DifferentialEvolutionOptimizer::admissible_locked(const Chromosome& c) {
+    const uint64_t h = c.full_hash();
+    auto it = admissible_cache_.find(h);
+    if (it != admissible_cache_.end()) return it->second;
+    if (train_bound_ < 0.0) {
+        double m = 0.0;
+        for (int i = 0; i < train_rows_; ++i)
+            m = std::max(m, std::abs(train_data_[static_cast<size_t>(i) * cols_ + output_col_]));
+        train_bound_ = IndividualEvaluator::kDivergenceFactor * std::max(m, 1e-6);
+    }
+    RationalModel model(c);
+    bool ok = c.coefficients.size() == c.regressors.size();
+    auto check = [&](const double* d, int rows) {
+        if (!ok || !d || rows <= c.max_delay() + 1) return;
+        const FreeRunResult fr = model.simulate(d, rows, cols_, output_col_, -1, train_bound_);
+        if (fr.yhat.empty() || fr.diverged) ok = false;
+        else if (c.is_rational() && fr.den.samples > 0 && fr.den.min_abs < kMinDenominator) ok = false;
+    };
+    check(train_data_, train_rows_);
+    check(val_data_, val_rows_);
+    if (admissible_cache_.size() > 4096) admissible_cache_.clear();
+    admissible_cache_.emplace(h, ok);
+    return ok;
+}
+
+bool DifferentialEvolutionOptimizer::champion_admissible() const {
+    std::lock_guard<std::mutex> lk(islands_mutex_);
+    return champion_valid_ && champion_admissible_;
+}
+
 void DifferentialEvolutionOptimizer::update_champion_locked() {
+    if (cfg_.admissibility_veto) {
+        // M9: the best veto_top_k members of every island compete; an
+        // admissible candidate always beats an inadmissible one, and within
+        // the same class the lower canonical fitness wins.
+        const int k = std::max(1, cfg_.veto_top_k);
+        for (const auto& isl : islands_) {
+            const auto& pop = isl->population();
+            std::vector<int> idx;
+            for (int i = 0; i < static_cast<int>(pop.size()); ++i)
+                if (pop[i].evaluated && std::isfinite(pop[i].fitness)) idx.push_back(i);
+            const int kk = std::min<int>(k, static_cast<int>(idx.size()));
+            std::partial_sort(idx.begin(), idx.begin() + kk, idx.end(),
+                [&](int a, int b) { return pop[a].fitness < pop[b].fitness; });
+            for (int t = 0; t < kk; ++t) {
+                Chromosome cand = canonical_evaluate_locked(pop[idx[t]]);
+                if (!cand.evaluated || !std::isfinite(cand.fitness)) continue;
+                const bool adm = admissible_locked(cand);
+                const bool better = !champion_valid_ ||
+                    (adm && !champion_admissible_) ||
+                    (adm == champion_admissible_ && cand.fitness < champion_.fitness);
+                if (better) {
+                    champion_ = std::move(cand);
+                    champion_valid_ = true;
+                    champion_admissible_ = adm;
+                }
+            }
+        }
+        return;
+    }
     for (const auto& isl : islands_) {
         const Chromosome& ib = isl->best_ref();
         if (!ib.evaluated) continue;

@@ -314,3 +314,29 @@ protocol below is run once; every result is reported.
   champion in 10/10, 5/10, 4/10 seeds. Equivalence criterion met. Median wall
   time 134/1704/1484 s vs E3 874/24752/25746 s (parallelism differs, see
   `experiments/perf/PERF_REPORT.md`).
+
+### Core: P1 + P2'a applied; M9 veto and P6 final refinement (2026-11-26)
+
+- User request (2026-11-26): apply P1 and P2'a to the main source, then add
+  the champion's final simulation refinement (P6) and the admissibility veto
+  checking the training simulation too. Branch `audit/aegis-1.1.0-wip` only.
+- `0af456d`: P1 + P2'a applied from the validated patch. The frozen binaries
+  in `cpp/build` and `cpp/build_phase0` were not rebuilt; they correspond to
+  the source at `adc1ee9`. New build directory: `cpp/build_a1`.
+- New options (all off by default; default output stays bit-identical to the
+  frozen binary, checked on CT aegis_full seed 1 with `cpp/build_a1`):
+  - `admissibilityVeto` (+ `vetoTopK`, default 5): champion promotion
+    considers the best `vetoTopK` members of each island; admissible = free
+    run over the whole training and validation splits does not diverge and
+    |D| never falls below 1e-12; admissible always beats inadmissible. The
+    veto also guards the pruner and the one-step refiner in post-processing.
+  - `finalRefine` = `simulation`: P6 as the last post-processing step
+    (`cpp/src/sim_refiner.cpp`, ported from the validated tool; same LM,
+    veto with τ and sign changes, choice on V_A).
+- Tests: `core_tests` 96/0 (new `test_sim_refiner`: refinement recovers a
+  perturbed rational model, divergent model vetoed), `api_tests` 66/0,
+  `phase0_tests` 11/0, `aegis_p6 --selftest` PASS.
+- Smoke (validation only): CT mr39_zero_simulation + fitMethod normal + veto
+  + finalRefine, seeds 23–26 (seeds 23 and 26 had training-divergent
+  champions in E3): all four champions admissible (no training or validation
+  divergence); refinement applied in 3 of 4 (seed 24 kept iterate 0).

@@ -67,6 +67,14 @@ struct DEConfig {
     // Threading
     int    num_threads       = 0;     // 0 = one thread per island; 1 = sequential
     int    fit_method        = 0;     // P2'a: 0 = QR (default), 1 = Gram/Cholesky in the island inner loop
+    // M9 admissibility veto on champion promotion (off by default = 1.1.0 rule).
+    // A candidate is admissible when its free-run simulation over the whole
+    // training and validation splits does not diverge and the denominator
+    // magnitude never falls below the core guard (1e-12). Admissible always
+    // beats inadmissible; the best veto_top_k members of each island compete
+    // every generation.
+    bool   admissibility_veto = false;
+    int    veto_top_k        = 5;
     uint64_t random_seed     = 0;     // 0 = time-based seed (pipeline records the effective seed)
 };
 
@@ -295,6 +303,9 @@ public:
     int generation() const { return current_gen_.load(); }
     std::string stop_reason() const;
     DEConfig config() const;
+    /** M9: whether the current champion passed the admissibility veto
+     *  (always false when the veto is off). */
+    bool champion_admissible() const;
 
 private:
     DEConfig              cfg_;
@@ -320,6 +331,9 @@ private:
     std::unordered_map<uint64_t, Chromosome> canonical_cache_;
     ModelDiagnostics    champion_diag_;
     uint64_t            champion_diag_hash_ = 0;
+    bool                champion_admissible_ = false;
+    std::unordered_map<uint64_t, bool> admissible_cache_;
+    double              train_bound_ = -1.0;
 
     // Progress / stopping (generation-level)
     std::atomic<int> current_gen_{0};
@@ -333,6 +347,7 @@ private:
     void migrate();
     void update_champion_locked();
     Chromosome canonical_evaluate_locked(const Chromosome& c);
+    bool admissible_locked(const Chromosome& c);
     GenerationReport build_report_locked();
     bool check_stop_locked();
 };

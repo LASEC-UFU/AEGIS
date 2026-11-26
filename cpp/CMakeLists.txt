@@ -25,6 +25,7 @@ set(AEGIS_SOURCES
   src/automatic_pruner.cpp
   src/individual_evaluator.cpp
   src/local_refiner.cpp
+  src/sim_refiner.cpp
   src/model_io.cpp
   src/de_optimizer.cpp
   src/identification_pipeline.cpp
