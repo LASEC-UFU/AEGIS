@@ -3,7 +3,7 @@
 //   dart run tool/experiments/run_agent_experiment.dart \
 //     --dll cpp/build/aegis_core.dll --data est.csv [--data-test test.csv] \
 //     --config experiments/configs/conditions/aegis_full.json [--set key=value ...] \
-//     --agent none|ucb1|fuzzy|fuzzy:<rulebase.json>|llm --seed 1 --output <dir> [--label name]
+//     --agent none|ucb1|fuzzy|fuzzy:<rulebase.json>|cac|cac:<table.json>|llm --seed 1 --output <dir> [--label name]
 //     [--llm-model claude-opus-5-5] [--llm-effort medium] [--consult-every 50] [--max-cost 5]
 //
 // Each generation: step(1) → snapshot → agent.consult() (awaited) → proposed
@@ -21,6 +21,7 @@ import 'package:aegis/core/math/matrix.dart';
 import 'package:aegis/ffi/aegis_ffi_service_native.dart';
 import 'package:aegis/ffi/aegis_library_native.dart';
 import 'package:aegis/services/fuzzy_policy_agent.dart';
+import 'package:aegis/services/convergence_controller.dart';
 import 'package:aegis/services/llm_agent_native.dart';
 import 'package:aegis/services/local_adaptive_agent.dart';
 import 'package:aegis/services/optimization_agent.dart';
@@ -118,6 +119,16 @@ Future<void> main(List<String> args) async {
       id: 'fuzzy-${rb.name}',
       phaseStagnationLimit: (config['phaseStagnationLimit'] as num?)?.toInt() ?? 150,
     );
+  } else if (agentSpec == 'cac' || agentSpec.startsWith('cac:')) {
+    agent = AdaptiveConvergenceController(
+      actionSchema: service.getActionSchema,
+      currentParameters: () => service.parameters.currentValues,
+      phaseStagnationLimit: (config['phaseStagnationLimit'] as num?)?.toInt() ?? 150,
+      seed: seed,
+      table: agentSpec.startsWith('cac:')
+          ? jsonDecode(File(agentSpec.substring(4)).readAsStringSync()) as Map<String, dynamic>
+          : null,
+    );
   } else if (agentSpec == 'llm') {
     agent = LlmAgent(
       model: opt('llm-model', 'claude-opus-5-5'),
@@ -208,6 +219,9 @@ Future<void> main(List<String> args) async {
       if (agent is LocalAdaptiveAgent) 'arms': agent.armStatistics,
       if (agent is LocalAdaptiveAgent) 'inconclusiveObservations': agent.inconclusiveObservations,
       if (agent is FuzzyPolicyAgent) 'ruleBase': agent.ruleBase.toJson(),
+      if (agent is AdaptiveConvergenceController) 'cacTable': agent.tableJson(),
+      if (agent is AdaptiveConvergenceController) 'cacCalibration': agent.calibration,
+      if (agent is AdaptiveConvergenceController) 'cacInconclusive': agent.inconclusive,
     },
     'report': report,
     'history': history,

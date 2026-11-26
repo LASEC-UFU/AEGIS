@@ -479,8 +479,8 @@ void IdentificationPipeline::build_specs() {
         "eta (singularity + free-run divergence penalty)");
     add("exponentPenalty", "weight", 0.0, 1.0, 0.2, false, false, -1, "delta");
     add("alpha", "weight", 0.0, 2.0, 0.5, false, false, -1, "BIC/n weight");
-    add("triggerRestart", "event", 0.05, 0.5, 0.5, false, false, 50,
-        "one-shot: replace this fraction of every island and reset JADE means");
+    add("triggerRestart", "event", 0.05, 1.0, 1.0, false, false, 50,
+        "one-shot: replace this fraction of every island and reset JADE means; the elite (elitismCount) is always kept, so 1.0 = cataclysmic restart");
 }
 
 const ActionSpec* IdentificationPipeline::find_spec(const std::string& name) const {

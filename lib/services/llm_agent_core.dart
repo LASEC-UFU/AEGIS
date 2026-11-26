@@ -48,7 +48,7 @@ const Map<String, List<double>> kLlmActionBounds = {
   'denominatorPenalty': [0.0, 2.0, 0.5],
   'stabilityPenalty': [0.0, 5.0, 1.0],
   'exponentPenalty': [0.0, 1.0, 0.2],
-  'triggerRestart': [0.05, 0.5, 0.5],
+  'triggerRestart': [0.05, 1.0, 1.0],
 };
 
 const String kLlmSystemPrompt = '''

@@ -51,7 +51,7 @@ present in either (`rmse_test` is always `null` during a run).
 | `freeRunPenalty` | weight | 0–5 | 1.0 | θ base |
 | `freeRunHorizon` | weight | 10–500 | 200 | re-evaluates the populations |
 | `denominatorPenalty`, `stabilityPenalty`, `exponentPenalty`, `alpha` | weight | see schema | | |
-| `triggerRestart` | event | 0.05–0.5 | — | one-shot restart fraction, cooldown 50 |
+| `triggerRestart` | event | 0.05–1.0 | — | one-shot restart fraction, cooldown 50; the elite (`elitismCount` per island) and the champion are always kept, so 1.0 is a cataclysmic restart (CHC, Eshelman 1991) |
 
 Request (`aegis_apply_action`, WebSocket text frame, or the Dart
 `AegisFfiService.applyAction`):

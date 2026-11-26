@@ -117,7 +117,9 @@ ação anterior; agir tarde desperdiça gerações num platô. Então:
    - se a busca está rápida (ρ alta), o controlador espera: h_o = tempo
      previsto até a melhora relativa desacelerar abaixo de ε por bloco;
    - se está em platô (ρ ≈ 0), h_o = h_min.
-3. **h = clamp(max(h_d, h_o), h_min, h_max)**, com h_min = 10 e h_max = 200
+3. **h = h_min se a busca está parada** (ρ·h_max < ε); senão h = h_d, elevado a
+   pelo menos h_max/2 se a busca está rápida (ρ·h_min ≥ 4ε); sempre dentro de
+   [h_min, h_max], com h_min = 10 e h_max = 200
    gerações, e em múltiplos de 5.
 4. **Eventos antecipam h:**
    - campeão inadmissível;
@@ -172,3 +174,25 @@ ação anterior; agir tarde desperdiça gerações num platô. Então:
   CAC melhora o A1, em validação e depois em teste.
 - O CAC não substitui a avaliação do A1. Se não mostrar ganho, isso é
   reportado como no estudo 1.1.0.
+
+## 10. Convergência prematura × estagnação; cataclismo (acréscimo de 2026-11-26)
+
+- **Convergência prematura:** a população colapsa cedo num ponto, por perda
+  de diversidade (deriva genética). Remédio clássico: **cataclismo**
+  (*cataclysmic mutation*, CHC, Eshelman 1991): reinicializar toda a
+  população menos a elite.
+- **Estagnação** (Lampinen e Zelinka, 2000): a população continua diversa,
+  mas não progride. Reiniciar não ajuda; os ajustes úteis são passos de
+  mutação e de cruzamento e a migração.
+- **No núcleo:** `triggerRestart` passa a aceitar fração até 1,0. A elite de
+  cada ilha (`elitismCount`) e o campeão global são sempre preservados, então
+  1,0 é o cataclismo.
+- **No CAC:**
+  - o reinício parcial (30 %) é sempre um braço;
+  - o **cataclismo** só é oferecido quando o diagnóstico é de convergência
+    prematura: diversidade baixa, convergência parada e estagnação média ou
+    alta.
+  - O *cooldown* de 50 gerações do núcleo vale para os dois.
+- **Correção da §5:** com a busca parada, o horizonte é h_min, ou seja, agir
+  logo. A versão anterior da fórmula dava h_max nesse caso, e o teste
+  unitário pegou.
