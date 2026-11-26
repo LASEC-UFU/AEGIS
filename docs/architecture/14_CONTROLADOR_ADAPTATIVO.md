@@ -196,3 +196,35 @@ ação anterior; agir tarde desperdiça gerações num platô. Então:
 - **Correção da §5:** com a busca parada, o horizonte é h_min, ou seja, agir
   logo. A versão anterior da fórmula dava h_max nesse caso, e o teste
   unitário pegou.
+
+## 11. Versão 2, depois da primeira rodada de desenvolvimento (2026-11-26)
+
+**Resultado da v1** (CT, validação, sementes 21–23, pacote A1): pior que
+sem agente nas 3 sementes. RMSE de validação 0,723 / 0,851 / 0,640 V contra
+0,592 / 0,659 / 0,494 V, e campeões com K = 5. Causas medidas:
+- horizonte mediano de 10 gerações, porque os platôs normais do campeão
+  foram lidos como "parado";
+- cerca de 150 ações por execução;
+- exploração quase uniforme sobre mais de 30 braços, que subiu as
+  penalidades que o pacote zera.
+
+**Mudanças da v2:**
+
+| | v1 | v2 |
+|---|---|---|
+| h_min / janela do modelo de convergência | 10 / 40 | **25 / 80** gerações |
+| Variância a priori dos braços | 0,25 | **0,01**: ação só com evidência |
+| Prior do braço "não agir" | 0 | **+0,25** |
+| Escala do prior fuzzy | 0,2·μ | **0,4·μ** |
+| Pesos do fitness | livres | **âncoras** = valores no início da execução (o pacote): mover para longe custa 0,15 de prior por passo; braço "voltar à âncora" com prior +0,1 |
+| Tabela entre execuções | não usada | **treino** em sementes de desenvolvimento, carregada congelada na avaliação |
+
+Todos os parâmetros do esquema continuam disponíveis. As âncoras só tornam
+o afastamento do pacote uma decisão que precisa de evidência.
+
+**Protocolo de desenvolvimento** (`experiments/perf/cac_dev.sh`, só CT, só
+validação):
+- treino nas sementes 31–40, com a tabela carregada de uma execução para a
+  seguinte;
+- avaliação nas sementes 21–23, com a tabela treinada congelada e sem
+  tabela, comparadas ao A1 sem agente das mesmas sementes.

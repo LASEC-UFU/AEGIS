@@ -28,6 +28,9 @@ class AdaptiveConvergenceController extends OptimizationAgent {
   final int hMin, hMax, window;
   final double epsilon; // relevant gain in log-RMSE units (0.005 ≈ 0.5 %)
   final double priorScale, priorVariance;
+  /// v2: prior advantage of "no action", drift cost away from the anchor
+  /// (per max step, for fitness weights) and prior of the return-to-anchor arm.
+  final double nonePrior, driftPenalty, anchorPrior;
   final math.Random _rng;
 
   AdaptiveConvergenceController({
@@ -35,12 +38,15 @@ class AdaptiveConvergenceController extends OptimizationAgent {
     required this.currentParameters,
     FuzzyRuleBase? ruleBase,
     this.phaseStagnationLimit = 150,
-    this.hMin = 10,
+    this.hMin = 25,
     this.hMax = 200,
-    this.window = 40,
+    this.window = 80,
     this.epsilon = 0.005,
-    this.priorScale = 0.2,
-    this.priorVariance = 0.25,
+    this.priorScale = 0.4,
+    this.priorVariance = 0.01,
+    this.nonePrior = 0.25,
+    this.driftPenalty = 0.15,
+    this.anchorPrior = 0.1,
     int seed = 1,
     Map<String, dynamic>? table,
   })  : ruleBase = ruleBase ?? FuzzyRuleBase.expert(),
@@ -64,6 +70,8 @@ class AdaptiveConvergenceController extends OptimizationAgent {
   final Map<String, _Stats> _global = {};
   final Map<String, _Stats> _situational = {};
   int inconclusive = 0;
+  /// Fitness-weight values at the first decision (the pre-registered package).
+  final Map<String, double> anchors = {};
   final List<Map<String, dynamic>> calibration = [];
 
   /// Arm statistics, for logs and persistence.
@@ -168,9 +176,11 @@ class AdaptiveConvergenceController extends OptimizationAgent {
     final prior = _fuzzyPrior(feats);
     String best = 'none';
     var bestDraw = -double.infinity;
-    for (final a in arms.keys) {
-      final draw = _draw(a.key, situation, prior[a.key] ?? 0.0);
-      if (draw > bestDraw) { bestDraw = draw; best = a.key; }
+    for (final e in arms.entries) {
+      final key = e.key.key;
+      final p0 = (prior[key] ?? 0.0) + e.value.priorAdj + (key == 'none' ? nonePrior : 0.0);
+      final draw = _draw(key, situation, p0);
+      if (draw > bestDraw) { bestDraw = draw; best = key; }
     }
     final h = horizon(model.rho, model.sigma);
     final forecast = model.level - model.rho * h;
@@ -236,13 +246,27 @@ class AdaptiveConvergenceController extends OptimizationAgent {
       }
       final cur = current[name] ?? (s.parameters[name]);
       if (cur == null) continue;
+      // v2 anchors: fitness weights start at the package values; moving away
+      // costs prior mass, and a return-to-anchor arm is offered.
+      final weight = kind == 'weight';
+      if (weight) anchors.putIfAbsent(name, () => cur);
+      final anchor = anchors[name];
       var step = maxStep / 2;
       if (integer) step = math.max(1, step.roundToDouble());
       for (final dir in const [1, -1]) {
         var v = (cur + dir * step).clamp(lo, hi).toDouble();
         if (integer) v = v.roundToDouble();
         if ((v - cur).abs() < 1e-12) continue;
-        out[MapEntry('$name:${dir > 0 ? '+' : '-'}', dir)] = _Move(name, v);
+        var adj = 0.0;
+        if (weight && anchor != null && maxStep > 0) {
+          final away = ((v - anchor).abs() - (cur - anchor).abs()) / maxStep;
+          if (away > 0) adj = -driftPenalty * away * 2; // per half step = one move
+        }
+        out[MapEntry('$name:${dir > 0 ? '+' : '-'}', dir)] = _Move(name, v, adj);
+      }
+      if (weight && anchor != null && (cur - anchor).abs() > 1e-12) {
+        final back = cur + (anchor - cur).clamp(-maxStep, maxStep);
+        out[MapEntry('$name:anchor', 0)] = _Move(name, integer ? back.roundToDouble() : back, anchorPrior);
       }
     }
     return out;
@@ -311,7 +335,8 @@ class AdaptiveConvergenceController extends OptimizationAgent {
 class _Move {
   final String param;
   final double value;
-  const _Move(this.param, this.value);
+  final double priorAdj; // v2: anchor drift cost (−) or return-to-anchor prior (+)
+  const _Move(this.param, this.value, [this.priorAdj = 0.0]);
 }
 
 class _Pending {
