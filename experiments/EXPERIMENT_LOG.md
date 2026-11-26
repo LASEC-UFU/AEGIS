@@ -340,3 +340,26 @@ protocol below is run once; every result is reported.
   + finalRefine, seeds 23–26 (seeds 23 and 26 had training-divergent
   champions in E3): all four champions admissible (no training or validation
   divergence); refinement applied in 3 of 4 (seed 24 kept iterate 0).
+
+### Agents updated, CAC developed, A1 frozen and started (2026-11-26)
+
+- Agents (UCB1, fuzzy `expert-v2`, LLM prompt) read the new snapshot fields
+  `search{…}` and `champion_admissible` (`ca765b6`). There is no neural
+  network agent in the code base.
+- CAC, adaptive convergence controller over every action-schema parameter
+  with an estimated horizon to the next decision; `triggerRestart` now
+  accepts up to 1.0 (elite and champion always kept = cataclysmic restart)
+  (`5587fea`, doc 14).
+- **CAC development run (CT, validation only, E3 split, A1 package, seeds
+  21–23): unfavourable.** Validation free-run RMSE with CAC 0.723 / 0.851 /
+  0.640 V against 0.592 / 0.659 / 0.494 V without agent; champions shrank to
+  K = 5 (vs 14–28). About 150 actions per run, median horizon 10
+  generations (champion plateaus read as "stalled"); the near-uniform
+  Thompson exploration over 30+ arms raised the penalties that the A1
+  package sets to zero. CAC is NOT part of A1; it needs redesign and its own
+  pre-registration.
+- A1 design frozen at `f51b8a7` (`experiments/a1/A1_PREREG.md`,
+  `tool/experiments/a1_analysis.dart`, `experiments/a1/run_a1.sh`). The
+  first launch failed before running anything (output directory missing for
+  the log redirect); relaunched 07:41. Test metrics are written but not read
+  until all 30 runs finish.
