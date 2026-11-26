@@ -93,8 +93,12 @@ class FuzzyRuleBase {
   ///  div  — unique structures / total population
   ///  gap  — (RMSE_val − RMSE_train) / RMSE_train
   ///  sim  — free-run RMSE (full validation) / one-step RMSE_val
+  ///         (undefined when errorMode = simulation: θ is then inert, the
+  ///         fitness already scores the free run, so R7 cannot fire)
+  ///  adm  — 1 if the champion passed the admissibility veto, 0 if not,
+  ///         undefined when the veto is off (A1, M9)
   factory FuzzyRuleBase.expert() => FuzzyRuleBase(
-    name: 'expert-v1',
+    name: 'expert-v2',
     variables: {
       'stag': {
         'low': const Trapezoid(-inf, -inf, 0.15, 0.3),
@@ -119,6 +123,10 @@ class FuzzyRuleBase {
         'ok': const Trapezoid(-inf, -inf, 1.5, 3.0),
         'high': const Trapezoid(2.0, 5.0, inf, inf),
       },
+      'adm': {
+        'no': const Trapezoid(-inf, -inf, 0.0, 0.5),
+        'yes': const Trapezoid(0.5, 1.0, inf, inf),
+      },
     },
     rules: const [
       FuzzyRule(id: 'R1', antecedents: {'stag': 'high', 'sr': 'low'}, param: 'mutationFactor', delta: 0.1,
@@ -137,6 +145,8 @@ class FuzzyRuleBase {
           explanation: 'simulation much worse than one-step prediction: weight free-run error'),
       FuzzyRule(id: 'R8', antecedents: {'stag': 'high', 'sr': 'low', 'div': 'high'}, param: 'migrationRate', delta: 0.05,
           explanation: 'diverse but stuck islands: exchange more individuals'),
+      FuzzyRule(id: 'R9', antecedents: {'adm': 'no'}, param: 'stabilityPenalty', delta: 0.5,
+          explanation: 'no admissible champion (free run diverges on training or validation): weight stability'),
     ],
     bounds: const {
       'mutationFactor': [0.1, 1.0, 0.3],
@@ -146,6 +156,7 @@ class FuzzyRuleBase {
       'complexityPenalty': [0.0, 0.2, 0.1],
       'freeRunPenalty': [0.0, 3.0, 1.0],
       'migrationRate': [0.0, 0.3, 0.2],
+      'stabilityPenalty': [0.0, 5.0, 1.0],
     },
   );
 
@@ -198,9 +209,12 @@ Map<String, double> fuzzyFeatures(GenerationSnapshot s, {int phaseStagnationLimi
     'sr': s.successRate,
     'div': totalPop > 0 ? s.uniqueStructures / totalPop : double.nan,
     'gap': (train.isFinite && train > 0 && val.isFinite) ? (val - train) / train : double.nan,
-    'sim': s.freeRunDiverged
+    'sim': s.errorMode == 'simulation'
+        ? double.nan
+        : s.freeRunDiverged
         ? 10.0
         : ((val.isFinite && val > 0 && sim.isFinite) ? sim / val : double.nan),
+    'adm': s.championAdmissible == null ? double.nan : (s.championAdmissible! ? 1.0 : 0.0),
   };
 }
 

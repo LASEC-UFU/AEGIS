@@ -31,6 +31,7 @@ present in either (`rmse_test` is always `null` during a run).
 | Population | `population_diversity` (mean within-island fitness s.d.), `population_variance`, `fitness_mean`, `fitness_median`, `unique_structures`, `structure_entropy`, `success_rate`, `mu_f`, `mu_cr`, `stagnation` (max island), `global_stagnation` (champion), `mean_num_regressors` |
 | Islands | `islands[]{id, role, best/mean/median/std/worst_fitness, stagnation, success_rate, mu_f, mu_cr, unique_structures, population_size, mean_num_regressors, best_rmse_val}` — fitness values are on each island's own objective scale |
 | Control | `parameters{name: current base value}`, `effective_weights{alpha…theta, free_run_horizon}`, `agent{enabled, actionsAccepted, actionsRejected, pending, lastAction}` |
+| Search (A1, 2026-11-26) | `search{error_mode, fit_method, admissibility_veto, final_refine}`, `champion_admissible` (null when the veto is off). In `errorMode = simulation` the fitness already scores the free run over the whole validation split, so `freeRunPenalty` and `freeRunHorizon` are inert |
 
 ## 2. Actions
 
@@ -97,8 +98,8 @@ These records are the training data for local policies
 | Mode | Class | Notes |
 |---|---|---|
 | off | — | |
-| local (UCB1) | `LocalAdaptiveAgent` | heuristic candidates every 25 generations; UCB1 over (parameter, direction) arms; reward = improvement of validation RMSE over 50 generations relative to the drift baseline, clipped to [−1, 1]; observations crossing a phase change are discarded; severe signals bypass persistence, never the cooldown |
-| fuzzy | `FuzzyPolicyAgent` | zero-order Takagi–Sugeno rule base (JSON); explicit refusal when the firing strength is below the evidence threshold |
+| local (UCB1) | `LocalAdaptiveAgent` | A1: arm `stabilityPenalty` when no admissible champion; no θ / horizon arms in `errorMode = simulation`. Heuristic candidates every 25 generations; UCB1 over (parameter, direction) arms; reward = improvement of validation RMSE over 50 generations relative to the drift baseline, clipped to [−1, 1]; observations crossing a phase change are discarded; severe signals bypass persistence, never the cooldown |
+| fuzzy | `FuzzyPolicyAgent` | zero-order Takagi–Sugeno rule base (JSON, `expert-v2`); explicit refusal when the firing strength is below the evidence threshold. v2: variable `adm` (champion admissible) and rule R9 (no admissible champion → `stabilityPenalty` +0.5); the free-run rule R7 cannot fire in `errorMode = simulation` |
 | remote (Claude) | `LlmAgent` (`llm_agent_core.dart`) | raw HTTPS to the Messages API (Dart has no official SDK); default model `claude-opus-5-5`, effort `medium`, structured output (JSON schema), server-side refusal fallback, 120 s timeout, call and cost budgets; at most one action per consultation |
 | external | WebSocket client | `webSocketPort > 0`; same action interface |
 

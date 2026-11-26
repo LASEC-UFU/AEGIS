@@ -76,6 +76,9 @@ GenerationSnapshot snapshotFromCoreJson(
   final stability = j['stability'] is Map<String, dynamic>
       ? j['stability'] as Map<String, dynamic>
       : const <String, dynamic>{};
+  final search = j['search'] is Map<String, dynamic>
+      ? j['search'] as Map<String, dynamic>
+      : const <String, dynamic>{};
   final worst = islands.map((s) => s.worstFitness).whereType<double>();
   final q = islands.map((s) => s.medianFitness).whereType<double>().toList()..sort();
   final err = arr('err');
@@ -147,6 +150,11 @@ GenerationSnapshot snapshotFromCoreJson(
     meanMuF: _optd(j, 'mu_f'),
     meanMuCR: _optd(j, 'mu_cr'),
     agentInfo: j['agent'] is Map<String, dynamic> ? j['agent'] as Map<String, dynamic> : const {},
+    errorMode: (search['error_mode'] as String?) ?? '',
+    fitMethod: (search['fit_method'] as String?) ?? '',
+    admissibilityVeto: search['admissibility_veto'] as bool? ?? false,
+    finalRefine: (search['final_refine'] as String?) ?? '',
+    championAdmissible: j['champion_admissible'] as bool?,
   );
 }
 

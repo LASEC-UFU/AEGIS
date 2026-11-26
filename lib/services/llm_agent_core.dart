@@ -58,6 +58,8 @@ Every consultation you receive one observation (schema aegis.observation/1): cha
 
 Decide whether ONE bounded parameter adjustment is likely to improve the identification (lower validation free-run error without loss of stability or parsimony). Typical patterns: long stagnation with very low success rate suggests larger mutation steps or more random immigrants; collapsed structural diversity suggests restarts or structural mutation; validation error well above training error suggests more parsimony; free-run error much larger than one-step error suggests a larger free-run penalty or horizon. A healthy, improving search needs no action.
 
+The observation field "search" tells how the run is configured. When search.errorMode is "simulation", the fitness already scores the free-run error over the whole validation split: freeRunPenalty and freeRunHorizon are then inert and must not be proposed. When search.admissibilityVeto is true, only champions whose free run does not diverge on the whole training and validation splits are promoted; model.championAdmissible = false means no admissible candidate has been found yet, and a larger stabilityPenalty is the relevant lever. When search.finalRefine is "simulation", the champion's coefficients are refined by free-run error after the search; do not try to emulate that refinement during the search.
+
 Rules:
 - Propose at most one action, only from the allowed parameters, within [min, max] and with |new - current| <= maxStep. Values outside are rejected by the engine.
 - If the observation does not clearly support a change (for example the search is still improving, or signals conflict), return no action and set evidence_sufficient to false or explain that the search is healthy.

@@ -226,8 +226,24 @@ class LocalAdaptiveAgent extends OptimizationAgent {
     final validRmse = snapshot.bestModelValidationRMSE;
     final freeRunRmse = snapshot.freeRunRmse;
 
-    // Free-run divergence
-    if (_validPositive(trainRmse) && _validPositive(freeRunRmse)) {
+    // A1 (M9): no admissible champion — the free run diverges on training or
+    // validation for every promoted candidate. Weight stability (η).
+    if (snapshot.championAdmissible == false) {
+      final eta = _v(params, 'stabilityPenalty', 1.0);
+      final c = _candidate(
+        signal: 'inadmissible-champion', parameter: 'stabilityPenalty', current: eta,
+        proposed: eta + 0.5, min: 0.0, max: 5.0, severe: true,
+        reason: 'nenhum campeao admissivel (simulacao livre diverge no treino ou na validacao); '
+            'aumentando o peso de estabilidade.',
+      );
+      if (c != null) list.add(c);
+    }
+
+    // Free-run divergence. With errorMode = simulation the fitness already
+    // scores the free run over the whole validation split: θ and the horizon
+    // are inert there, so these arms are not offered.
+    if (snapshot.errorMode != 'simulation' &&
+        _validPositive(trainRmse) && _validPositive(freeRunRmse)) {
       final ratio = freeRunRmse! / math.max(trainRmse, 1e-12);
       final validRef = _validPositive(validRmse) ? validRmse! : trainRmse;
       if (ratio > 4.0 || freeRunRmse > math.max(0.08, validRef * 3.0)) {

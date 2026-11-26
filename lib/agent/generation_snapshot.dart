@@ -95,6 +95,15 @@ class GenerationSnapshot {
   final double? meanNumRegressors;
   final double? meanMuF;
   final double? meanMuCR;
+  /// A1 search configuration reported by the core (snapshot `search`):
+  /// `one_step` / `simulation`, `qr` / `normal`, veto on/off, `none` / `simulation`.
+  /// Empty strings / false for engines that do not report it.
+  final String errorMode;
+  final String fitMethod;
+  final bool admissibilityVeto;
+  final String finalRefine;
+  /// Whether the champion passed the admissibility veto (null when the veto is off).
+  final bool? championAdmissible;
   /// Agent bookkeeping reported by the core (accepted/rejected/pending).
   final Map<String, dynamic> agentInfo;
 
@@ -162,6 +171,11 @@ class GenerationSnapshot {
     this.meanMuF,
     this.meanMuCR,
     this.agentInfo = const {},
+    this.errorMode = '',
+    this.fitMethod = '',
+    this.admissibilityVeto = false,
+    this.finalRefine = '',
+    this.championAdmissible,
   });
 
   /// Compact, documented observation used by agents and trajectory logs
@@ -206,10 +220,17 @@ class GenerationSnapshot {
       'overfitting': overfitting,
       'underfitting': underfitting,
       'fitnessBreakdown': fitnessBreakdown,
+      'championAdmissible': championAdmissible,
     },
     'islands': islandStatuses.map((s) => s.toMap()).toList(),
     'parameters': parameters,
     'effectiveWeights': effectiveWeights,
+    'search': {
+      'errorMode': errorMode,
+      'fitMethod': fitMethod,
+      'admissibilityVeto': admissibilityVeto,
+      'finalRefine': finalRefine,
+    },
     'alerts': alerts,
     'stopReason': stopReason,
   };

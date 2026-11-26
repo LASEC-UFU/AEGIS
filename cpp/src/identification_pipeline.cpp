@@ -1560,6 +1560,15 @@ std::string IdentificationPipeline::snapshot_json() const {
       << ",\"zeta\":" << num(w.zeta) << ",\"theta\":" << num(w.theta)
       << ",\"free_run_horizon\":" << w.free_run_horizon << "}"
       << ",\"agent\":" << agent.str()
+      // A1: how the search is configured and whether the champion passed the
+      // admissibility veto (null when the veto is off), so that agents do not
+      // act on weights that are inert in this configuration.
+      << ",\"search\":{\"error_mode\":" << str(w.error_mode == 1 ? "simulation" : "one_step")
+      << ",\"fit_method\":" << str(cfg_.de.fit_method == 1 ? "normal" : "qr")
+      << ",\"admissibility_veto\":" << json::boolean(cfg_.de.admissibility_veto)
+      << ",\"final_refine\":" << str(cfg_.final_refine_simulation ? "simulation" : "none") << "}"
+      << ",\"champion_admissible\":"
+      << (cfg_.de.admissibility_veto && de_ ? json::boolean(de_->champion_admissible()) : std::string("null"))
       << ",\"stop_reason\":" << str(r.stop_reason)
       << ",\"best_contexts_survived\":" << r.best_contexts_survived
       << ",\"best_worst_fitness_seen\":" << num(r.best_worst_fitness_seen)
