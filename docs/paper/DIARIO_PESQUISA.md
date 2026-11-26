@@ -1,0 +1,281 @@
+# Diário de pesquisa do AEGIS (base para o artigo)
+
+**Finalidade:** registro cronológico de tudo o que foi feito, decidido,
+medido, falhou ou desviou do plano, para servir de base à escrita do artigo
+(`docs/paper/IFAC_JSC_PREPARACAO.md`). Pedido do usuário em 2026-11-26:
+"vá registrando todas estas ações para servir depois de base para a escrita
+do artigo".
+
+**Como ler:**
+- cada entrada traz a data, o que foi feito, o resultado com números e a
+  fonte (commit e documento);
+- **[artigo]** marca o que provavelmente entra no texto;
+- **[limitação]** marca ressalvas que o texto precisa declarar.
+
+**Regras de integridade, válidas em todas as entradas:**
+- nenhum dado de teste é usado para escolher estrutura, parâmetro ou
+  critério;
+- WH e SB têm o teste fechado até o congelamento do A1;
+- resultados desfavoráveis, falhas e desvios são registrados.
+
+Registro técnico detalhado (em inglês): `experiments/EXPERIMENT_LOG.md`.
+
+---
+
+## 2026-11-21 — Continuação numa segunda máquina e fim do protocolo 1.1.0
+
+- **Máquina:** Ryzen 5 PRO 5650G, 6 núcleos e 12 threads, 7,4 GB, Windows
+  11. Binários congelados transferidos com SHA-256 conferido.
+- **Reprodução entre máquinas:** CT `aegis_full`, semente 1: modelo,
+  avaliações e validação idênticos bit a bit (RMSE livre de validação
+  0,8320657852 V nas duas). **[artigo]** reprodutibilidade bit a bit entre
+  máquinas.
+- **Protocolo 1.1.0 completo:** WH e SB `legacy_head` terminados nesta
+  máquina (10/10 cada). CT 14 condições, WH 10, SB 8; todas 10/10.
+  - Falhas registradas: dois travamentos da máquina original (hardware), com
+    reexecução.
+  - Fontes: `37d6333`, `973b3b3`, `3f5d926`.
+
+## 2026-11-21 a 23 — Fase 0, E3: triagem só por configuração
+
+- **Desenho (pré-registrado):** 8 células = `maxRegressors` {8, 39} ×
+  penalidades {padrão, zero} × `errorMode` {one_step, simulation}, sementes
+  21–30, 240 execuções, só validação.
+- **Critério:** zero+39 / padrão+8 ≤ 0,90 em ≥ 2 de 3 benchmarks.
+- **Resultado:** atingido nos dois modos.
+
+| Modo | CT | WH | SB |
+|---|---|---|---|
+| `one_step` | 1,22 ✗ | 0,56 ✓ | 0,12 ✓ |
+| `simulation` | 0,52 ✓ | 0,28 ✓ | 0,13 ✓ |
+
+- **Leituras [artigo]:**
+  - com as penalidades padrão, o teto de regressores não é a restrição
+    ativa (K de 4 a 7);
+  - sem penalidades, o próprio AEGIS chega a 22–33 coeficientes e supera as
+    estruturas fixas ajustadas por QR do E1 no WH (10,7 contra 26,5 mV) e no
+    SB (0,34 contra 0,60 mV);
+  - otimizar pela simulação livre foi melhor em 11 de 12 pares de células;
+  - sem pressão, a busca usa extensivamente os expoentes reais (32–50 % dos
+    fatores não inteiros) e a forma racional.
+- **[limitação]** "penalidades zeradas" é um pacote, sem atribuição
+  causal; uma divisão por benchmark; o CT tem 205 amostras de validação.
+- **Custo:** as células grandes levaram cerca de 7 h por execução no WH.
+- Fontes: `experiments/phase0/PHASE0_REPORT.md` §7; `e36aa9c`.
+
+## 2026-11-23 — Propostas de arquitetura por estados (TDF-II) e auditorias
+
+- **Diretriz do usuário:**
+  - o objetivo é ganho de **velocidade e de arquitetura** mantendo os
+    **expoentes reais** (a identidade do AEGIS);
+  - embarcar código não é o objetivo.
+- **Documentos:**
+  - 08 (realização em estilo TDF-II, ponto fixo);
+  - 09 (outro agente: estados transpostos);
+  - 10 (auditoria do 09; proposta de ajuste por estatísticas deslocáveis);
+  - 11 (outro agente: realização transposta adaptativa);
+  - 12 (auditoria do 11).
+- **Revisão externa da §10 do documento 10:**
+  - acertou dois pontos: colunas do denominador (−y·φ) não são deslocáveis,
+    porque N·D e D·D dependem de dois atrasos;
+  - e o cache precisa ser medido antes de se prometer O(N·K).
+- **Decisões:**
+  - ordem P0 (medir) → P1 (exato) → P2′ (ajuste rápido) → P6 (refino por
+    simulação);
+  - a "Passada A" do 11 (gradiente em fluxo) foi descartada, porque perde
+    para a solução exata em colunas mal condicionadas.
+- Fontes: `3f84d2c`, `32e0369`, `adc1ee9`, `b783087`.
+
+## 2026-11-24 — P0: onde o tempo é gasto (medido)
+
+- Build instrumentado, idêntico bit a bit ao congelado (custo de 2 %).
+- **Modelos grandes:**
+
+| Parte da avaliação | Fração do tempo |
+|---|---|
+| Ajuste por QR | 26–35 % |
+| ERR completo, que não entra no fitness | 25–27 % |
+| ERR por grupo | 21–23 % |
+| Montagem de Ψ | 15–19 % |
+| Simulação livre | ≤ 2 % |
+| Fora da avaliação | 0,5–3 % |
+
+- **Cache de estatísticas deslocáveis (P2′b):** acerto simulado de 50–60 %,
+  com 7,8–72 milhões de chaves. Inviável; **descartado com dados**.
+- **[artigo]** a realização em estados para a simulação não acelera,
+  porque o custo está no ajuste e no ERR.
+- Fontes: `docs/architecture/13_P0_PROFILING.md`; `ba24dc3`.
+
+## 2026-11-25 — P1: otimizações exatas
+
+- **Mudanças:**
+  - ERR completo só no avaliador canônico;
+  - cache de séries de potência, com Ψ montada por linhas;
+  - QR de Householder percorrendo a matriz por linhas.
+- **Resultado:** idêntico bit a bit ao binário congelado em 7 de 7
+  comparações (CT, WH, SB e modos `signed`/`legacy`); **1,8–2,6× mais
+  rápido**.
+- Fontes: `experiments/perf/PERF_REPORT.md`; `0af456d`.
+
+## 2026-11-25 — P2′a: ajuste pelo Gram centrado (pré-registrado)
+
+- **Mudança:** Gram centrado + Cholesky com descarte de colunas na ordem do
+  QR, ERR por grupo no espaço K×K e *fallback* para Householder. Usado só
+  nas ilhas; o campeão é sempre certificado pelo QR.
+- **Auditoria por candidato:**
+  - caminho rápido em 100 % dos candidatos (2 *fallbacks* em 60 015);
+  - descarte de colunas idêntico ao do QR;
+  - p99 de |ΔSSE|/SSE ≤ 4,7e−9.
+- **Qualidade com sementes pareadas contra o E3 (critério de equivalência
+  atingido):**
+
+| | Razão do RMSE de validação | Campeões idênticos | Ganho de tempo |
+|---|---|---|---|
+| CT | 1,000 | 10 de 10 | 6,5× |
+| WH | 1,010 | 5 de 10 | 14,5× |
+| SB | 0,965 | 4 de 10 | 17,3× |
+
+- **[artigo]** uma execução grande no WH cai de cerca de 7 h para cerca
+  de 30 min, sem mudar a qualidade.
+- **[limitação]** o paralelismo diferiu entre o E3 e o P2′a; os tempos
+  são ordem de grandeza.
+- **Desvio:** WH e SB foram reiniciados com paralelismo 3 minutos depois de
+  começar, sem resultados.
+- Fontes: `experiments/perf/P2A_PREREG.md` (`dba3e22`), `PERF_REPORT.md`.
+
+## 2026-11-25 — P6: refino do campeão por erro de simulação (pré-registrado)
+
+- **Método:** LM sobre o erro de simulação livre no treino, com
+  sensibilidades exatas para modelos **racionais**, veto de admissibilidade
+  e escolha da iteração na primeira metade da validação (V_A). A medida é a
+  segunda metade (V_B).
+- **Critério atingido em 2 de 3** (célula `mr39_zero_simulation`):
+
+| | Mediana de V_B (refinado / original) | Antes → depois |
+|---|---|---|
+| WH | 0,873 | 11,0 → 9,5 mV |
+| SB | 0,841 | 0,36 → 0,29 mV |
+| CT | 1,000 | sem ganho |
+
+- No WH e no SB, o refino melhorou 15 de 16 células e não piorou nenhuma.
+- **Achado de estabilidade [artigo]:** 3 de 10 campeões da melhor célula do
+  E3 no CT divergem em simulação livre **no treino**, embora sejam estáveis
+  na validação. Motivou o veto checando também o treino.
+- **Desvio:** um defeito da ferramenta (fator de entrada com expoente 0,5 em
+  x = 0 marcado como não diferenciável) foi corrigido antes de ver
+  resultados de refino; a execução foi refeita do zero.
+- Fontes: `experiments/p6/P6_PREREG.md` (`01d62e6`), `P6_REPORT.md`
+  (`26ed134`).
+
+## 2026-11-26 — Núcleo: P1 e P2′a aplicados; veto (M9) e refino final
+
+- **P1 e P2′a no código-fonte** (`0af456d`). Opções novas, todas desligadas
+  por padrão, com a saída padrão idêntica ao 1.1.0:
+  - `fitMethod`;
+  - `admissibilityVeto` + `vetoTopK`: admissível = sem divergência no treino
+    e na validação inteiros e |D| ≥ 1e−12; na promoção do campeão, os 5
+    melhores de cada ilha concorrem, e um admissível sempre vence um
+    inadmissível;
+  - `finalRefine` = `simulation` (o P6 no núcleo).
+- **Testes:** `core_tests` 96/0. Fumaça no CT: os campeões das sementes 23 e
+  26, que divergiam no treino no E3, foram trocados por admissíveis.
+- Fontes: `f2d6bf7`.
+- **[limitação]** os binários de `cpp/build` correspondem ao código de
+  `adc1ee9`; o build novo fica em `cpp/build_a1`.
+
+## 2026-11-26 — Agentes atualizados e cataclismo
+
+- **Agentes:** os três (UCB1, fuzzy, LLM) passam a ver a configuração da
+  busca e a admissibilidade do campeão.
+  - Fuzzy `expert-v2`: regra nova "sem campeão admissível → η" e a regra de
+    θ desligada no modo `simulation`, onde θ não tem efeito.
+  - Não há agente de rede neural no código.
+  - Fonte: `ca765b6`.
+- **Cataclismo:** `triggerRestart` passa a aceitar fração até 1,0. A elite
+  e o campeão são sempre preservados (CHC, Eshelman 1991).
+  - **Terminologia [artigo]:**
+    - convergência prematura = colapso por perda de diversidade (deriva);
+    - estagnação = população diversa que não progride (Lampinen e Zelinka,
+      2000).
+
+## 2026-11-26 — A1: pré-registro e congelamento
+
+- **Decisão do usuário:** usar o melhor pacote do E3 e só abrir os testes do
+  WH e do SB depois de congelar o desenho.
+- **Braço A1:** pacote E3 (penalidades zero, teto 39, `simulation`) +
+  `fitMethod` = `normal` + veto + refino final. Comparação com o
+  `aegis_full` do 1.1.0, mesmos dados, sementes 1–10 e orçamentos.
+- **Gate primário:** no WH e no SB, mediana da razão de teste ≤ 0,90, com
+  Wilcoxon pareado exato, unilateral, e Holm < 0,05.
+- **Congelado em `f51b8a7`**, antes de qualquer execução. O script de
+  análise foi conferido com dados sintéticos. A primeira tentativa falhou
+  sem rodar nada (diretório inexistente) e foi relançada às 07:41.
+- Fontes: `experiments/a1/A1_PREREG.md`.
+
+## 2026-11-26 — CAC: controlador adaptativo de convergência (desenvolvimento)
+
+- **Pedido do usuário:**
+  - um controlador que, a cada bloco de iterações, ajuste os parâmetros para
+    extrair o máximo da convergência;
+  - que **estime quando agir de novo**;
+  - e que atue em **todos** os parâmetros do sistema.
+- **Desenho (doc 14):**
+  - braços lidos do esquema de ações do núcleo (16 parâmetros, ± passo e
+    "não agir");
+  - modelo de convergência por Theil–Sen sobre o log RMSE de validação do
+    campeão;
+  - horizonte h até a próxima decisão, com eventos que antecipam;
+  - recompensa = ganho além do previsto;
+  - Thompson sampling com prior das regras fuzzy.
+- **v1 (desfavorável):** pior que sem agente nas 3 sementes do CT (validação
+  0,72 / 0,85 / 0,64 contra 0,59 / 0,66 / 0,49 V); campeões encolheram para
+  K = 5.
+- **v2 (desfavorável)**, mecanismo identificado:
+  - a regra fuzzy R6 subiu γ de 0 para 0,06 num único passo;
+  - a seleção eliminou os modelos grandes de toda a população, de forma
+    **irreversível** (voltar γ a 0 não recupera nada);
+  - a tabela treinada entre execuções não ajudou, porque a recompensa é
+    míope.
+- **v3:**
+  - pesos andam em décimos do passo máximo;
+  - custo de afastamento do pacote;
+  - prior fuzzy só para os operadores do DE.
+  - **Primeiro resultado favorável:** o campeão no fim da busca é melhor
+    que sem agente nas 3 sementes (RMSE normalizado 0,082 / 0,098 / 0,060
+    contra 0,109 / 0,105 / 0,082), com K = 24–30.
+  - Mais 7 sementes (24–30) em execução.
+- **Achado sobre o A1:** num caso do CT, o refino final escolheu por V_A e
+  V_B explodiu (RMSE de validação reportado 2,82 V). É o risco do P6 com a
+  validação curta. **[limitação]** para o CT no A1; correção candidata:
+  exigir que nenhuma das duas metades piore.
+- Fontes: `5587fea`, `f480a71`, `f70923b`.
+
+## 2026-11-26 — Plano empírico de treino do CAC
+
+- **Pedido do usuário:** testes para o CAC aprender empiricamente o que cada
+  um dos 16 parâmetros faz e quando agir.
+- **Desenho (doc 15):** **ramificação determinística**. A mesma semente é
+  idêntica até a geração g; num ramo se aplica uma ação, o outro segue sem
+  mudança. Usam-se placebos (parâmetros inertes no pacote A1) para medir o
+  ruído caótico.
+- **Estágios:**
+  - T1: mapa de impacto (≈ 1 440 ramos no CT);
+  - T2: dose e momento;
+  - T3: transferência para WH e SB;
+  - T4: modelo de impacto e CAC v4;
+  - T5: validação.
+- **T0 executado:** a ação marcada para depois do fim reproduz o controle bit
+  a bit; o ramo em g = 150 diverge exatamente na geração 151. **[artigo]**
+  medição causal do efeito de cada hiperparâmetro.
+- Fontes: `docs/architecture/15_PLANO_TREINO_CAC.md`; `2408df0`.
+
+---
+
+## Pendências e decisões do usuário (atualizado em 2026-11-26)
+
+- Resultado do A1 (em execução) e a abertura dos testes do WH e do SB
+  (logo depois).
+- CAC: sementes 24–30 da v3 em execução; T1–T5 depois do A1.
+- Correção do refino final no CT (exigir V_A e V_B sem piora): candidata
+  para depois do A1.
+- Estratégia do artigo, licenças dos dados WH/SB, agente LLM pago.

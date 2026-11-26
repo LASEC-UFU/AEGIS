@@ -296,6 +296,7 @@ dart analyze lib test tool    # sem problemas
   agente) e auditorias 10 e 12 em `docs/architecture/`. Ordem acordada:
   P0 profiling → P1 otimizações exatas → P2′a/b ajuste por Gram/estatísticas
   deslocáveis → P6 refino por erro de simulação (10 §11.4, 12 §6).
+- **Diário de pesquisa para o artigo:** `docs/paper/DIARIO_PESQUISA.md`, atualizado a cada ação (pedido do usuário, 2026-11-26).
 - **Núcleo atualizado (2026-11-26, `0af456d` e `f2d6bf7`):** P1 e P2′a aplicados ao código;
   opções novas `fitMethod` (`qr`/`normal`), `admissibilityVeto` + `vetoTopK` e `finalRefine`
   (`none`/`simulation`), todas desligadas por padrão (saída padrão idêntica ao 1.1.0).
