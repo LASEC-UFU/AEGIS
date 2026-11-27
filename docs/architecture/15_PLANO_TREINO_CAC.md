@@ -428,3 +428,67 @@ das execuções: `tool/experiments/cac_t5_analysis.dart`.
   3. não ser pior que o v3 na mediana em nenhum sistema.
   - Com 5 sementes, o WH e o SB não permitem significância; o critério
     nesses dois é de não-dano.
+
+## 12. Resultado do T5 (validação; 2026-11-27)
+
+Saída da análise congelada: `experiments/cac/T5_RESULTS.md`.
+
+**Integridade:**
+- 60 de 60 execuções completas: CT 30, WH 15, SB 15.
+- Término: CT 05:43, WH 07:10, SB 08:36.
+
+**Resultados** (d = log agente / sem agente, mediana; negativo = melhor):
+
+| Sistema | Medida | v4 vs sem agente | v3 vs sem agente | v4 vs v3 |
+|---|---|---|---|---|
+| CT | fim da busca | **−0,151** (8 melhores / 2 piores) | −0,216 (8/1, p = 0,039) | +0,081 (5/5) |
+| CT | final reportada | **+0,329** (2/8) | +0,188 (4/5) | +0,300 |
+| WH | fim da busca | **+0,205** (1/4) | +0,006 (2/3) | +0,124 (1/4) |
+| WH | final reportada | +0,131 (0/5) | +0,053 (1/4) | +0,086 |
+| SB | fim da busca | +0,007 (2/3) | +0,031 (1/4) | −0,058 (3/2) |
+| SB | final reportada | +0,017 (1/4) | +0,050 (1/4) | −0,019 |
+
+**Critério da §11.3: não atingido.**
+1. Mediana negativa no CT (medida principal): **sim** (−0,151).
+2. Não-dano no WH e no SB: **não**.
+   - WH: mediana +0,205, com 4 de 5 sementes piores.
+   - SB: mediana +0,007, mas 3 de 5 sementes piores (o limite era 2).
+3. Não ser pior que o v3 em nenhum sistema: **não** (CT +0,081, WH +0,124).
+
+**Análise não prevista no registro (exploratória):**
+- **O portão funcionou como desenhado.**
+  - No WH e no SB, o gap ficou entre −0,04 e +0,04 e o portão nunca abriu.
+    O v4 não mexeu em nenhum peso.
+  - No CT, β só subiu com o portão aberto e voltou à âncora quando ele
+    fechou.
+- **O dano no WH vem de poucas ações em operadores do DE.** Foram de 2 a 8
+  ações por execução (F, CR, migração, mutação estrutural, imigrantes,
+  reinício parcial). O T1 mediu essas ações como "dentro do ruído", mas só
+  no CT.
+  - Exemplos: na semente 35, só F em g = 26 e CR em g = 126 deram um campeão
+    27 % pior; na semente 33, só migração e mutação estrutural, 30 % pior.
+  - No WH com orçamento completo, os campeões sem agente são muito
+    parecidos entre sementes (0,0120–0,0136). Perturbar a trajetória quase
+    só pode piorar.
+- **CT, métrica final:** o v4 melhora o campeão da busca em 8 de 10
+  sementes, mas a validação final reportada piora em 8 de 10. É a variância
+  do pós-processamento já identificada (§7 e diário de 2026-11-26), maior
+  com os modelos que o v4 produz. O A1, e portanto o T5, roda sem
+  `postProcessGuard`.
+
+**Leitura:**
+- O mapa medido acertou nos pesos: no WH e no SB, o v4 não repetiu o dano
+  de β, δ e γ.
+- Ainda assim, "dentro do ruído" no CT não significa "inofensivo" em outro
+  sistema. Um braço com efeito médio nulo no CT ainda desloca a trajetória
+  caótica, e no WH esse deslocamento custa.
+- Nenhuma versão do CAC melhora o pacote A1 de forma consistente nos três
+  sistemas.
+
+**Próximos passos possíveis** (a decidir; não testar de novo nestas
+sementes):
+- **v4.1:** sem ganho medido, não agir. Isso significa mascarar os
+  operadores do DE e os reinícios, ou exigir evidência positiva na tabela
+  antes de oferecê-los, e manter só β (com o portão) e α.
+- **CT:** testar com `postProcessGuard` ligado, que é tema do A2.
+- **Validação nova:** novas sementes (36–45 no WH e no SB, 61–70 no CT).

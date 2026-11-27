@@ -406,3 +406,13 @@ protocol below is run once; every result is reported.
   +1.7), and β worsens less; on CT the same arms are within noise or helpful
   (final metric: α and late β help, δ and γ hurt). Results:
   `experiments/cac/T2_*.md`, doc 15 §10.
+- CAC T4 (2026-11-27): overfitting gate gapOS = log(val/train one-step) >= 0.15
+  separates CT from WH/SB (leave-one-system-out: no raises authorized on the
+  held-out WH or SB); CAC v4 built from the measured map
+  (`experiments/cac/T4_FEATURES.md`, doc 15 §11).
+- CAC T5 (2026-11-27, 60 runs, validation only): pre-registered criterion NOT
+  met. CT end-of-search v4 −0.151 (8/10 better) but worse than v3; WH +0.205
+  (4/5 worse); SB +0.007 (3/5 worse). The gate never opened on WH/SB; the harm
+  came from a few DE-operator moves. CT final reported validation worse in
+  8/10 (post-processing variance, no postProcessGuard). Results:
+  `experiments/cac/T5_RESULTS.md`, doc 15 §12.

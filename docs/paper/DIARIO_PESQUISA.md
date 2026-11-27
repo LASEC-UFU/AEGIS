@@ -444,11 +444,39 @@ Registro técnico detalhado (em inglês): `experiments/EXPERIMENT_LOG.md`.
 
 ---
 
+## 2026-11-27 — CAC T5: resultado (v4 contra o A1 sem agente e contra o v3)
+
+- 60 de 60 execuções completas; só validação. Análise congelada antes:
+  `experiments/cac/T5_RESULTS.md`.
+- [artigo] **Critério registrado: não atingido.**
+  - CT, fim da busca: v4 −0,151 (8/10 melhores), mas pior que o v3
+    (−0,216).
+  - WH: dano, +0,205 com 4 de 5 sementes piores.
+  - SB: +0,007, com 3 de 5 piores (o limite era 2).
+- [artigo] **O portão funcionou como desenhado.** No WH e no SB ele nunca
+  abriu (gap entre −0,04 e +0,04) e nenhum peso foi mexido. O dano no WH
+  veio de 2 a 8 ações em operadores do DE, medidos como "ruído" só no CT. Um
+  efeito médio nulo não quer dizer inofensivo: perturbar a trajetória
+  caótica no WH, onde os campeões sem agente são muito parecidos entre
+  sementes, quase só pode piorar. (Análise exploratória, não prevista no
+  registro.)
+- [artigo] **CT:** o campeão da busca melhora em 8 de 10 sementes, mas a
+  validação final reportada piora em 8 de 10. É a variância do
+  pós-processamento; o A1 roda sem `postProcessGuard`.
+- [limitação] 5 sementes no WH e no SB; as conclusões sobre a causa do dano
+  são exploratórias.
+- Próximos passos possíveis (decisão do usuário), em sementes novas:
+  - v4.1, que só age onde há ganho medido;
+  - CT com `postProcessGuard`.
+- Fonte: doc 15 §12.
+
+---
+
 ## Pendências e decisões do usuário (atualizado em 2026-11-27)
 
 - ~~Resultado do A1 e abertura dos testes do WH e do SB~~ feitos em 2026-11-26.
 - Estratégia do artigo à luz do A1 (gate atingido no WH e no SB; CT pior).
-- CAC: T2+T3 e T4 concluídos (2026-11-27); T5 (validação do v4) em execução.
+- CAC: T5 concluído (2026-11-27), critério não atingido; decidir entre v4.1 (só agir com ganho medido), CT com postProcessGuard ou encerrar o CAC como resultado negativo.
 - A2 candidato: alinhar a validação da busca com a reportada e proteger o
   pós-processamento (problema do CT).
 - Licenças dos dados WH/SB, agente LLM pago.
