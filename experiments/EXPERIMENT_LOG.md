@@ -416,3 +416,11 @@ protocol below is run once; every result is reported.
   came from a few DE-operator moves. CT final reported validation worse in
   8/10 (post-processing variance, no postProcessGuard). Results:
   `experiments/cac/T5_RESULTS.md`, doc 15 §12.
+- CAC T6 (2026-11-27, 50 runs, validation only, new seeds): pre-registered
+  criterion NOT met. CT cac41_guard vs none_guard: end-of-search −0.184 (8/10
+  better) but final reported validation +0.604 (7/10 worse); WH and SB: the
+  gate never opened, 0 actions, identical to control (non-harm met).
+  postProcessGuard alone on CT: final better 4/10, never worse. Exploratory
+  diagnosis: v4.1 (β↑, α↑) yields smaller champions (K 5–22 vs 24–34) that win
+  under the search validation convention but lose under the reported one.
+  Results: `experiments/cac/T6_RESULTS.md`, doc 15 §14.

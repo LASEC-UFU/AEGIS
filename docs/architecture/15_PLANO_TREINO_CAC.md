@@ -547,3 +547,49 @@ Script: `experiments/cac/run_t6.sh <benchmark>`. Análise, congelada antes:
 
 **Desfecho secundário:** efeito do guard sozinho no CT (`none_guard` vs
 `none`).
+
+## 14. Resultado do T6 (validação; 2026-11-27)
+
+Execução completa: CT 30, WH 10 e SB 10 execuções, sem erros no log
+(`experiments/results_cac/t6_run.log`). Tabela da análise congelada:
+`experiments/cac/T6_RESULTS.md`.
+
+| sistema | comparação | n | mediana d fim | melhores / piores | mediana d final | melhores / piores (final) |
+|---|---|---|---|---|---|---|
+| CT | `cac41_guard` vs `none_guard` | 10 | −0,184 | 8 / 2 | **+0,604** | 3 / 7 |
+| CT | `none_guard` vs `none` | 10 | 0,000 | — | 0,000 | 4 / 0 |
+| WH | `cac41_guard` vs `none_guard` | 5 | 0,000 | 0 / 0 (0 ações) | 0,000 | 0 / 0 |
+| SB | `cac41_guard` vs `none_guard` | 5 | 0,000 | 0 / 0 (0 ações) | 0,000 | 0 / 0 |
+
+**Critério pré-registrado (§13.2): NÃO atendido.**
+- Item 2 (não-dano no WH e no SB) atendido: o portão nunca abriu e o v4.1
+  não agiu (execuções idênticas ao controle).
+- Item 1 falhou no CT:
+  - o fim da busca melhora (8/10);
+  - a validação final reportada piora (+0,604, 7/10 piores).
+
+**Desfecho secundário.** O guard sozinho nunca piora o CT: 4 sementes
+melhoram na validação final, 6 ficam iguais, e o fim da busca não muda.
+
+**Diagnóstico** (exploratório, depois da análise congelada):
+- **Ações do CAC.** No CT, o v4.1 agiu de 2 a 9 vezes por semente, quase
+  sempre com β↑ (penalidade do denominador) e às vezes α↑.
+- **Modelos menores.** Os campeões ficaram bem menores: K de 5 a 22, contra
+  24 a 34 no controle.
+- **Duas convenções de validação.** Esses modelos são melhores na
+  convenção de validação da busca:
+  - simulação a partir do atraso máximo do próprio modelo, dentro do bloco
+    de validação (`freeRunValFull`);
+  - piores na convenção reportada: simulação a partir de trainEnd −
+    maxDelay, sobre a validação inteira.
+  - Exemplos:
+    - semente 80: fim 0,0815 e final 0,2183;
+    - semente 78: fim 0,0663 e final 0,3568.
+- **O pós-processamento não causou a piora.** O guard só aceita mudanças
+  que não pioram a convenção reportada, então o campeão já saiu da busca
+  pior nela.
+- **Conclusão:** o controlador otimiza um sinal (validação da busca) que no
+  CT discorda da métrica reportada. É o caso de "sinal errado" levantado
+  pelo usuário. A correção candidata é dar ao controlador, e à escolha do
+  campeão, a validação na convenção reportada. Isso exige desenho próprio e
+  ainda não foi testado.

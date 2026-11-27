@@ -578,7 +578,7 @@ Registro técnico detalhado (em inglês): `experiments/EXPERIMENT_LOG.md`.
 
 - ~~Resultado do A1 e abertura dos testes do WH e do SB~~ feitos em 2026-11-26.
 - Estratégia do artigo à luz do A1 (gate atingido no WH e no SB; CT pior).
-- CAC: T5 concluído (critério não atingido); T6 (v4.1 + postProcessGuard, sementes novas) em execução.
+- CAC: T5 e T6 concluídos (critério não atingido em ambos; T6: sinal de validação da busca discorda da métrica reportada no CT). Próximo: ajustes no Dart para os 45 reguladores e T7.
 - A2 candidato: alinhar a validação da busca com a reportada e proteger o
   pós-processamento (problema do CT).
 - Licenças dos dados WH/SB, agente LLM pago.
