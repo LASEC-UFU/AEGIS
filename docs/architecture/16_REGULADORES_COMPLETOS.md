@@ -114,3 +114,70 @@ P6) e `postProcessGuard` (0/1).
   - o CAC v4 os oferece com prior levemente negativo.
   - Próximo estágio de treino (T7): medir o impacto desses reguladores no
     CT, no WH e no SB, com ramificação determinística como no T1.
+
+## 5. Ajuste de semântica: `pmax` e `maxDelay` (2026-11-27, antes de qualquer uso)
+
+**Problema.** Na fase 0, o currículo reduz temporariamente o espaço de
+busca: atraso a 50 % e `pmax` inicial. O regulador lia esse valor reduzido.
+- Exemplo: um "+10" na fase 0 viraria 30, e a passagem para a fase 1
+  fixaria o atraso em 30 em vez de 50.
+
+**Correção.** O valor do regulador passa a ser o **alvo** do espaço de
+busca:
+- **na fase 0**, a ação muda só o alvo, que o currículo aplica ao entrar na
+  fase 1. A exceção é um alvo mais apertado que a restrição atual, que vale
+  na hora;
+- **da fase 1 em diante**, a ação vale imediatamente.
+
+**Verificação:**
+- testes: core 96/96, API 92/92, phase0 11/11;
+- bit-identidade sem ações contra o `build_dev` no CT conferida de novo:
+  idêntico;
+- teste rápido com o agente roteirizado (CT, semente 81, fora do T7):
+  - 5 de 5 ações aceitas: teto 59 → 69, atraso 40 → 50, população
+    50 → 100, semeadura pelo campeão e avanço de fase;
+  - o campeão chegou a 41 regressores.
+
+## 6. T7: mapa de impacto dos novos reguladores (registrado antes de rodar)
+
+Script: `experiments/cac/run_t7.sh <benchmark>`. Análise:
+`tool/experiments/cac_t1_analysis.dart` (a mesma do T1 a T3).
+
+**Configuração comum:**
+- ramificação determinística, como no T1: o braço é idêntico ao controle
+  até a geração g, onde o agente roteirizado aplica a ação;
+- só validação, build `cpp/build_cap`;
+- pacote A1 com `postProcessGuard`;
+- teto de atraso 60 com início em 40, em todos os braços, inclusive o
+  controle.
+
+| | CT | WH | SB |
+|---|---|---|---|
+| Sementes | 81–90 | 66–70 | 66–70 |
+| Orçamento | 3×10⁵ | 6×10⁴ (≈ 400 gerações) | 6×10⁴ |
+| Momentos g | 100 e 400 | 50 | 50 |
+
+**Braços (23 ramificados):**
+
+| Grupo | Braços |
+|---|---|
+| Capacidade | `maxRegressors` +10, +20 (duas ações com 25 gerações de intervalo) e −10; `maxTermsPerReg` +1; `maxDelay` +10 e +20; `pmax` ±1; `denominatorProbability` ±0,2 |
+| Busca | população +50 e −25; elite +2; mutação de variável +0,2; JADE p +0,1; rand/1; hipermutação desligada; papéis das ilhas desligados |
+| Objetivo e eventos | modo de erro um passo; semeadura pelo campeão (0,2); poda do campeão; avanço de fase |
+| Placebo | θ + 0,5 (inerte em simulação) |
+
+**Braços estáticos de capacidade** (sem agente, desde o início): teto 59 e
+teto 79. Eles respondem diretamente se há folga de capacidade.
+
+**Medidas:**
+- principal: campeão de validação no fim da busca;
+- também: validação final reportada e ΔK.
+
+**Pergunta:**
+- quais reguladores novos têm efeito fora da faixa de ruído do placebo, em
+  qual sistema e em qual direção;
+- em particular, se mais capacidade melhora o WH e o SB (gap ≈ 0) e piora o
+  CT (gap alto).
+
+**Custo:** CT 490 execuções, WH e SB 130 cada, com 5 processos, cerca de
+12–14 h. Roda depois do T6.

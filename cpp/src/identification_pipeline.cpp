@@ -577,6 +577,10 @@ double IdentificationPipeline::current_value_locked(const std::string& name) con
     if (name == "alpha")              return cfg_.weights.alpha;
     if (name == "triggerRestart" || name == "advancePhase" || name == "seedFromChampion" ||
         name == "pruneChampion")      return std::numeric_limits<double>::quiet_NaN();
+    // pmax / maxDelay regulators act on the search-space target; during
+    // curriculum phase 0 the search runs on a reduced space (doc 16 §3.1).
+    if (de_ && name == "pmax")       return search_pmax_;
+    if (de_ && name == "maxDelay")   return search_max_delay_;
     if (name == "errorMode")            return cfg_.weights.error_mode;
     if (name == "inputContributionMin") return cfg_.input_contribution_min;
     if (name == "phaseStagnationLimit") return cfg_.phase_stagnation_limit;
@@ -1135,10 +1139,16 @@ void IdentificationPipeline::apply_action_locked(ActionRecord& a) {
         de_->apply_tuning(a.param, v);
         if (a.param == "stagnationLimit") cfg_.de.stagnation_limit = static_cast<int>(v);
     } else if (spec->kind == "structure" || spec->kind == "search") {
-        de_->apply_structure(a.param, v);
-        // Keep the curriculum's post-phase-0 search space in step with the regulator.
-        if (a.param == "pmax")     search_pmax_ = de_->tuning_value("pmax");
-        if (a.param == "maxDelay") search_max_delay_ = static_cast<int>(de_->tuning_value("maxDelay"));
+        if (a.param == "pmax" || a.param == "maxDelay") {
+            // Target of the search space; in curriculum phase 0 the reduced
+            // space is kept unless the new target is tighter (doc 16 §3.1).
+            if (a.param == "pmax") search_pmax_ = v;
+            else search_max_delay_ = static_cast<int>(v);
+            const double live = de_->tuning_value(a.param);
+            if (phase_.load() != 0 || v < live) de_->apply_structure(a.param, v);
+        } else {
+            de_->apply_structure(a.param, v);
+        }
     } else if (spec->kind == "objective") {
         if (a.param == "errorMode")            cfg_.weights.error_mode = v >= 0.5 ? 1 : 0;
         else if (a.param == "inputContributionMin") {
