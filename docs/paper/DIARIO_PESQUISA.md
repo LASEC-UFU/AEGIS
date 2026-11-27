@@ -574,6 +574,32 @@ Registro técnico detalhado (em inglês): `experiments/EXPERIMENT_LOG.md`.
 
 ---
 
+### 2026-11-27 — Resultado do T6 (CAC v4.1 + postProcessGuard)
+
+- **Execução.** T6 concluído sem erros: CT 30, WH 10 e SB 10 execuções,
+  sementes novas, só validação. Análise congelada:
+  `experiments/cac/T6_RESULTS.md`; doc 15 §14.
+- [artigo] **Critério pré-registrado NÃO atendido.**
+  - CT, `cac41_guard` vs `none_guard`:
+    - fim da busca −0,184 (8/10 melhores);
+    - validação final reportada +0,604 (7/10 piores).
+  - WH e SB: o portão de sobreajuste nunca abriu e houve 0 ações; as
+    execuções ficaram idênticas ao controle (não-dano atendido).
+- [artigo] **O `postProcessGuard` sozinho** melhora a validação final do CT
+  em 4/10 e nunca piora.
+- [limitação] **Diagnóstico exploratório, feito depois da análise
+  congelada.**
+  - O v4.1 agiu com β↑ e α↑ e produziu campeões menores (K 5–22 contra
+    24–34).
+  - Esses campeões vencem na convenção de validação da busca (simulação a
+    partir do atraso do próprio modelo), mas perdem na convenção reportada
+    (simulação a partir de trainEnd − maxDelay).
+  - O guard descarta que a causa seja o pós-processamento.
+  - O controlador otimiza um sinal que, no CT, discorda da métrica
+    reportada: confirma a hipótese do usuário de "sinal errado".
+  - Correção candidata, ainda não testada: dar ao controlador, e à escolha
+    do campeão, a validação na convenção reportada.
+
 ## Pendências e decisões do usuário (atualizado em 2026-11-27)
 
 - ~~Resultado do A1 e abertura dos testes do WH e do SB~~ feitos em 2026-11-26.
