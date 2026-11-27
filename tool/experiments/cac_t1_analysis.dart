@@ -113,7 +113,8 @@ void main(List<String> args) {
     rows[a] = {'g': g, 'n': n, 'rejected': rejected, 'dEnd': dEnd, 'dFinal': dFinal, 'dK': dK, 'dLag': dLag};
   }
   final lo = quantile(placebo, 0.05), hi = quantile(placebo, 0.95);
-  final out = StringBuffer('# CAC T1: mapa de impacto (CT, validação)\n\n'
+  final bench = root.split(RegExp(r'[/\\]')).where((p) => p.isNotEmpty).last;
+  final out = StringBuffer('# CAC: mapa de impacto ($bench, validação)\n\n'
       'Efeito = log(RMSE ramo / RMSE controle) do campeão; negativo = melhor. Medida principal: fim da busca.\n\n'
       '**Faixa de ruído (placebos, fim da busca):** p5 = ${f(lo)}, p95 = ${f(hi)}, mediana |d| = ${f(median(placebo.map((x) => x.abs()).toList()))}, n = ${placebo.length}.\n\n'
       '| braço@g | n | rejeitadas | mediana d fim | melhores | sign p | fora da faixa placebo (melhor/pior) | '

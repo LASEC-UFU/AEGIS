@@ -385,11 +385,40 @@ Registro técnico detalhado (em inglês): `experiments/EXPERIMENT_LOG.md`.
 
 ---
 
-## Pendências e decisões do usuário (atualizado em 2026-11-26)
+## 2026-11-27 — CAC T2+T3: resultado (dose e momento dos pesos, CT, WH e SB)
+
+- 820 de 820 execuções completas, sem travamentos com 5 processos. Só
+  validação.
+- [artigo] **O efeito dos pesos de penalidade depende do sistema:**
+  - no WH e no SB (20 000 amostras), subir δ ou γ, mesmo na menor dose
+    (+0,02 e +0,002), piora o campeão em 5/5 sementes e em todos os
+    momentos, com log da razão de +0,4 a +1,7;
+  - β também piora, com efeito menor;
+  - no CT (819 amostras), os mesmos braços ficam dentro do ruído ou ajudam;
+  - na métrica final do CT, α e β tardio ajudam, e δ e γ pioram.
+- [artigo] Coerente com o E3: penalidades zero foram o melhor pacote no WH e
+  no SB.
+- [artigo] Transiente no CT: β e δ pioram nas primeiras 25–50 gerações e só
+  depois melhoram. O horizonte para julgar uma ação de peso deve ser de
+  ≈ 200 gerações.
+- Consequência para o CAC v4: subir β, δ ou γ exige um sinal medido de
+  sobreajuste; sem ele, o CAC mantém os pesos. α fica permitido com passo
+  pequeno.
+- [limitação]
+  - 5 sementes e orçamento de 3×10⁴ no WH e no SB;
+  - sem correção para comparações múltiplas;
+  - a faixa de ruído do CT é larga (−0,41 a +0,25).
+- Ajuste de ferramenta: o título da análise passou a usar o nome do
+  benchmark. A análise segue reproduzindo o T1 idêntico.
+- Fonte: doc 15 §10; `experiments/cac/T2_*.md`.
+
+---
+
+## Pendências e decisões do usuário (atualizado em 2026-11-27)
 
 - ~~Resultado do A1 e abertura dos testes do WH e do SB~~ feitos em 2026-11-26.
 - Estratégia do artigo à luz do A1 (gate atingido no WH e no SB; CT pior).
-- CAC: T2+T3 em execução; depois T4 (modelo de impacto → CAC v4) e T5.
+- CAC: T2+T3 concluído (2026-11-27); próximo: T4 (modelo de impacto → CAC v4) e T5.
 - A2 candidato: alinhar a validação da busca com a reportada e proteger o
   pós-processamento (problema do CT).
 - Licenças dos dados WH/SB, agente LLM pago.

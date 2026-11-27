@@ -399,3 +399,10 @@ protocol below is run once; every result is reported.
   search-end metric (δ hurts the reported metric); DE operators, restarts,
   η and stagnationLimit within the placebo noise band; ζ inert (curriculum
   floors). Results: `experiments/cac/T1_RESULTS.md`, doc 15 §8.
+- CAC T2+T3 completed (2026-11-27, 820 runs: CT 410, WH 205, SB 205; 5
+  processes, no crashes; validation only). Penalty-weight effects are
+  system-dependent: on WH and SB, raising δ or γ (even +0.02 / +0.002)
+  worsens the champion in 5/5 seeds at every time point (log ratio +0.4 to
+  +1.7), and β worsens less; on CT the same arms are within noise or helpful
+  (final metric: α and late β help, δ and γ hurt). Results:
+  `experiments/cac/T2_*.md`, doc 15 §10.

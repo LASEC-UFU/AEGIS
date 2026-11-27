@@ -256,3 +256,79 @@ ocorreram com 6).
 - o sinal do efeito de β, α e δ é o mesmo no CT, no WH e no SB?
 - a partir de que momento o efeito deixa de existir?
 - existe dose de γ que não prejudica?
+
+## 10. Resultado do T2+T3 (validação; 2026-11-27)
+
+Saídas: `experiments/cac/T2_cascaded_tanks.md`, `T2_wiener_hammerstein.md`,
+`T2_silverbox.md` (gerados por `tool/experiments/cac_t1_analysis.dart`).
+
+**Integridade:**
+- 820 de 820 execuções completas: CT 410, WH 205, SB 205.
+- Nenhum travamento do Dart com 5 processos; nenhuma ação rejeitada.
+- Término: CT 2026-11-26 21:55, WH 2026-11-27 00:20, SB 02:55.
+- No WH e no SB, o orçamento de 3×10⁴ dá ≈ 196 gerações. Logo, o momento
+  g = 150 está perto do fim da busca.
+
+**Faixa de ruído (placebo θ, fim da busca, p5 a p95, log):**
+
+| CT | WH | SB |
+|---|---|---|
+| −0,409 a +0,252 | −0,099 a +0,039 | −0,025 a +0,107 |
+
+**Efeito no fim da busca (mediana do log da razão; negativo = melhor):**
+
+| Braço | CT | WH | SB |
+|---|---|---|---|
+| β +0,025 / +0,05 / +0,25 | −0,29 a +0,03; dentro do ruído, exceto 9/10 melhores em 3 de 12 casos | **+0,07 a +0,35**, pior em todas as sementes e momentos | **+0,05 a +0,78**, pior na maioria; o pior momento é g = 150 |
+| α +0,05 / +0,25 | −0,24 a 0; 9/10 melhores só em α +0,05 @25 | −0,08 a +0,02 (ruído) | −0,17 a +0,10; 4/5 melhores em α +0,25 @60 e @150 (p = 0,375) |
+| δ +0,02 / +0,1 | −0,28 a −0,07; 9/10 melhores só em δ +0,02 @1200 | **+0,44 a +0,86**, 5/5 piores | **+1,19 a +1,67**, 5/5 piores |
+| γ +0,002 / +0,005 | −0,22 a +0,03 (ruído) | **+0,36 a +0,85**, 5/5 piores | **+1,02 a +1,43**, 5/5 piores |
+
+- **WH e SB:** δ e γ pioram em 5/5 sementes, em todos os momentos e já na
+  menor dose, sempre fora da faixa de ruído. Com 5 pares, p = 0,063 é o menor
+  valor possível do teste do sinal.
+  - O efeito cresce com a dose.
+  - K cai de 11 a 31 regressores.
+  - A métrica final pós-processada tem o mesmo sinal.
+  - β também piora, com efeito menor.
+- **CT:** quase todas as medianas são negativas, mas a faixa de ruído é
+  larga. Só 5 de 36 braços têm 9/10 sementes melhores (p = 0,021, sem
+  correção para comparações múltiplas).
+- **CT, métrica final pós-processada:**
+  - α melhora em todos os momentos (−0,06 a −0,43);
+  - β melhora quando aplicado em g = 400 ou 1200 (−0,16 a −0,42);
+  - δ e γ pioram (+0,03 a +0,33), como no T1.
+- **Transiente no CT:** β e δ pioram nas primeiras 25–50 gerações após a ação
+  e só depois melhoram. Logo, o horizonte para julgar uma ação de peso
+  precisa ser de ≈ 200 gerações.
+- **γ no CT:** nas doses mínimas, γ não piora o fim da busca (dentro do
+  ruído), ao contrário das doses maiores do T1. Ainda assim, piora a métrica
+  final.
+
+**Respostas às perguntas da §9:**
+1. **O sinal não é o mesmo nos três sistemas.**
+   - β, δ e γ (penalidades que reduzem K) ajudam ou são neutros no CT, que
+     tem 819 amostras de treino e sobreajusta.
+   - Os mesmos braços prejudicam claramente no WH e no SB, que têm 20 000
+     amostras e precisam de capacidade. Isso é coerente com o E3, onde
+     penalidades zero foram o melhor pacote no WH e no SB.
+   - α é o único peso sem dano claro em nenhum dos três.
+2. **Momento:**
+   - no WH e no SB não há momento seguro para subir β, δ ou γ;
+   - no CT, β tardio (g ≥ 400) é o único que melhora também a métrica final.
+3. **Não existe dose de γ inofensiva no WH e no SB:** +0,002 já piora 5/5.
+
+**Consequências para o CAC v4 (T4):**
+- β, δ e γ não podem ser subidos por padrão. Subir esses pesos exige um
+  sinal medido de sobreajuste, por exemplo:
+  - a diferença entre o erro de treino e o de validação em simulação livre;
+  - o número de amostras por parâmetro.
+- Sem esse sinal, o CAC deve manter os pesos e agir nos outros parâmetros.
+- α pode ficar como braço permitido, com passo pequeno.
+- O horizonte mínimo após uma ação de peso deve ser de ≈ 200 gerações no CT.
+
+**Limitações:**
+- No WH e no SB: 5 sementes e orçamento reduzido (3×10⁴, contra 1,5×10⁵ do
+  A1).
+- Sem correção para comparações múltiplas.
+- Só validação; nenhum dado de teste foi lido.
