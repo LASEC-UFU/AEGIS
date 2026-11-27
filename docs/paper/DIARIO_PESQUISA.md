@@ -472,11 +472,29 @@ Registro técnico detalhado (em inglês): `experiments/EXPERIMENT_LOG.md`.
 
 ---
 
+## 2026-11-27 — CAC v4.1 e desenho do T6 (com `postProcessGuard`)
+
+- Pedido do usuário: "pode seguir com o v4.1 e o postProcessGuard no T6".
+- **v4.1** (`measuredOnly`): só oferece braços com ganho medido (β ↑ e α ↑
+  com o portão aberto, e o retorno à âncora). Os demais braços precisam de
+  evidência positiva na tabela do próprio controlador.
+  - Consequência: com o portão fechado, ele não age.
+  - Testes: 45 de 45.
+- **T6 registrado antes de rodar** (doc 15 §13):
+  - sementes novas: CT 71–80, WH e SB 36–40;
+  - `cac41_guard` vs `none_guard`, e, no CT, também `none`;
+  - no CT, a medida principal passa a ser a validação final reportada;
+  - no WH e no SB, o critério é de não-dano.
+- Escolha registrada: o v4.1 foi desenhado depois de ver o T5. Por isso ele
+  é testado só em sementes que ainda não tinham sido usadas.
+
+---
+
 ## Pendências e decisões do usuário (atualizado em 2026-11-27)
 
 - ~~Resultado do A1 e abertura dos testes do WH e do SB~~ feitos em 2026-11-26.
 - Estratégia do artigo à luz do A1 (gate atingido no WH e no SB; CT pior).
-- CAC: T5 concluído (2026-11-27), critério não atingido; decidir entre v4.1 (só agir com ganho medido), CT com postProcessGuard ou encerrar o CAC como resultado negativo.
+- CAC: T5 concluído (critério não atingido); T6 (v4.1 + postProcessGuard, sementes novas) em execução.
 - A2 candidato: alinhar a validação da busca com a reportada e proteger o
   pós-processamento (problema do CT).
 - Licenças dos dados WH/SB, agente LLM pago.

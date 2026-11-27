@@ -37,6 +37,10 @@ class AdaptiveConvergenceController extends OptimizationAgent {
   final int version;
   final double overfitGate;
   final int gapWindow;
+  /// v4.1: offer only arms with a measured gain (impact map prior > 0, or a
+  /// positive mean reward over at least [minEvidence] uses in the table).
+  final bool measuredOnly;
+  final int minEvidence;
   final math.Random _rng;
 
   AdaptiveConvergenceController({
@@ -56,6 +60,8 @@ class AdaptiveConvergenceController extends OptimizationAgent {
     this.version = 3,
     this.overfitGate = 0.15,
     this.gapWindow = 10,
+    this.measuredOnly = false,
+    this.minEvidence = 3,
     int seed = 1,
     Map<String, dynamic>? table,
   })  : ruleBase = ruleBase ?? FuzzyRuleBase.expert(),
@@ -64,7 +70,12 @@ class AdaptiveConvergenceController extends OptimizationAgent {
   }
 
   @override
-  String get id => version >= 4 ? 'cac4' : 'cac';
+  String get id => version >= 4 ? (measuredOnly ? 'cac41' : 'cac4') : 'cac';
+
+  bool _hasGain(String arm) {
+    final st = _global[arm];
+    return st != null && st.n >= minEvidence && st.sum / st.n > 0;
+  }
   @override
   String get name => 'Controlador adaptativo de convergência (CAC)';
   @override
@@ -280,6 +291,8 @@ class AdaptiveConvergenceController extends OptimizationAgent {
         // which the core always keeps) only when the diagnosis is premature
         // convergence (low diversity, stalled convergence, stagnation).
         final ip = version >= 4 ? _impact(name, kind, '*').prior : 0.0;
+        // v4.1: no measured gain → offered only once the arm table shows one.
+        if (version >= 4 && measuredOnly && ip <= 0 && !_hasGain('$name:partial')) continue;
         out[MapEntry('$name:partial', 1)] = _Move(name, 0.3.clamp(lo, hi).toDouble(), 0.0, ip);
         if (premature) out[MapEntry('$name:cataclysm', 1)] = _Move(name, hi, 0.0, ip);
         continue;
@@ -312,6 +325,10 @@ class AdaptiveConvergenceController extends OptimizationAgent {
           ip = imp.prior;
           // α↑ is neutral on WH/SB and helpful on CT: positive prior only with the gate.
           if (name == 'alpha' && dir > 0 && gateOpen) ip = 0.2;
+          // v4.1 (T5: "within the noise on CT" is not harmless on WH): only arms
+          // with a measured gain; the others need positive evidence in the table.
+          final key = '$name:${dir > 0 ? '+' : '-'}';
+          if (measuredOnly && ip <= 0 && !_hasGain(key)) continue;
           mh = imp.horizon;
           if (weight && mh == 0) mh = 200; // any weight move: measured transient (T2)
         }

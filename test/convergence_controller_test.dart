@@ -192,5 +192,28 @@ void main() {
       expect(c.id, 'cac');
       expect(c.candidateMoves(s(1, 0.05, 0.051)).keys, contains('complexityPenalty:+'));
     });
+
+    test('v4.1 (measuredOnly): without the gate it offers no action at all; with it only β↑ and α↑', () {
+      AdaptiveConvergenceController v41() => AdaptiveConvergenceController(
+          actionSchema: () => wSchema, currentParameters: () => Map.of(wParams), version: 4, measuredOnly: true);
+      final closed = v41();
+      for (var g = 1; g <= 12; g++) { closed.processSnapshot(s(g, 0.05, 0.051)); }
+      expect(closed.id, 'cac41');
+      expect(closed.candidateMoves(s(13, 0.05, 0.051), premature: true).keys, ['none']);
+      final open = v41();
+      for (var g = 1; g <= 12; g++) { open.processSnapshot(s(g, 0.05, 0.075)); }
+      expect(open.candidateMoves(s(13, 0.05, 0.075), premature: true).keys.toSet(),
+          {'none', 'denominatorPenalty:+', 'alpha:+'});
+    });
+
+    test('v4.1 never acts when the gate stays closed (WH/SB-like run)', () {
+      final c = AdaptiveConvergenceController(
+          actionSchema: () => wSchema, currentParameters: () => Map.of(wParams), version: 4, measuredOnly: true);
+      var actions = 0;
+      c.onDecision = (d) { if (d.status == 'action') actions++; };
+      c.onSuggestion = (p, v, r) {};
+      for (var g = 1; g <= 2000; g++) { c.processSnapshot(s(g, 0.05, 0.051)); }
+      expect(actions, 0);
+    });
   });
 }

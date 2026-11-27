@@ -492,3 +492,58 @@ sementes):
   antes de oferecê-los, e manter só β (com o portão) e α.
 - **CT:** testar com `postProcessGuard` ligado, que é tema do A2.
 - **Validação nova:** novas sementes (36–45 no WH e no SB, 61–70 no CT).
+
+## 13. T6: CAC v4.1 + `postProcessGuard` (registrado antes de rodar; 2026-11-27)
+
+Pedido do usuário: "pode seguir com o v4.1 e o postProcessGuard no T6".
+
+### 13.1 CAC v4.1 (agente `cac41`; `version: 4, measuredOnly: true`)
+
+Lição do T5: "dentro do ruído no CT" não quer dizer "inofensivo" no WH.
+Por isso o v4.1 só oferece braços com **ganho medido**:
+- β ↑ com o portão aberto (prior +0,3);
+- α ↑ com o portão aberto (prior +0,2);
+- retorno à âncora de um peso já movido.
+
+Os demais braços continuam no espaço de ações, mas só são oferecidos quando
+a tabela do próprio controlador mostra recompensa média positiva em pelo
+menos 3 usos. São eles:
+- operadores do DE;
+- reinício parcial e cataclismo;
+- η;
+- descidas de peso;
+- α ↑ sem o portão.
+
+Como cada execução começa sem tabela, na prática o v4.1 **não age quando o
+portão fica fechado**. Dois testes novos cobrem isso, e a suíte passa
+(45/45).
+
+### 13.2 Desenho
+
+Script: `experiments/cac/run_t6.sh <benchmark>`. Análise, congelada antes:
+`tool/experiments/cac_t6_analysis.dart`.
+
+**Sementes novas, nunca usadas no CAC:**
+
+| | CT | WH | SB |
+|---|---|---|---|
+| Sementes | 71–80 | 36–40 | 36–40 |
+| Orçamento | 3×10⁵ | 1,5×10⁵ | 1,5×10⁵ |
+| Braços | `none`, `none_guard`, `cac41_guard` | `none_guard`, `cac41_guard` | `none_guard`, `cac41_guard` |
+
+- Os braços `_guard` usam `postProcessGuard=true`.
+- Pacote A1, só validação, build `cpp/build_dev`, 5 processos.
+
+**Medidas:**
+- **CT:** a principal passa a ser a **validação final reportada**, porque
+  é o que o guard protege. O campeão no fim da busca fica como secundária.
+- **WH e SB:** as duas medidas.
+
+**Critério para o CAC v4.1 ganhar pré-registro próprio contra o A1**
+(`cac41_guard` vs `none_guard`, d = log da razão):
+1. CT: mediana de d < 0 na validação final **e** no fim da busca;
+2. WH e SB: não-dano na validação final, ou seja, mediana de d ≤ +0,02 e no
+   máximo 2 de 5 sementes piores.
+
+**Desfecho secundário:** efeito do guard sozinho no CT (`none_guard` vs
+`none`).
