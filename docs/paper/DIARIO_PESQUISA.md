@@ -414,11 +414,41 @@ Registro técnico detalhado (em inglês): `experiments/EXPERIMENT_LOG.md`.
 
 ---
 
+## 2026-11-27 — CAC T4: modelo de impacto, CAC v4 e desenho do T5
+
+- Pedido do usuário: "pode seguir para o T4 e montar o CAC v4".
+- [artigo] **Sinal de sobreajuste.** gapOS = log(validação / treino, um
+  passo) separa os sistemas em que subir penalidade ajuda (CT, mediana
+  0,40) dos sistemas em que prejudica (WH 0,02, SB −0,05).
+  - Na validação cruzada deixando o WH ou o SB de fora, o limiar escolhido
+    nos outros dois não autoriza nenhuma subida no sistema deixado de fora.
+  - O gap em simulação livre falha: autorizaria 77 de 140 ramos do WH, com
+    perda.
+  - Limiar conservador: 0,15. Fonte: `experiments/cac/T4_FEATURES.md`.
+- [artigo] **CAC v4.** O mapa medido substitui o prior fuzzy:
+  - β ↑ só com o portão aberto;
+  - α ↑ permitido;
+  - δ ↑ e γ ↑ bloqueados;
+  - ζ, θ e o horizonte livre mascarados;
+  - operadores do DE e reinícios com prior levemente negativo (ruído
+    medido);
+  - horizonte mínimo de 200 gerações após ação de peso.
+  - Todos os parâmetros continuam no espaço de ações. O v3 segue disponível.
+  - Testes: 43 de 43.
+- [limitação] Só três sistemas: o portão separa grupos, não estima um
+  limiar fino. Deixando o CT de fora, a regra "quando subir" não pode ser
+  aprendida.
+- T5 registrado antes de rodar (doc 15 §11.3): v4 contra o A1 sem agente e
+  contra o v3, no CT (sementes 21–30) e no WH e no SB (31–35, orçamento
+  completo); só validação; critério de não-dano no WH e no SB.
+
+---
+
 ## Pendências e decisões do usuário (atualizado em 2026-11-27)
 
 - ~~Resultado do A1 e abertura dos testes do WH e do SB~~ feitos em 2026-11-26.
 - Estratégia do artigo à luz do A1 (gate atingido no WH e no SB; CT pior).
-- CAC: T2+T3 concluído (2026-11-27); próximo: T4 (modelo de impacto → CAC v4) e T5.
+- CAC: T2+T3 e T4 concluídos (2026-11-27); T5 (validação do v4) em execução.
 - A2 candidato: alinhar a validação da busca com a reportada e proteger o
   pós-processamento (problema do CT).
 - Licenças dos dados WH/SB, agente LLM pago.

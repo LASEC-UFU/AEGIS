@@ -3,7 +3,7 @@
 //   dart run tool/experiments/run_agent_experiment.dart \
 //     --dll cpp/build/aegis_core.dll --data est.csv [--data-test test.csv] \
 //     --config experiments/configs/conditions/aegis_full.json [--set key=value ...] \
-//     --agent none|ucb1|fuzzy|fuzzy:<rulebase.json>|cac|cac:<table.json>|script:<p=v@g;...>|llm --seed 1 --output <dir> [--label name]
+//     --agent none|ucb1|fuzzy|fuzzy:<rulebase.json>|cac|cac:<table.json>|cac4|cac4:<table.json>|script:<p=v@g;...>|llm --seed 1 --output <dir> [--label name]
 //     [--llm-model claude-opus-5-5] [--llm-effort medium] [--consult-every 50] [--max-cost 5]
 //
 // Each generation: step(1) → snapshot → agent.consult() (awaited) → proposed
@@ -123,14 +123,17 @@ Future<void> main(List<String> args) async {
   } else if (agentSpec.startsWith('script:')) {
     agent = ScriptedAgent.parse(agentSpec.substring(7), actionSchema: service.getActionSchema,
         phaseStagnationLimit: (config['phaseStagnationLimit'] as num?)?.toInt() ?? 150);
-  } else if (agentSpec == 'cac' || agentSpec.startsWith('cac:')) {
+  } else if (agentSpec == 'cac' || agentSpec.startsWith('cac:') || agentSpec == 'cac4' || agentSpec.startsWith('cac4:')) {
+    final v4 = agentSpec.startsWith('cac4');
+    final tablePath = agentSpec.contains(':') ? agentSpec.substring(agentSpec.indexOf(':') + 1) : null;
     agent = AdaptiveConvergenceController(
       actionSchema: service.getActionSchema,
       currentParameters: () => service.parameters.currentValues,
       phaseStagnationLimit: (config['phaseStagnationLimit'] as num?)?.toInt() ?? 150,
       seed: seed,
-      table: agentSpec.startsWith('cac:')
-          ? jsonDecode(File(agentSpec.substring(4)).readAsStringSync()) as Map<String, dynamic>
+      version: v4 ? 4 : 3,
+      table: tablePath != null
+          ? jsonDecode(File(tablePath).readAsStringSync()) as Map<String, dynamic>
           : null,
     );
   } else if (agentSpec == 'llm') {

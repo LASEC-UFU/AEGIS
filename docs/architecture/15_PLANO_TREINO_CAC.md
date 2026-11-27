@@ -332,3 +332,99 @@ Saídas: `experiments/cac/T2_cascaded_tanks.md`, `T2_wiener_hammerstein.md`,
   A1).
 - Sem correção para comparações múltiplas.
 - Só validação; nenhum dado de teste foi lido.
+
+## 11. T4: modelo de impacto e CAC v4; desenho do T5 (registrado antes de rodar; 2026-11-27)
+
+### 11.1 Sinal de sobreajuste
+
+Saída: `experiments/cac/T4_FEATURES.md`, gerada por
+`tool/experiments/cac_t4_features.dart`.
+- **Dados:** 800 ramos de peso (β, δ, γ ↑) do T1 e do T2+T3. Os atributos
+  são lidos no controle da mesma semente, na geração da ação.
+
+**Atributo escolhido: gapOS = log(RMSE de validação / RMSE de treino), um
+passo à frente, do campeão.**
+
+| | CT | WH | SB |
+|---|---|---|---|
+| gapOS, p10 / p50 / p90 | 0,23 / 0,40 / 0,76 | −0,01 / 0,02 / 0,04 | −0,10 / −0,05 / −0,03 |
+| Ramos de peso que ajudam | 321 de 520 | 2 de 140 | 17 de 140 |
+
+**Validação cruzada deixando um sistema de fora:**
+- **gapOS:** o limiar escolhido nos outros dois sistemas não autoriza
+  nenhuma subida no WH (0/140) nem no SB (0/140).
+- **Amostras por regressor:** separa igualmente bem, mas é uma propriedade
+  fixa dos dados, não um sinal medido durante a busca.
+- **Atributos descartados:**
+  - o gap em simulação livre autorizaria 77 de 140 ramos no WH, com perda
+    (o WH tem erro livre alto sem sobreajuste);
+  - o número de regressores perde no WH e no SB.
+- **Deixando o CT de fora:** a validação cruzada não se aplica, porque nos
+  outros dois sistemas subir peso nunca ajuda. A regra aprendida ali é
+  "nunca subir".
+
+**Dentro do CT (tercis de gapOS):**
+- β ajuda em todos os tercis (≈ 72 %);
+- δ ajuda mais quanto maior o gap;
+- γ é prejudicial, ou neutro só no tercil mais alto.
+
+**Limiar do portão: gapOS ≥ 0,15**, na mediana das últimas 10 gerações.
+- Fica entre os dois grupos: p90 do WH/SB = 0,04; p10 do CT = 0,23.
+- É conservador. Com só três sistemas, o limiar é uma escolha entre
+  grupos, não uma estimativa fina.
+
+### 11.2 CAC v4 (`version: 4`, agente `cac4`)
+
+Mapa de impacto medido (`cacImpactMapV4` em
+`lib/services/convergence_controller.dart`). Ele substitui o prior fuzzy
+escrito à mão; o v3 segue disponível para reprodução.
+
+| Ação | Regra | Prior | Horizonte mínimo | Evidência |
+|---|---|---|---|---|
+| β ↑ (`denominatorPenalty`) | só com o portão aberto | +0,3 | 200 | T1, T2: CT melhor; WH/SB pior 5/5 |
+| α ↑ | permitida | +0,2 com portão, 0 sem | 200 | CT melhor (busca e final); WH/SB ruído |
+| δ ↑ | bloqueada | — | — | WH/SB muito pior; CT piora a métrica final |
+| γ ↑ | bloqueada | — | — | dano em todos os sistemas e doses |
+| ζ | mascarada | — | — | inerte (pisos do currículo) |
+| θ, horizonte livre | mascarados em simulação | — | — | placebos |
+| η, operadores do DE, reinício e cataclismo | permitidos | −0,05 | — | dentro do ruído |
+| Descida de peso e retorno à âncora | permitidos | âncora +0,1 | 200 | sem medida própria |
+
+- Os passos seguem os do v3: um décimo do passo máximo para os pesos, o que
+  dá β e α + 0,05 (doses medidas no T2). Para os operadores do DE, o passo
+  é metade do passo máximo.
+- Todos os parâmetros do sistema continuam no espaço de ações. Os
+  bloqueios e máscaras vêm do mapa medido, e a amostragem de Thompson pode
+  reabilitar um braço permitido se a experiência mostrar ganho.
+- Testes: `test/convergence_controller_test.dart`. Há 4 testes novos do v4,
+  e a suíte completa passa (43 de 43).
+
+### 11.3 Desenho do T5
+
+Script: `experiments/cac/run_t5.sh <benchmark>`. Análise, congelada antes
+das execuções: `tool/experiments/cac_t5_analysis.dart`.
+- **Braços:** pacote A1 sem agente (`none`), CAC v3 (`cac`) e CAC v4
+  (`cac4`). Ambos os CAC começam sem tabela treinada.
+- **Sementes e orçamento:**
+
+| | CT | WH | SB |
+|---|---|---|---|
+| Sementes | 21–30 | 31–35 | 31–35 |
+| Orçamento | 3×10⁵ | 1,5×10⁵ (igual ao A1) | 1,5×10⁵ (igual ao A1) |
+
+- Só validação, build `cpp/build_dev`, 5 processos.
+- As sementes 21–23 do CT já foram usadas na avaliação do v3 em
+  desenvolvimento (doc 14). Isso não afeta o v4, cujo mapa vem só do T1–T3
+  (sementes 41–65).
+- **Medidas:**
+  - principal: campeão de validação no fim da busca;
+  - secundária: validação final reportada.
+  - Para cada sistema: mediana de d = log(agente / sem agente),
+    melhores/piores e teste do sinal.
+- **Critério para o v4 ganhar pré-registro próprio contra o A1:**
+  1. mediana de d < 0 no CT na medida principal;
+  2. no WH e no SB, nenhum dano: mediana de d ≤ +0,02 e no máximo 2 de 5
+     sementes piores;
+  3. não ser pior que o v3 na mediana em nenhum sistema.
+  - Com 5 sementes, o WH e o SB não permitem significância; o critério
+    nesses dois é de não-dano.

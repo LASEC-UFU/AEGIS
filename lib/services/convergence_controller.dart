@@ -31,6 +31,12 @@ class AdaptiveConvergenceController extends OptimizationAgent {
   /// v2: prior advantage of "no action", drift cost away from the anchor
   /// (per max step, for fitness weights) and prior of the return-to-anchor arm.
   final double nonePrior, driftPenalty, anchorPrior;
+  /// v4: rule version (3 = expert fuzzy prior, 4 = measured impact map of
+  /// T1–T3), the overfitting gate on gapOS = log(val / train one-step RMSE)
+  /// and the number of recent snapshots whose median gives the signal.
+  final int version;
+  final double overfitGate;
+  final int gapWindow;
   final math.Random _rng;
 
   AdaptiveConvergenceController({
@@ -47,6 +53,9 @@ class AdaptiveConvergenceController extends OptimizationAgent {
     this.nonePrior = 0.25,
     this.driftPenalty = 0.5,
     this.anchorPrior = 0.1,
+    this.version = 3,
+    this.overfitGate = 0.15,
+    this.gapWindow = 10,
     int seed = 1,
     Map<String, dynamic>? table,
   })  : ruleBase = ruleBase ?? FuzzyRuleBase.expert(),
@@ -55,7 +64,7 @@ class AdaptiveConvergenceController extends OptimizationAgent {
   }
 
   @override
-  String get id => 'cac';
+  String get id => version >= 4 ? 'cac4' : 'cac';
   @override
   String get name => 'Controlador adaptativo de convergência (CAC)';
   @override
@@ -73,6 +82,26 @@ class AdaptiveConvergenceController extends OptimizationAgent {
   /// Fitness-weight values at the first decision (the pre-registered package).
   final Map<String, double> anchors = {};
   final List<Map<String, dynamic>> calibration = [];
+  final List<double> _gaps = [];
+
+  /// v4 overfitting signal: median of gapOS over the last [gapWindow]
+  /// snapshots (null until available).
+  double? overfitSignal() {
+    if (_gaps.isEmpty) return null;
+    final v = _gaps.sublist(math.max(0, _gaps.length - gapWindow))..sort();
+    return v.length.isOdd ? v[v.length ~/ 2] : (v[v.length ~/ 2 - 1] + v[v.length ~/ 2]) / 2;
+  }
+
+  /// v4 gate: complexity weights may be raised only when the champion
+  /// overfits (T4: gapOS 0.23–0.76 on CT, −0.10–0.04 on WH and SB).
+  bool get gateOpen => (overfitSignal() ?? double.negativeInfinity) >= overfitGate;
+
+  CacImpact _impact(String name, String kind, String dir) {
+    for (final e in cacImpactMapV4) {
+      if (e.arm == '$name:$dir' || e.arm == '$name:*' || (kind == 'de' && e.arm == 'de:*')) return e;
+    }
+    return CacImpact('$name:$dir', 'allow', -0.05, 0, 'não medido');
+  }
 
   /// Arm statistics, for logs and persistence.
   Map<String, dynamic> tableJson() => {
@@ -133,6 +162,8 @@ class AdaptiveConvergenceController extends OptimizationAgent {
   void processSnapshot(GenerationSnapshot s) {
     final rmse = s.freeRunRmseValidationFull ?? s.bestModelValidationRMSE;
     if (rmse != null && rmse.isFinite && rmse > 0) _trace.add((s.generation, math.log(rmse)));
+    final tr = s.bestModelRMSE, va = s.bestModelValidationRMSE;
+    if (va != null && tr.isFinite && va.isFinite && tr > 0 && va > 0) _gaps.add(math.log(va / tr));
     final g = s.generation;
     final model = convergence();
 
@@ -179,18 +210,23 @@ class AdaptiveConvergenceController extends OptimizationAgent {
     for (final e in arms.entries) {
       final key = e.key.key;
       // v3: the expert fuzzy prior applies to DE operators only, not to fitness weights.
-      final fz = anchors.containsKey(e.value.param) ? 0.0 : (prior[key] ?? 0.0);
-      final p0 = fz + e.value.priorAdj + (key == 'none' ? nonePrior : 0.0);
+      // v4: the measured impact map replaces the hand-written fuzzy prior.
+      final fz = version >= 4 || anchors.containsKey(e.value.param) ? 0.0 : (prior[key] ?? 0.0);
+      final p0 = fz + e.value.impactPrior + e.value.priorAdj + (key == 'none' ? nonePrior : 0.0);
       final draw = _draw(key, situation, p0);
       if (draw > bestDraw) { bestDraw = draw; best = key; }
     }
-    final h = horizon(model.rho, model.sigma);
+    final chosen = arms.entries.firstWhere((e) => e.key.key == best).value;
+    // v4: weight actions are judged only after their measured transient.
+    final h = math.max(horizon(model.rho, model.sigma), chosen.minHorizon);
     final forecast = model.level - model.rho * h;
     _nextDecision = g + h;
     final diag = {
       'situation': situation, 'rho': model.rho, 'sigmaL': model.sigma, 'rate': rateTerm(model.rho),
       'h': h, 'forecastLogRmse': forecast, 'levelLogRmse': model.level, 'events': events,
       'arms': arms.length, 'chosen': best,
+      if (version >= 4) 'overfitGap': overfitSignal(),
+      if (version >= 4) 'gateOpen': gateOpen,
     };
     if (best == 'none') {
       _pending = _Pending('none', situation, g, g + h, model.level, forecast, s.phase);
@@ -198,7 +234,7 @@ class AdaptiveConvergenceController extends OptimizationAgent {
           rationale: 'no arm expected to beat the forecast; next decision in $h generations', diagnosis: diag));
       return;
     }
-    final spec = arms.entries.firstWhere((e) => e.key.key == best).value;
+    final spec = chosen;
     final reason = 'CAC: ${spec.param} ${spec.value} (situação $situation, ρ=${model.rho.toStringAsExponential(2)}, '
         'próxima decisão em $h gerações)';
     _pending = _Pending(best, situation, g, g + h, model.level, forecast, s.phase);
@@ -234,6 +270,7 @@ class AdaptiveConvergenceController extends OptimizationAgent {
       final kind = (m['kind'] as String?) ?? '';
       if ((m['budget'] == true || m['budgetAffecting'] == true) && !allowBudget) continue;
       if (simulation && (name == 'freeRunPenalty' || name == 'freeRunHorizon')) continue; // inert
+      if (version >= 4 && _impact(name, kind, '*').rule == 'masked') continue; // measured inert
       final lo = (m['min'] as num).toDouble(), hi = (m['max'] as num).toDouble();
       final integer = m['integer'] == true;
       final maxStep = (m['maxStep'] as num?)?.toDouble() ?? (m['max_step'] as num?)?.toDouble() ?? (hi - lo);
@@ -242,8 +279,9 @@ class AdaptiveConvergenceController extends OptimizationAgent {
         // cataclysmic restart (CHC, Eshelman 1991: everything but the elite,
         // which the core always keeps) only when the diagnosis is premature
         // convergence (low diversity, stalled convergence, stagnation).
-        out[MapEntry('$name:partial', 1)] = _Move(name, 0.3.clamp(lo, hi).toDouble());
-        if (premature) out[MapEntry('$name:cataclysm', 1)] = _Move(name, hi);
+        final ip = version >= 4 ? _impact(name, kind, '*').prior : 0.0;
+        out[MapEntry('$name:partial', 1)] = _Move(name, 0.3.clamp(lo, hi).toDouble(), 0.0, ip);
+        if (premature) out[MapEntry('$name:cataclysm', 1)] = _Move(name, hi, 0.0, ip);
         continue;
       }
       final cur = current[name] ?? (s.parameters[name]);
@@ -266,11 +304,23 @@ class AdaptiveConvergenceController extends OptimizationAgent {
           final away = ((v - anchor).abs() - (cur - anchor).abs()) / maxStep;
           if (away > 0) adj = -driftPenalty * away * 2; // per half step = one move
         }
-        out[MapEntry('$name:${dir > 0 ? '+' : '-'}', dir)] = _Move(name, v, adj);
+        var ip = 0.0, mh = 0;
+        if (version >= 4) {
+          final imp = _impact(name, kind, dir > 0 ? '+' : '-');
+          if (imp.rule == 'blocked') continue;
+          if (imp.rule == 'gated' && !gateOpen) continue;
+          ip = imp.prior;
+          // α↑ is neutral on WH/SB and helpful on CT: positive prior only with the gate.
+          if (name == 'alpha' && dir > 0 && gateOpen) ip = 0.2;
+          mh = imp.horizon;
+          if (weight && mh == 0) mh = 200; // any weight move: measured transient (T2)
+        }
+        out[MapEntry('$name:${dir > 0 ? '+' : '-'}', dir)] = _Move(name, v, adj, ip, mh);
       }
       if (weight && anchor != null && (cur - anchor).abs() > 1e-12) {
         final back = cur + (anchor - cur).clamp(-maxStep, maxStep);
-        out[MapEntry('$name:anchor', 0)] = _Move(name, integer ? back.roundToDouble() : back, anchorPrior);
+        out[MapEntry('$name:anchor', 0)] = _Move(name, integer ? back.roundToDouble() : back, anchorPrior, 0.0,
+            version >= 4 ? 200 : 0);
       }
     }
     return out;
@@ -340,7 +390,9 @@ class _Move {
   final String param;
   final double value;
   final double priorAdj; // v2: anchor drift cost (−) or return-to-anchor prior (+)
-  const _Move(this.param, this.value, [this.priorAdj = 0.0]);
+  final double impactPrior; // v4: measured prior (impact map)
+  final int minHorizon; // v4: measured transient before judging
+  const _Move(this.param, this.value, [this.priorAdj = 0.0, this.impactPrior = 0.0, this.minHorizon = 0]);
 }
 
 class _Pending {
@@ -359,3 +411,35 @@ class _Stats {
     ..n = (j['n'] as num).toInt()
     ..sum = (j['sum'] as num).toDouble();
 }
+/// CAC v4 (docs/architecture/15_PLANO_TREINO_CAC.md §11): the measured
+/// impact map of T1–T3 (validation only). One entry per (parameter,
+/// direction); `prior` is the prior mean in reward units, `gate` names the
+/// condition under which the arm is offered, `horizon` the minimum number of
+/// generations before the action is judged (measured transient).
+class CacImpact {
+  final String arm; // 'param:+' or 'param:-' or 'param:*'
+  final String rule; // 'allow' | 'gated' | 'blocked' | 'masked'
+  final double prior;
+  final int horizon;
+  final String evidence;
+  const CacImpact(this.arm, this.rule, this.prior, this.horizon, this.evidence);
+}
+
+const cacImpactMapV4 = <CacImpact>[
+  CacImpact('denominatorPenalty:+', 'gated', 0.3, 200,
+      'β↑: CT 7–9/10 melhores em T1/T2 (todos os tercis de gapOS); WH/SB piora 5/5 (T2)'),
+  CacImpact('alpha:+', 'allow', 0.0, 200,
+      'α↑: CT −0,05 a −0,24 e métrica final melhor; WH/SB dentro do ruído (T2). Prior positivo só com o portão'),
+  CacImpact('exponentPenalty:+', 'blocked', 0.0, 200,
+      'δ↑: WH/SB +0,44 a +1,67, 5/5 piores; CT melhora a busca mas piora a métrica final (T1, T2)'),
+  CacImpact('complexityPenalty:+', 'blocked', 0.0, 200,
+      'γ↑: dano dose-dependente no CT (T1) e no WH/SB já com +0,002 (T2)'),
+  CacImpact('noInputPenalty:*', 'masked', 0.0, 0,
+      'ζ: inerte, pisos do currículo acima dos valores testados (T1)'),
+  CacImpact('freeRunPenalty:*', 'masked', 0.0, 0, 'θ: inerte em modo simulação (placebo do T0–T2)'),
+  CacImpact('freeRunHorizon:*', 'masked', 0.0, 0, 'horizonte livre: inerte em modo simulação (placebo do T1)'),
+  CacImpact('stabilityPenalty:*', 'allow', -0.05, 0, 'η: dentro do ruído (T1); o veto já garante admissibilidade'),
+  CacImpact('de:*', 'allow', -0.05, 0,
+      'operadores do DE (F, CR, migração, imigrantes, mutação estrutural): dentro do ruído (T1)'),
+  CacImpact('triggerRestart:*', 'allow', -0.05, 0, 'reinício parcial e cataclismo: dentro do ruído no CT (T1)'),
+];
