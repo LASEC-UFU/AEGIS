@@ -216,4 +216,71 @@ void main() {
       expect(actions, 0);
     });
   });
+
+  group('full regulator set (doc 16)', () {
+    const fSchema = {
+      'schema': 'aegis.actions/1',
+      'allowBudgetActions': false,
+      'parameters': [
+        {'name': 'mutationFactor', 'kind': 'de', 'min': 0.05, 'max': 1.0, 'maxStep': 0.3, 'integer': false},
+        {'name': 'stabilityPenalty', 'kind': 'weight', 'min': 0.0, 'max': 5.0, 'maxStep': 1.0, 'integer': false},
+        {'name': 'triggerRestart', 'kind': 'event', 'min': 0.05, 'max': 1.0, 'maxStep': 1.0, 'integer': false},
+        {'name': 'maxRegressors', 'kind': 'structure', 'min': 1, 'max': 200, 'maxStep': 10, 'integer': true},
+        {'name': 'populationSize', 'kind': 'search', 'min': 4, 'max': 1000, 'maxStep': 50, 'integer': true},
+        {'name': 'islandRoles', 'kind': 'objective', 'min': 0, 'max': 1, 'maxStep': 1, 'integer': true},
+        {'name': 'postProcessGuard', 'kind': 'post', 'min': 0, 'max': 1, 'maxStep': 1, 'integer': true},
+        {'name': 'seedFromChampion', 'kind': 'event', 'min': 0.05, 'max': 0.5, 'maxStep': 0.5, 'integer': false},
+        {'name': 'advancePhase', 'kind': 'event', 'min': 1, 'max': 1, 'maxStep': 1, 'integer': true},
+      ],
+    };
+    // Registry with a stale value (maxRegressors 8) next to the core's live one (39).
+    const registry = {'mutationFactor': 0.5, 'stabilityPenalty': 1.0, 'maxRegressors': 8.0};
+    GenerationSnapshot live(int g) => GenerationSnapshot(
+          generation: g, elapsed: Duration.zero,
+          bestFitness: 1, worstFitness: 2, meanFitness: 1.5, medianFitness: 1.5, stdDevFitness: 0.1,
+          q1Fitness: 1.2, q3Fitness: 1.8,
+          improvementAbsolute: 0, improvementRelative: 0, improvementRate5: 0, improvementRate20: 0,
+          stagnationCounter: 0, uniqueStructures: 60, structureEntropy: 3, phenotypicDiversity: 0.1,
+          regressorFrequency: const {}, populationVariance: 0.01, successRate: 0.2, successRateHistory: const [],
+          bestModelComplexity: 4, bestModelMaxDegree: 2, bestModelMaxDelay: 5, bestModelERR: const [],
+          bestModelRMSE: 0.05, bestModelValidationRMSE: 0.05, bestModelR2: 0.95, islandSnapshots: const [],
+          freeRunRmseValidationFull: 0.1,
+          islandStatuses: const [IslandStatus(id: 0, populationSize: 50)],
+          parameters: const {'mutationFactor': 0.6, 'stabilityPenalty': 1.0, 'maxRegressors': 39.0,
+            'populationSize': 50.0, 'islandRoles': 1.0, 'postProcessGuard': 1.0,
+            'seedFromChampion': double.nan, 'advancePhase': double.nan, 'triggerRestart': double.nan},
+        );
+
+    test('off by default: only the 16 original regulators, original value lookup', () {
+      final c = AdaptiveConvergenceController(actionSchema: () => fSchema, currentParameters: () => Map.of(registry));
+      final m = c.candidateMoves(live(10));
+      expect(c.id, 'cac');
+      expect(m.keys.toSet(), {'none', 'mutationFactor:+', 'mutationFactor:-', 'stabilityPenalty:+',
+        'stabilityPenalty:-', 'triggerRestart:partial'});
+      expect(m['mutationFactor:+'], closeTo(0.65, 1e-12)); // registry 0.5 + 0.15
+    });
+
+    test('on: every regulator except post-processing, live core values, one-shot events', () {
+      final c = AdaptiveConvergenceController(
+          actionSchema: () => fSchema, currentParameters: () => Map.of(registry), allRegulators: true);
+      final m = c.candidateMoves(live(10));
+      expect(c.id, 'cac-all');
+      expect(m['mutationFactor:+'], closeTo(0.75, 1e-12)); // core 0.6 + 0.15
+      expect(m['maxRegressors:+'], 44); // core 39 + 5, not the stale registry 8
+      expect(m['maxRegressors:-'], 34);
+      expect(m['populationSize:+'], 75);
+      expect(m['islandRoles:-'], 0);
+      expect(m['seedFromChampion:fire'], 0.2);
+      expect(m['advancePhase:fire'], 1);
+      expect(m.containsKey('triggerRestart:partial'), isTrue);
+      expect(m.keys.where((k) => k.startsWith('postProcessGuard')), isEmpty);
+    });
+
+    test('v4.1 with the full set still offers only measured arms', () {
+      final c = AdaptiveConvergenceController(actionSchema: () => fSchema, currentParameters: () => Map.of(registry),
+          version: 4, measuredOnly: true, allRegulators: true);
+      expect(c.id, 'cac41-all');
+      expect(c.candidateMoves(live(10)).keys, ['none']);
+    });
+  });
 }

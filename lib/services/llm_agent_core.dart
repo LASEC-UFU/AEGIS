@@ -49,14 +49,47 @@ const Map<String, List<double>> kLlmActionBounds = {
   'stabilityPenalty': [0.0, 5.0, 1.0],
   'exponentPenalty': [0.0, 1.0, 0.2],
   'triggerRestart': [0.05, 1.0, 1.0],
+  // Full regulator set (doc 16), same ranges as the core schema; the engine
+  // still enforces its own limits (e.g. maxDelay up to the launch ceiling).
+  // Post-processing flags are left out: they act only at finalization.
+  'maxRegressors': [1, 200, 10],
+  'maxTermsPerReg': [1, 6, 1],
+  'maxDelay': [1, 500, 10],
+  'pmax': [0.5, 10.0, 1.0],
+  'pmin': [0.1, 3.0, 0.5],
+  'exponentStep': [0.1, 0.5, 0.25],
+  'denominatorProbability': [0.0, 1.0, 0.2],
+  'populationSize': [4, 1000, 50],
+  'elitismCount': [0, 50, 2],
+  'variableMutationRate': [0.0, 1.0, 0.2],
+  'jadeC': [0.0, 1.0, 0.1],
+  'jadeP': [0.01, 1.0, 0.1],
+  'reinitInterval': [1, 500, 25],
+  'hypermutation': [0, 1, 1],
+  'mutationStrategy': [0, 1, 1],
+  'fitMethod': [0, 1, 1],
+  'admissibilityVeto': [0, 1, 1],
+  'vetoTopK': [1, 50, 5],
+  'errorMode': [0, 1, 1],
+  'inputContributionMin': [0.0, 1.0, 0.2],
+  'phaseStagnationLimit': [2, 5000, 100],
+  'islandRoles': [0, 1, 1],
+  'advancePhase': [1, 1, 1],
+  'seedFromChampion': [0.05, 0.5, 0.5],
+  'pruneChampion': [1, 1, 1],
 };
 
+/// One-shot events: the value is a dose, not a move from a current value.
+const Set<String> kLlmEventParams = {'triggerRestart', 'advancePhase', 'seedFromChampion', 'pruneChampion'};
+
 const String kLlmSystemPrompt = '''
-You supervise AEGIS, a multi-island Differential Evolution engine that identifies polynomial/rational NARX models of a dynamic system from data. A deterministic curriculum inside the engine already advances phases (0 structural exploration, 1 nonlinear expansion, 2 parsimony/validation, 3 local refinement) and anneals penalties; do not try to manage phases.
+You supervise AEGIS, a multi-island Differential Evolution engine that identifies polynomial/rational NARX models of a dynamic system from data. A deterministic curriculum inside the engine already advances phases (0 structural exploration, 1 nonlinear expansion, 2 parsimony/validation, 3 local refinement) and anneals penalties; leave phases to it unless the evidence is clear (advancePhase forces the next phase).
 
 Every consultation you receive one observation (schema aegis.observation/1): champion metrics on training and validation (one-step RMSE/R2, horizon-limited and full validation free-run RMSE, input contribution, residual whiteness, stability), population health (success rate, unique structures, structure entropy, stagnation in generations, per-island statistics, mean JADE parameters), the current parameter values, the effective fitness weights, alerts, and your previous decisions with the engine's response (accepted/rejected and, when known, the observed outcome). Test-set data are never shown to you and must not be requested.
 
 Decide whether ONE bounded parameter adjustment is likely to improve the identification (lower validation free-run error without loss of stability or parsimony). Typical patterns: long stagnation with very low success rate suggests larger mutation steps or more random immigrants; collapsed structural diversity suggests restarts or structural mutation; validation error well above training error suggests more parsimony; free-run error much larger than one-step error suggests a larger free-run penalty or horizon. A healthy, improving search needs no action.
+
+Besides the search dynamics and penalty weights you can change the model class and the search itself: maxRegressors, maxTermsPerReg, maxDelay, pmax, pmin, exponentStep (only 0.5 or finer) and denominatorProbability set the capacity (a champion at the regressor ceiling with validation error close to training error suggests more capacity; validation error well above training error suggests less); populationSize, elitismCount, variableMutationRate, jadeC, jadeP, reinitInterval, hypermutation, mutationStrategy (0 JADE, 1 rand/1), fitMethod, admissibilityVeto and vetoTopK tune the search; errorMode (0 one-step, 1 simulation), inputContributionMin, phaseStagnationLimit and islandRoles change the objective and the curriculum. One-shot events: triggerRestart (fraction restarted), seedFromChampion (fraction of each island replaced by mutants of the champion), pruneChampion and advancePhase (value 1).
 
 The observation field "search" tells how the run is configured. When search.errorMode is "simulation", the fitness already scores the free-run error over the whole validation split: freeRunPenalty and freeRunHorizon are then inert and must not be proposed. When search.admissibilityVeto is true, only champions whose free run does not diverge on the whole training and validation splits are promoted; model.championAdmissible = false means no admissible candidate has been found yet, and a larger stabilityPenalty is the relevant lever. When search.finalRefine is "simulation", the champion's coefficients are refined by free-run error after the search; do not try to emulate that refinement during the search.
 
@@ -270,7 +303,8 @@ class LlmAgentCore extends OptimizationAgent {
       invalid = 'parameter not allowed';
     } else if (!value.isFinite || value < bounds[0] || value > bounds[1]) {
       invalid = 'value outside [${bounds[0]}, ${bounds[1]}]';
-    } else if (param != 'triggerRestart' && current != null && (value - current).abs() > bounds[2] + 1e-12) {
+    } else if (!kLlmEventParams.contains(param) && current != null && current.isFinite &&
+        (value - current).abs() > bounds[2] + 1e-12) {
       invalid = 'step larger than maxStep ${bounds[2]}';
     }
     if (raw.length > 1) diagnosis['ignoredExtraActions'] = raw.length - 1;

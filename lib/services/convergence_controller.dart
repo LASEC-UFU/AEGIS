@@ -41,6 +41,14 @@ class AdaptiveConvergenceController extends OptimizationAgent {
   /// positive mean reward over at least [minEvidence] uses in the table).
   final bool measuredOnly;
   final int minEvidence;
+  /// Full regulator set (doc 16): offer every regulator of the core schema
+  /// (structure, search, objective, the new events), reading their live
+  /// values from the snapshot. Off (default): only the 16 original regulators
+  /// (DE, weights, triggerRestart) with the original value lookup, which keeps
+  /// v3, v4 and v4.1 identical to T1–T6 on any build. Post-processing
+  /// regulators are never offered: they act only at finalization, so an
+  /// online arm cannot be judged by its effect.
+  final bool allRegulators;
   final math.Random _rng;
 
   AdaptiveConvergenceController({
@@ -62,6 +70,7 @@ class AdaptiveConvergenceController extends OptimizationAgent {
     this.gapWindow = 10,
     this.measuredOnly = false,
     this.minEvidence = 3,
+    this.allRegulators = false,
     int seed = 1,
     Map<String, dynamic>? table,
   })  : ruleBase = ruleBase ?? FuzzyRuleBase.expert(),
@@ -70,7 +79,7 @@ class AdaptiveConvergenceController extends OptimizationAgent {
   }
 
   @override
-  String get id => version >= 4 ? (measuredOnly ? 'cac41' : 'cac4') : 'cac';
+  String get id => (version >= 4 ? (measuredOnly ? 'cac41' : 'cac4') : 'cac') + (allRegulators ? '-all' : '');
 
   bool _hasGain(String arm) {
     final st = _global[arm];
@@ -280,11 +289,24 @@ class AdaptiveConvergenceController extends OptimizationAgent {
       final name = m['name'] as String;
       final kind = (m['kind'] as String?) ?? '';
       if ((m['budget'] == true || m['budgetAffecting'] == true) && !allowBudget) continue;
+      if (kind == 'post') continue; // finalization only: no online effect to judge
+      final legacy = kind == 'de' || kind == 'weight' || name == 'triggerRestart';
+      if (!allRegulators && !legacy) continue;
       if (simulation && (name == 'freeRunPenalty' || name == 'freeRunHorizon')) continue; // inert
       if (version >= 4 && _impact(name, kind, '*').rule == 'masked') continue; // measured inert
       final lo = (m['min'] as num).toDouble(), hi = (m['max'] as num).toDouble();
       final integer = m['integer'] == true;
       final maxStep = (m['maxStep'] as num?)?.toDouble() ?? (m['max_step'] as num?)?.toDouble() ?? (hi - lo);
+      if (kind == 'event' && name != 'triggerRestart') {
+        // One-shot events of doc 16 (advancePhase, seedFromChampion,
+        // pruneChampion): a single arm. seedFromChampion replaces 20 % of
+        // every island (the dose measured in T7).
+        final ip = version >= 4 ? _impact(name, kind, '*').prior : 0.0;
+        if (version >= 4 && measuredOnly && ip <= 0 && !_hasGain('$name:fire')) continue;
+        final v = name == 'seedFromChampion' ? 0.2.clamp(lo, hi).toDouble() : lo;
+        out[MapEntry('$name:fire', 1)] = _Move(name, v, 0.0, ip);
+        continue;
+      }
       if (kind == 'event') {
         // Restart events: a partial restart (30 %) is always an option; the
         // cataclysmic restart (CHC, Eshelman 1991: everything but the elite,
@@ -297,8 +319,10 @@ class AdaptiveConvergenceController extends OptimizationAgent {
         if (premature) out[MapEntry('$name:cataclysm', 1)] = _Move(name, hi, 0.0, ip);
         continue;
       }
-      final cur = current[name] ?? (s.parameters[name]);
-      if (cur == null) continue;
+      // Full set: the core's live value comes first (the Dart registry keeps
+      // stale defaults for some names, e.g. γ 0.01 while A1 runs with 0).
+      final cur = allRegulators ? (s.parameters[name] ?? current[name]) : (current[name] ?? (s.parameters[name]));
+      if (cur == null || (allRegulators && !cur.isFinite)) continue;
       // v2 anchors: fitness weights start at the package values; moving away
       // costs prior mass, and a return-to-anchor arm is offered.
       final weight = kind == 'weight';

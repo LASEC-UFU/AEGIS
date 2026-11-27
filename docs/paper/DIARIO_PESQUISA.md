@@ -600,6 +600,26 @@ Registro técnico detalhado (em inglês): `experiments/EXPERIMENT_LOG.md`.
   - Correção candidata, ainda não testada: dar ao controlador, e à escolha
     do campeão, a validação na convenção reportada.
 
+### 2026-11-27 — Controlador em Dart com acesso aos 45 reguladores; correção do doc 16
+
+- **Opção nova `allRegulators` no CAC** (agentes `cac-all`, `cac4-all`,
+  `cac41-all`). Com a opção ligada:
+  - o controlador oferece todos os reguladores do esquema, menos os de
+    pós-processamento, que não têm efeito online;
+  - lê o valor atual do snapshot do núcleo, o que corrige o defeito do
+    registro com padrões velhos;
+  - trata os 3 eventos novos como braços de um disparo.
+- **Padrão desligado:** v3, v4 e v4.1 ficam idênticos ao T1–T6.
+- **Agente LLM:** a lista de parâmetros e o prompt incluem os reguladores
+  novos.
+- **Testes:** Flutter 48/48.
+- [limitação] **Correção de documentação.** O doc 16 §3.5 listava um evento
+  `refineChampion` que nunca foi implementado no núcleo. A linha foi
+  removida; são 3 eventos novos e a contagem de 29 reguladores novos está
+  certa.
+- **Mapa de impacto.** Os reguladores novos continuam sem mapa de impacto.
+  O CAC v4.1 não os usa até o T7 medir o efeito.
+
 ## Pendências e decisões do usuário (atualizado em 2026-11-27)
 
 - ~~Resultado do A1 e abertura dos testes do WH e do SB~~ feitos em 2026-11-26.

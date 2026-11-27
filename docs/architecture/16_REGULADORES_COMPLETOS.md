@@ -99,7 +99,6 @@ P6) e `postProcessGuard` (0/1).
 | `advancePhase` | 1 | força o currículo a passar para a fase seguinte |
 | `seedFromChampion` | 0,05–0,5 | troca essa fração dos piores de cada ilha por mutantes do campeão (intensificação) |
 | `pruneChampion` | 1 | poda o campeão com o podador do pós-processamento e o injeta como migrante |
-| `refineChampion` | 1–50 | refina o campeão por simulação (P6, até esse número de iterações) e o injeta como migrante |
 
 ## 4. Garantias
 
@@ -181,3 +180,35 @@ teto 79. Eles respondem diretamente se há folga de capacidade.
 
 **Custo:** CT 490 execuções, WH e SB 130 cada, com 5 processos, cerca de
 12–14 h. Roda depois do T6.
+
+**Correção (2026-11-27):** a primeira versão da tabela de eventos (§3.5)
+listava um quarto evento, `refineChampion`, que nunca foi implementado no
+núcleo. A linha foi removida. Os eventos novos são três (`advancePhase`,
+`seedFromChampion`, `pruneChampion`), o que fecha a conta de 29 reguladores
+novos (7 + 11 + 4 + 4 + 3).
+
+## 7. Controlador em Dart: acesso ao conjunto completo (2026-11-27, depois do T6)
+
+**`allRegulators`** é uma nova opção do CAC, com agentes `cac-all`,
+`cac4-all` e `cac41-all` no runner. Padrão: desligada.
+
+| | desligada (padrão) | ligada |
+|---|---|---|
+| Reguladores oferecidos | os 16 originais (DE, pesos, `triggerRestart`) | todos do esquema, exceto `post` |
+| Valor atual | registro do Dart primeiro, depois o snapshot (como no T1 a T6) | snapshot do núcleo primeiro |
+| Eventos novos | — | um braço cada (`seedFromChampion` com 0,2) |
+
+- **Desligada:** v3, v4 e v4.1 ficam idênticos ao T1–T6 em qualquer build.
+- **Valor atual com a opção ligada.** Corrige o defeito do registro: ele
+  mantém padrões velhos, por exemplo γ 0,01 enquanto o A1 roda com 0, e teto
+  de regressores 8.
+- **Reguladores `post` nunca entram no bandit.** Só agem na finalização,
+  então uma ação online não pode ser julgada pelo efeito.
+- **Agente LLM:** a lista de parâmetros permitidos passa a incluir os
+  reguladores novos (menos `post`), com as faixas do esquema do núcleo. O
+  prompt descreve os reguladores de capacidade, de busca e os eventos.
+- **Agente roteirizado** (usado no T7): já lia os valores do snapshot; não
+  mudou.
+- **Testes:** Flutter 48/48, com 3 testes novos (padrão desligado
+  inalterado, conjunto completo com valores do núcleo, v4.1 continua
+  oferecendo só braços medidos).

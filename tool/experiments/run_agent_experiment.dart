@@ -123,9 +123,11 @@ Future<void> main(List<String> args) async {
   } else if (agentSpec.startsWith('script:')) {
     agent = ScriptedAgent.parse(agentSpec.substring(7), actionSchema: service.getActionSchema,
         phaseStagnationLimit: (config['phaseStagnationLimit'] as num?)?.toInt() ?? 150);
-  } else if (agentSpec == 'cac' || agentSpec.startsWith('cac:') || agentSpec == 'cac4' || agentSpec.startsWith('cac4:') || agentSpec == 'cac41' || agentSpec.startsWith('cac41:')) {
+  } else if (RegExp(r'^cac(4|41)?(-all)?(:.*)?$').hasMatch(agentSpec)) {
+    // cac | cac4 | cac41, optional "-all" (full regulator set, doc 16), optional ":<table.json>".
     final v4 = agentSpec.startsWith('cac4');
     final tablePath = agentSpec.contains(':') ? agentSpec.substring(agentSpec.indexOf(':') + 1) : null;
+    final all = agentSpec.split(':').first.endsWith('-all');
     agent = AdaptiveConvergenceController(
       actionSchema: service.getActionSchema,
       currentParameters: () => service.parameters.currentValues,
@@ -133,6 +135,7 @@ Future<void> main(List<String> args) async {
       seed: seed,
       version: v4 ? 4 : 3,
       measuredOnly: agentSpec.startsWith('cac41'),
+      allRegulators: all,
       table: tablePath != null
           ? jsonDecode(File(tablePath).readAsStringSync()) as Map<String, dynamic>
           : null,
