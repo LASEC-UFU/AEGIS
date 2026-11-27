@@ -620,6 +620,26 @@ Registro técnico detalhado (em inglês): `experiments/EXPERIMENT_LOG.md`.
 - **Mapa de impacto.** Os reguladores novos continuam sem mapa de impacto.
   O CAC v4.1 não os usa até o T7 medir o efeito.
 
+### 2026-11-27 — Autorização do usuário para continuar sem supervisão
+
+- **Pedido do usuário:** "quando terminar já vou estar dormindo então já
+  deixo registrado que você pode continuar já para a próxima etapa e ter
+  como meta só parar quando tudo já estiver analisado e implementado
+  conforme nossas conversas".
+- **Plano:**
+  - analisar o T7;
+  - montar as regras do CAC v5 a partir do mapa medido;
+  - corrigir o sinal de validação (convenção reportada, achado do T6);
+  - pré-registrar e rodar a validação (T8);
+  - registrar tudo.
+- **Restrições que continuam valendo:**
+  - sem chamadas pagas;
+  - sem uso do teste;
+  - builds congelados intactos;
+  - commits só em `audit/aegis-1.1.0-wip`.
+- **Decisões reservadas ao usuário** (artigo, A2, licenças, LLM pago):
+  continuam pendentes.
+
 ## Pendências e decisões do usuário (atualizado em 2026-11-27)
 
 - ~~Resultado do A1 e abertura dos testes do WH e do SB~~ feitos em 2026-11-26.
