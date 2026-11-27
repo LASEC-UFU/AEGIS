@@ -74,7 +74,7 @@ static const std::set<std::string>& known_config_keys() {
         "initialDelayFraction","islandRoles","islandRegimes","enableRefiner","enablePruner",
         "webSocketPort","agentActionsEnabled","allowBudgetActions","actionCooldown",
         "outcomeHorizon","broadcastInterval","syncMode","historyStride","fitMethod",
-        "admissibilityVeto","vetoTopK","finalRefine","postProcessGuard","maxDelayStart"
+        "admissibilityVeto","vetoTopK","finalRefine","postProcessGuard","maxDelayStart","validationContext"
     };
     return keys;
 }
@@ -153,6 +153,7 @@ bool PipelineConfig::from_json(const std::string& text, std::string* error,
         if (fr != "none" && fr != "simulation") { if (error) *error = "finalRefine must be \"none\" or \"simulation\""; return false; }
         final_refine_simulation = fr == "simulation";
         post_process_guard = v.bool_or("postProcessGuard", false);
+        validation_context = v.bool_or("validationContext", false);
     }
     {
         const double s = v.number_or("randomSeed", 0.0);
@@ -227,6 +228,7 @@ std::string PipelineConfig::to_json() const {
       << (de.admissibility_veto ? ",\"admissibilityVeto\":true,\"vetoTopK\":" + std::to_string(de.veto_top_k) : std::string())
       << (final_refine_simulation ? ",\"finalRefine\":\"simulation\"" : "")
       << (post_process_guard ? ",\"postProcessGuard\":true" : "")
+      << (validation_context ? ",\"validationContext\":true" : "")
       << (max_delay_start >= 0 && max_delay_start != de.max_delay ? ",\"maxDelayStart\":" + std::to_string(max_delay_start) : std::string())
       << ",\"alpha\":" << num(weights.alpha) << ",\"denominatorPenalty\":" << num(weights.beta)
       << ",\"complexityPenalty\":" << num(weights.gamma) << ",\"exponentPenalty\":" << num(weights.delta)
@@ -395,6 +397,7 @@ bool IdentificationPipeline::configure(const std::string& json_config) {
     c.history_stride = std::max(1, c.history_stride);
     c.de.num_variables = raw_cols_;
     c.weights.score_start = c.de.max_delay; // common scoring row for all candidates
+    c.weights.val_context = c.validation_context;
 #ifdef __EMSCRIPTEN__
     c.sync_mode = true;
     c.enable_ws = false;
@@ -439,11 +442,18 @@ void IdentificationPipeline::prepare_data() {
     train_rows_ = train_end_;
     val_rows_   = val_end_ - train_end_;
     train_data_.assign(norm_data_.begin(), norm_data_.begin() + static_cast<size_t>(train_end_) * cols);
-    if (val_rows_ > 0)
-        val_data_.assign(norm_data_.begin() + static_cast<size_t>(train_end_) * cols,
+    // validationContext: prepend the last maxDelay training rows, so the search
+    // simulates validation from trainEnd - maxDelay and scores it from
+    // score_start = maxDelay, i.e. over the whole validation split: the same
+    // convention as the reported metrics (segment_metrics_json).
+    val_ctx_ = (cfg_.validation_context && val_rows_ > 0) ? std::min(cfg_.de.max_delay, train_end_) : 0;
+    if (val_rows_ > 0) {
+        val_data_.assign(norm_data_.begin() + static_cast<size_t>(train_end_ - val_ctx_) * cols,
                          norm_data_.begin() + static_cast<size_t>(val_end_) * cols);
-    else
+        val_rows_ += val_ctx_;
+    } else {
         val_data_.clear();
+    }
 }
 
 double IdentificationPipeline::divergence_bound() const {
@@ -832,12 +842,13 @@ bool IdentificationPipeline::start() {
         de_->set_island_role(i, island_role_name(island_roles_[i]));
     }
     if (cfg_.island_regimes && val_rows_ > 0 && n_islands > 1) {
-        const int chunk = val_rows_ / n_islands;
+        // Regimes split the validation split proper (after the context rows).
+        const int chunk = (val_rows_ - val_ctx_) / n_islands;
         const int warmup = cfg_.de.max_delay;
         if (chunk > warmup + 5) {
             for (int i = 0; i < n_islands; ++i) {
-                const int start_row = i * chunk;
-                const int end_row = (i == n_islands - 1) ? val_rows_ : (i + 1) * chunk;
+                const int start_row = val_ctx_ + i * chunk;
+                const int end_row = (i == n_islands - 1) ? val_rows_ : val_ctx_ + (i + 1) * chunk;
                 const int data_start = std::max(0, start_row - warmup);
                 de_->set_island_validation_window(
                     i, val_data_.data() + static_cast<size_t>(data_start) * raw_cols_, end_row - data_start);

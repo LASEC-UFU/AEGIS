@@ -12,6 +12,7 @@
 #include <random>
 #include <string>
 #include <thread>
+#include <tuple>
 #include <vector>
 
 #ifdef _WIN32
@@ -444,12 +445,46 @@ void test_curriculum_off() {
 
 } // namespace
 
+// validationContext: the search validation follows the reported convention, so
+// with post-processing off the end-of-search champion's freeRunValFull equals
+// the reported validation free-run RMSE (doc 15 §14, T6 finding).
+void test_validation_context() {
+    std::puts("[validationContext]");
+    auto d = make_data(500, 9);
+    const std::string base =
+        "{\"numIslands\":2,\"populationSize\":12,\"maxRegressors\":5,\"maxDelay\":8,\"maxGenerations\":40,"
+        "\"randomSeed\":17,\"syncMode\":true,\"numThreads\":1,\"trainEndRow\":300,\"valEndRow\":420,"
+        "\"testStartRow\":420,\"errorMode\":\"simulation\",\"freeRunHorizon\":0,"
+        "\"enablePruner\":false,\"enableRefiner\":false";
+    auto run = [&](bool ctx) {
+        void* p = make_pipeline(d, 500, base + (ctx ? ",\"validationContext\":true}" : "}"));
+        aegis_start(p);
+        while (aegis_step(p, 10) > 0) {}
+        Value h = parse(take(aegis_get_history(p)));
+        const double end = h.items().back().number_or("freeRunValFull", NAN);
+        Value fin = parse(take(aegis_get_final_report(p)));
+        const double rep = fin.get("metrics")->get("validation")->number_or("rmseFreeRun", NAN);
+        Value cfg = parse(take(aegis_get_config(p)));
+        const bool recorded = cfg.bool_or("validationContext", false);
+        aegis_destroy_pipeline(p);
+        return std::make_tuple(end, rep, recorded);
+    };
+    auto [e1, r1, k1] = run(true);
+    expect(k1, "validationContext recorded in the effective config");
+    expect(std::isfinite(e1) && std::abs(e1 - r1) <= 1e-9 * std::max(1.0, std::abs(r1)),
+           "with validationContext the search validation equals the reported validation");
+    auto [e0, r0, k0] = run(false);
+    expect(!k0, "validationContext off by default");
+    (void)e0; (void)r0;
+}
+
 int main() {
     std::printf("build: %s\n", aegis_build_info());
     test_configuration();
     test_sync_run_and_reproducibility();
     test_actions();
     test_regulators();
+    test_validation_context();
     test_interruption();
     test_async_and_destroy();
     test_websocket();

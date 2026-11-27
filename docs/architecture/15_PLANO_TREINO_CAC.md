@@ -593,3 +593,65 @@ melhoram na validação final, 6 ficam iguais, e o fim da busca não muda.
   pelo usuário. A correção candidata é dar ao controlador, e à escolha do
   campeão, a validação na convenção reportada. Isso exige desenho próprio e
   ainda não foi testado.
+
+## 15. Correção do sinal: `validationContext`; desenho do T6b (registrado antes de rodar; 2026-11-27)
+
+### 15.1 A correção (núcleo, `cpp/build_sig`)
+
+**Problema (T6, §14).** A busca e o relatório medem a validação de formas
+diferentes:
+- **busca:** o bloco de validação é simulado sozinho, com condições
+  iniciais do próprio início da validação. As primeiras `maxDelay` linhas
+  da validação ficam fora da pontuação;
+- **relatório:** a simulação parte de trainEnd − maxDelay, com a cauda do
+  treino como condição inicial, e pontua a validação inteira.
+
+**Correção: chave `validationContext`** (padrão `false`). Com ela ligada:
+- o bloco de validação da busca passa a começar `maxDelay` linhas antes do
+  fim do treino;
+- como a pontuação começa em `score_start` = `maxDelay`, a busca, o
+  diagnóstico `freeRunValFull`, a validação de um passo (e o gapOS) e o
+  veto de admissibilidade passam a usar a convenção reportada;
+- as janelas de validação das ilhas (regimes) ficam deslocadas pelo
+  contexto.
+
+As linhas de contexto são de treino e servem só como condição inicial; o
+teste não entra.
+
+**Verificação:**
+- testes: core, API (com um teste novo) e phase0 passam;
+- CT, semente 7, 3×10⁴:
+  - **desligada:** bit-idêntica ao `build_cap`. Só o campo de relógio `t`
+    difere; a validação final é idêntica;
+  - **ligada, sem pós-processamento:** `freeRunValFull` do campeão no fim
+    da busca = validação reportada = 0,1332333753.
+
+### 15.2 Desenho do T6b
+
+Script: `experiments/cac/run_t6b.sh <benchmark>`. Análise congelada:
+`tool/experiments/cac_t6b_analysis.dart`.
+
+| | CT | WH e SB |
+|---|---|---|
+| Sementes (novas) | 91–100 | 41–45 |
+| Orçamento | 3×10⁵ | 1,5×10⁵ |
+| Quando roda | agora, com 1 processo ao lado do T7 (limite de 6) | depois do T7 |
+
+**Braços**, todos no pacote A1 com `postProcessGuard`:
+- `none_guard`;
+- `none_guard_ctx` (com `validationContext`);
+- `cac41_guard_ctx` (CAC v4.1, 16 reguladores, com `validationContext`).
+
+**Medida principal:** validação final reportada. O fim da busca é
+secundário, porque está em convenções diferentes entre os braços.
+
+**Critérios** (d = log da razão, pareado por semente):
+1. **Adotar `validationContext` no pacote** (`none_guard_ctx` vs
+   `none_guard`):
+   - CT: mediana de d final < 0;
+   - WH e SB: não-dano, ou seja, mediana ≤ +0,02 e no máximo 2 de 5
+     sementes piores.
+2. **CAC v4.1 com o sinal corrigido** (`cac41_guard_ctx` vs
+   `none_guard_ctx`):
+   - CT: mediana de d final < 0, com pelo menos 6 de 10 sementes melhores;
+   - WH e SB: não-dano, como acima.

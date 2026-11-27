@@ -25,6 +25,10 @@ struct FitnessWeights {
     // First row (in each split) where errors are scored; set to the configured
     // maxDelay so that every candidate is scored on the same samples.
     int    score_start = 0;
+    // validationContext: the validation block starts score_start rows before
+    // the end of training (training tail as initial conditions), so the
+    // diagnostics skip those context rows as well. Off: block starts at the split.
+    bool   val_context = false;
     double input_contribution_target = 0.3;
 };
 

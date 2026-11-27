@@ -640,6 +640,26 @@ Registro técnico detalhado (em inglês): `experiments/EXPERIMENT_LOG.md`.
 - **Decisões reservadas ao usuário** (artigo, A2, licenças, LLM pago):
   continuam pendentes.
 
+### 2026-11-27 — Correção do sinal de validação (`validationContext`) e desenho do T6b
+
+- **Achado do T6.** A busca simula o bloco de validação sozinho; o
+  relatório simula a partir da cauda do treino e pontua a validação
+  inteira.
+- **Correção:** nova chave `validationContext` no núcleo (build novo
+  `cpp/build_sig`, ignorado pelo git; o `build_cap` do T7 ficou intacto).
+  Com ela ligada, a busca e o controlador medem a validação na convenção
+  reportada.
+- **Verificação:**
+  - desligada: bit-idêntica ao `build_cap` no CT (só o relógio difere);
+  - ligada e sem pós-processamento: fim da busca = validação reportada
+    (0,1332333753 nos dois);
+  - testes core, API (com um teste novo) e phase0 passam.
+- **T6b**, registrado antes de rodar (doc 15 §15):
+  - CT com sementes 91–100, em 1 processo ao lado do T7;
+  - WH e SB (sementes 41–45) depois do T7;
+  - braços `none_guard`, `none_guard_ctx` e `cac41_guard_ctx`;
+  - medida principal: validação final reportada.
+
 ## Pendências e decisões do usuário (atualizado em 2026-11-27)
 
 - ~~Resultado do A1 e abertura dos testes do WH e do SB~~ feitos em 2026-11-26.

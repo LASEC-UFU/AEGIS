@@ -702,12 +702,14 @@ ModelDiagnostics IndividualEvaluator::diagnose(
             y_absmax = std::max(y_absmax, std::abs(train_data[static_cast<size_t>(i) * cols + output_col]));
         FreeRunResult fr = model.simulate(val_data, val_rows, cols, output_col, -1,
                                           kDivergenceFactor * std::max(y_absmax, 1e-6));
-        const int ns = static_cast<int>(fr.yhat.size());
+        // validationContext: drop the training-context rows (score from score_start).
+        const int vskip = weights_.val_context ? std::max(0, weights_.score_start - md) : 0;
+        const int ns = static_cast<int>(fr.yhat.size()) - vskip;
         if (ns > 1) {
             std::vector<double> ys(ns);
-            for (int i = 0; i < ns; ++i) ys[i] = val_data[static_cast<size_t>(i + md) * cols + output_col];
-            d.free_run_rmse_val_full = Metrics::rmse(ys.data(), fr.yhat.data(), ns);
-            d.free_run_r2_val_full   = Metrics::r2(ys.data(), fr.yhat.data(), ns);
+            for (int i = 0; i < ns; ++i) ys[i] = val_data[static_cast<size_t>(i + vskip + md) * cols + output_col];
+            d.free_run_rmse_val_full = Metrics::rmse(ys.data(), fr.yhat.data() + vskip, ns);
+            d.free_run_r2_val_full   = Metrics::r2(ys.data(), fr.yhat.data() + vskip, ns);
         }
         d.free_run_val_diverged = fr.diverged;
     }

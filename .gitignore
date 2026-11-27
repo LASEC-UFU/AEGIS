@@ -65,6 +65,7 @@ cpp/build_phase0/
 cpp/build_a1/
 cpp/build_dev/
 cpp/build_cap/
+cpp/build_sig/
 experiments/results_phase0/*/e3/
 experiments/transfer/
 experiments/results_perf/

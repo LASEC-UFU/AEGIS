@@ -62,6 +62,7 @@ struct PipelineConfig {
     bool           enable_refiner  = true;
     bool           final_refine_simulation = false; // P6: final champion refinement by free-run error
     bool           post_process_guard = false;      // accept post-processing only if reported validation does not worsen
+    bool           validation_context = false;      // search validation in the reported convention (training tail as context)
     bool           enable_pruner   = true;
     AutomaticPruner::Config prune;
 
@@ -234,6 +235,7 @@ private:
     int train_end_ = 0, val_end_ = 0, test_start_ = 0;
     std::vector<double> train_data_, val_data_;
     int train_rows_ = 0, val_rows_ = 0;
+    int val_ctx_ = 0; // context rows of training prepended to val_data_ (validationContext)
 
     std::unique_ptr<Normalizer>                      normalizer_;
     std::unique_ptr<DifferentialEvolutionOptimizer>  de_;
