@@ -77,6 +77,9 @@ struct PipelineConfig {
     int    phase_stagnation_limit = 150;
     double initial_pmax           = 1.5;
     double initial_delay_fraction = 0.5;
+    /** Regulator start value of the maximum delay; maxDelay is the launch
+     *  ceiling that fixes the common scoring row (doc 16). -1 = maxDelay. */
+    int    max_delay_start        = -1;
 
     // Islands
     bool   island_roles   = true;
@@ -150,7 +153,7 @@ struct ActionRecord {
 /** Specification of one agent-tunable parameter (published as schema). */
 struct ActionSpec {
     std::string name;
-    std::string kind;        // "de" | "weight" | "event"
+    std::string kind;        // "de" | "weight" | "event" | "structure" | "search" | "objective" | "post"
     double min = 0.0, max = 1.0, max_step = 1.0;
     bool   integer = false;
     bool   budget = false;   // affects the evaluation budget / stopping
@@ -260,6 +263,11 @@ private:
     std::vector<IslandRole> island_roles_;
     double             annealed_gamma_ = 0.01; // γ chosen by the curriculum at the last phase change
     double             gamma_override_ = -1.0; // ≥ 0 once an agent has set complexityPenalty
+    // Regulators (doc 16): search-space targets after the first curriculum phase.
+    double             search_pmax_ = 5.0;
+    int                search_max_delay_ = 40;
+    void   force_phase_advance_locked(const std::string& reason);
+    void   transition_phase_locked(int next, const std::string& reason, int gen);
     double current_gamma_value() const;
 
     std::thread     worker_thread_;

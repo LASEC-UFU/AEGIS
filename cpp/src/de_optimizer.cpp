@@ -449,7 +449,10 @@ void Island::reevaluate_population() {
 }
 
 void Island::update_weights(const FitnessWeights& w) {
-    const bool horizon_changed = w.free_run_horizon != evaluator_.weights().free_run_horizon;
+    // A new free-run horizon or error mode (regulator, doc 16) changes the
+    // objective itself: the whole population is re-evaluated.
+    const bool horizon_changed = w.free_run_horizon != evaluator_.weights().free_run_horizon ||
+                                 w.error_mode != evaluator_.weights().error_mode;
     evaluator_.weights() = w;
     if (horizon_changed) {
         reevaluate_population();
@@ -473,6 +476,81 @@ void Island::set_validation_window(const double* val_data, int val_rows) {
 
 void Island::update_config(const DEConfig& new_cfg) {
     cfg_ = new_cfg; // JADE means mu_f_/mu_cr_ intentionally preserved
+}
+
+// ── Regulators (docs/architecture/16_REGULADORES_COMPLETOS.md) ─────────────
+
+void Island::enforce_limits() {
+    bool changed = false;
+    for (auto& c : pop_) {
+        Chromosome r = c;
+        repair(r);
+        if (r.structural_hash() == c.structural_hash() &&
+            r.regressors.size() == c.regressors.size()) {
+            // Same structure: keep the evaluated member unless an exponent or
+            // delay was moved (the structural hash covers both).
+            continue;
+        }
+        evaluate(r);
+        c = std::move(r);
+        changed = true;
+    }
+    if (changed) {
+        stagnation_ = 0;
+        prev_best_ = best_fitness();
+    }
+}
+
+void Island::resize_population(int n) {
+    n = std::max(4, n);
+    const int sz = static_cast<int>(pop_.size());
+    if (n > sz) {
+        for (int i = sz; i < n; ++i) {
+            Chromosome c = random_chromosome();
+            evaluate(c);
+            pop_.push_back(std::move(c));
+        }
+    } else if (n < sz) {
+        std::vector<int> idx(sz);
+        std::iota(idx.begin(), idx.end(), 0);
+        std::stable_sort(idx.begin(), idx.end(),
+                         [&](int a, int b){ return pop_[a].fitness < pop_[b].fitness; }); // best first
+        std::vector<char> keep(sz, 0);
+        for (int k = 0; k < n; ++k) keep[idx[k]] = 1;
+        std::vector<Chromosome> np;
+        np.reserve(n);
+        for (int i = 0; i < sz; ++i) if (keep[i]) np.push_back(std::move(pop_[i]));
+        pop_ = std::move(np);
+    }
+    cfg_.population_size = static_cast<int>(pop_.size());
+    prev_best_ = best_fitness();
+}
+
+void Island::seed_from(const Chromosome& champ, double ratio) {
+    const int sz = static_cast<int>(pop_.size());
+    int k = std::max(1, static_cast<int>(std::ceil(sz * ratio)));
+    k = std::min(k, sz - std::min(std::max(cfg_.elitism_count, 1), sz));
+    if (k <= 0 || champ.regressors.empty()) return;
+    std::vector<int> idx(sz);
+    std::iota(idx.begin(), idx.end(), 0);
+    std::stable_sort(idx.begin(), idx.end(),
+                     [&](int a, int b){ return pop_[a].fitness > pop_[b].fitness; }); // worst first
+    std::uniform_real_distribution<double> u01(0.0, 1.0);
+    std::uniform_int_distribution<int> dd(-2, 2);
+    for (int m = 0; m < k; ++m) {
+        Chromosome c = champ;
+        structural_mutation(c);
+        for (auto& reg : c.regressors)
+            for (auto& t : reg.terms) {
+                if (u01(rng_) < 0.2) t.delay += dd(rng_);
+                if (u01(rng_) < 0.2) t.exponent += (u01(rng_) < 0.5 ? -1.0 : 1.0) *
+                                                    std::max(cfg_.exponent_step, 0.1);
+            }
+        repair(c);
+        evaluate(c);
+        pop_[idx[m]] = std::move(c);
+    }
+    prev_best_ = best_fitness();
 }
 
 IslandReport Island::report() const {
@@ -928,7 +1006,95 @@ double DifferentialEvolutionOptimizer::tuning_value(const std::string& p) const 
     if (p == "stagnationLimit")       return cfg_.stagnation_limit;
     if (p == "reinitializationRatio") return cfg_.reinit_ratio;
     if (p == "structuralMutationRate")return cfg_.structural_mutation_rate;
+    // Regulators (doc 16)
+    if (p == "maxRegressors")         return cfg_.max_regressors;
+    if (p == "maxTermsPerReg")        return cfg_.max_terms_per_reg;
+    if (p == "maxDelay")              return cfg_.max_delay;
+    if (p == "pmax")                  return cfg_.pmax;
+    if (p == "pmin")                  return cfg_.pmin;
+    if (p == "exponentStep")          return cfg_.exponent_step;
+    if (p == "denominatorProbability")return cfg_.denominator_probability;
+    if (p == "populationSize")        return cfg_.population_size;
+    if (p == "elitismCount")          return cfg_.elitism_count;
+    if (p == "variableMutationRate")  return cfg_.variable_mutation_rate;
+    if (p == "jadeC")                 return cfg_.jade_c;
+    if (p == "jadeP")                 return cfg_.jade_p;
+    if (p == "reinitInterval")        return cfg_.reinit_interval;
+    if (p == "hypermutation")         return cfg_.hypermutation ? 1.0 : 0.0;
+    if (p == "mutationStrategy")      return cfg_.strategy == MutationStrategy::Rand1 ? 1.0 : 0.0;
+    if (p == "fitMethod")             return cfg_.fit_method;
+    if (p == "admissibilityVeto")     return cfg_.admissibility_veto ? 1.0 : 0.0;
+    if (p == "vetoTopK")              return cfg_.veto_top_k;
     return std::numeric_limits<double>::quiet_NaN();
+}
+
+bool DifferentialEvolutionOptimizer::apply_structure(const std::string& p, double v) {
+    std::lock_guard<std::mutex> lk(islands_mutex_);
+    const int iv = static_cast<int>(std::lround(v));
+    bool tighten = false; // members may now violate the limits
+    if      (p == "maxRegressors")          { tighten = iv < cfg_.max_regressors; cfg_.max_regressors = std::max(1, iv); }
+    else if (p == "maxTermsPerReg")         { tighten = iv < cfg_.max_terms_per_reg; cfg_.max_terms_per_reg = std::max(1, iv); }
+    else if (p == "maxDelay")               { tighten = iv < cfg_.max_delay; cfg_.max_delay = std::max(1, iv); }
+    else if (p == "pmax")                   { tighten = v < cfg_.pmax; cfg_.pmax = std::max(cfg_.pmin, v); }
+    else if (p == "pmin")                   { tighten = v > cfg_.pmin; cfg_.pmin = std::min(cfg_.pmax, v); }
+    else if (p == "exponentStep")           { tighten = true; cfg_.exponent_step = v; }
+    else if (p == "denominatorProbability") { tighten = v <= 0.0 && cfg_.denominator_probability > 0.0;
+                                              cfg_.denominator_probability = v; }
+    else if (p == "populationSize") {
+        cfg_.population_size = std::max(4, iv);
+        cfg_.elitism_count = std::min(cfg_.elitism_count, cfg_.population_size - 1);
+        for (auto& isl : islands_) {
+            DEConfig nc = isl->config();
+            nc.elitism_count = cfg_.elitism_count;
+            isl->update_config(nc);
+            isl->resize_population(cfg_.population_size);
+        }
+        return true;
+    }
+    else if (p == "elitismCount")         cfg_.elitism_count = std::clamp(iv, 0, cfg_.population_size - 1);
+    else if (p == "variableMutationRate") cfg_.variable_mutation_rate = v;
+    else if (p == "jadeC")                cfg_.jade_c = v;
+    else if (p == "jadeP")                cfg_.jade_p = v;
+    else if (p == "reinitInterval")       cfg_.reinit_interval = std::max(1, iv);
+    else if (p == "hypermutation")        cfg_.hypermutation = iv != 0;
+    else if (p == "mutationStrategy")     cfg_.strategy = iv != 0 ? MutationStrategy::Rand1
+                                                                 : MutationStrategy::JadeCurrentToPBest;
+    else if (p == "fitMethod") {
+        cfg_.fit_method = iv != 0 ? 1 : 0;
+        for (auto& isl : islands_) isl->set_fit_method(cfg_.fit_method);
+    }
+    else if (p == "admissibilityVeto")    { cfg_.admissibility_veto = iv != 0; update_champion_locked(); }
+    else if (p == "vetoTopK")             { cfg_.veto_top_k = std::max(1, iv); update_champion_locked(); }
+    else return false;
+    for (auto& isl : islands_) {
+        DEConfig nc = isl->config(); // copy only the regulator fields
+        nc.max_regressors = cfg_.max_regressors;
+        nc.max_terms_per_reg = cfg_.max_terms_per_reg;
+        nc.max_delay = cfg_.max_delay;
+        nc.pmax = cfg_.pmax;
+        nc.pmin = cfg_.pmin;
+        nc.exponent_step = cfg_.exponent_step;
+        nc.denominator_probability = cfg_.denominator_probability;
+        nc.elitism_count = cfg_.elitism_count;
+        nc.variable_mutation_rate = cfg_.variable_mutation_rate;
+        nc.jade_c = cfg_.jade_c;
+        nc.jade_p = cfg_.jade_p;
+        nc.reinit_interval = cfg_.reinit_interval;
+        nc.hypermutation = cfg_.hypermutation;
+        nc.strategy = cfg_.strategy;
+        nc.fit_method = cfg_.fit_method;
+        nc.admissibility_veto = cfg_.admissibility_veto;
+        nc.veto_top_k = cfg_.veto_top_k;
+        isl->update_config(nc);
+        if (tighten) isl->enforce_limits();
+    }
+    return true;
+}
+
+void DifferentialEvolutionOptimizer::seed_from_champion(double ratio) {
+    std::lock_guard<std::mutex> lk(islands_mutex_);
+    if (!champion_valid_) return;
+    for (auto& isl : islands_) isl->seed_from(champion_, ratio);
 }
 
 bool DifferentialEvolutionOptimizer::apply_tuning(

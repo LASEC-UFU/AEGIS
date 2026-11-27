@@ -187,6 +187,15 @@ public:
     void accept_migrants(const std::vector<Chromosome>& migrants);
     void restart(double ratio);
 
+    /** Regulators (doc 16): repair and re-evaluate the members that violate
+     *  the current limits (capacity, delay, exponent grid, denominators). */
+    void enforce_limits();
+    /** Grow with evaluated random members or shrink by dropping the worst. */
+    void resize_population(int n);
+    /** Replace the worst fraction (never the elite) by mutants of c. */
+    void seed_from(const Chromosome& c, double ratio);
+    void set_fit_method(int m) { evaluator_.set_fit_method(m); }
+
     /** Replace config (search space, rates). JADE means are NOT reset. */
     void update_config(const DEConfig& new_cfg);
     void set_mu_f(double v)  { mu_f_ = v; }
@@ -296,6 +305,11 @@ public:
     void set_island_validation_window(int idx, const double* val_data, int val_rows);
     void set_island_role(int idx, const std::string& name);
     void trigger_restart(double ratio);
+    /** Regulators of capacity, search and objective (doc 16). Returns false
+     *  for unknown names. Thread-safe; applied between generations. */
+    bool apply_structure(const std::string& param, double value);
+    /** Event: replace the worst fraction of every island by champion mutants. */
+    void seed_from_champion(double ratio);
     void inject_migrant(const Chromosome& c);
 
     long long evaluations() const;

@@ -74,7 +74,7 @@ static const std::set<std::string>& known_config_keys() {
         "initialDelayFraction","islandRoles","islandRegimes","enableRefiner","enablePruner",
         "webSocketPort","agentActionsEnabled","allowBudgetActions","actionCooldown",
         "outcomeHorizon","broadcastInterval","syncMode","historyStride","fitMethod",
-        "admissibilityVeto","vetoTopK","finalRefine","postProcessGuard"
+        "admissibilityVeto","vetoTopK","finalRefine","postProcessGuard","maxDelayStart"
     };
     return keys;
 }
@@ -178,6 +178,7 @@ bool PipelineConfig::from_json(const std::string& text, std::string* error,
     phase_stagnation_limit = v.int_or("phaseStagnationLimit", 150);
     initial_pmax           = v.number_or("initialPmax", 1.5);
     initial_delay_fraction = v.number_or("initialDelayFraction", 0.5);
+    max_delay_start        = v.int_or("maxDelayStart", -1);
 
     island_roles   = v.bool_or("islandRoles", true);
     island_regimes = v.bool_or("islandRegimes", true);
@@ -226,6 +227,7 @@ std::string PipelineConfig::to_json() const {
       << (de.admissibility_veto ? ",\"admissibilityVeto\":true,\"vetoTopK\":" + std::to_string(de.veto_top_k) : std::string())
       << (final_refine_simulation ? ",\"finalRefine\":\"simulation\"" : "")
       << (post_process_guard ? ",\"postProcessGuard\":true" : "")
+      << (max_delay_start >= 0 && max_delay_start != de.max_delay ? ",\"maxDelayStart\":" + std::to_string(max_delay_start) : std::string())
       << ",\"alpha\":" << num(weights.alpha) << ",\"denominatorPenalty\":" << num(weights.beta)
       << ",\"complexityPenalty\":" << num(weights.gamma) << ",\"exponentPenalty\":" << num(weights.delta)
       << ",\"stabilityPenalty\":" << num(weights.eta) << ",\"noInputPenalty\":" << num(weights.zeta)
@@ -345,9 +347,14 @@ bool IdentificationPipeline::configure(const std::string& json_config) {
     c.de.num_islands        = std::clamp(c.de.num_islands, 1, 16);
     c.de.population_size    = std::clamp(c.de.population_size, 4, 1000);
     c.de.elitism_count      = std::clamp(c.de.elitism_count, 0, c.de.population_size - 1);
-    c.de.max_regressors     = std::clamp(c.de.max_regressors, 1, 40);
+    // Sanity bound only (no data structure depends on it). Was 40 up to
+    // 2026-11-27; raised so that the capacity headroom can be measured
+    // (docs/architecture/15_PLANO_TREINO_CAC.md §14). Configurations with
+    // maxRegressors <= 40 are unaffected.
+    c.de.max_regressors     = std::clamp(c.de.max_regressors, 1, 200);
     c.de.max_terms_per_reg  = std::clamp(c.de.max_terms_per_reg, 1, 6);
     c.de.max_delay          = std::clamp(c.de.max_delay, 1, 500);
+    c.max_delay_start = c.max_delay_start < 0 ? c.de.max_delay : std::clamp(c.max_delay_start, 1, c.de.max_delay);
     c.de.pmin               = std::clamp(c.de.pmin, 0.1, 10.0);
     c.de.pmax               = std::clamp(c.de.pmax, c.de.pmin, 10.0);
     c.de.exponent_step      = std::clamp(c.de.exponent_step, 0.0, 1.0);
@@ -483,6 +490,50 @@ void IdentificationPipeline::build_specs() {
     add("alpha", "weight", 0.0, 2.0, 0.5, false, false, -1, "BIC/n weight");
     add("triggerRestart", "event", 0.05, 1.0, 1.0, false, false, 50,
         "one-shot: replace this fraction of every island and reset JADE means; the elite (elitismCount) is always kept, so 1.0 = cataclysmic restart");
+    // ── Regulators (docs/architecture/16_REGULADORES_COMPLETOS.md) ──
+    // Capacity and model class.
+    add("maxRegressors", "structure", 1, 200, 10, true, false, 25,
+        "regressor ceiling; lowering repairs and re-evaluates the members above it");
+    add("maxTermsPerReg", "structure", 1, 6, 1, true, false, 25, "factors per regressor");
+    add("maxDelay", "structure", 1, 500, 10, true, false, 25,
+        "maximum delay, up to the launch ceiling (configured maxDelay, which fixes the scoring row)");
+    add("pmax", "structure", 0.5, 10.0, 1.0, false, false, 25, "largest exponent magnitude");
+    add("pmin", "structure", 0.1, 3.0, 0.5, false, false, 25, "smallest exponent magnitude");
+    add("exponentStep", "structure", 0.1, 0.5, 0.25, false, false, 50,
+        "exponent grid (only equal or finer than 0.5: real exponents are kept)");
+    add("denominatorProbability", "structure", 0.0, 1.0, 0.2, false, false, 25,
+        "probability that a new regressor goes to the denominator; 0 removes denominators");
+    // Search.
+    add("populationSize", "search", 4, 1000, 50, true, false, 50,
+        "members per island (grow: evaluated random members; shrink: drop the worst, never the elite)");
+    add("elitismCount", "search", 0, 50, 2, true, false, 25, "members protected from reinitialization");
+    add("variableMutationRate", "search", 0.0, 1.0, 0.2, false, false, -1, "per-factor variable mutation");
+    add("jadeC", "search", 0.0, 1.0, 0.1, false, false, -1, "JADE adaptation rate");
+    add("jadeP", "search", 0.01, 1.0, 0.1, false, false, -1, "JADE p-best fraction");
+    add("reinitInterval", "search", 1, 500, 25, true, false, -1, "generations of stagnation between immigrant waves");
+    add("hypermutation", "search", 0, 1, 1, true, false, -1, "triggered hypermutation on/off");
+    add("mutationStrategy", "search", 0, 1, 1, true, false, 50, "0 = JADE current-to-pbest, 1 = rand/1");
+    add("fitMethod", "search", 0, 1, 1, true, false, 50, "island fit: 0 = QR, 1 = Gram/Cholesky (P2'a)");
+    add("admissibilityVeto", "search", 0, 1, 1, true, false, 50, "M9 veto on champion promotion");
+    add("vetoTopK", "search", 1, 50, 5, true, false, 25, "members per island competing under the veto");
+    // Objective and curriculum.
+    add("errorMode", "objective", 0, 1, 1, true, false, 50,
+        "0 = one-step, 1 = free-run simulation error; re-evaluates the population");
+    add("inputContributionMin", "objective", 0.0, 1.0, 0.2, false, false, -1, "input contribution target (zeta)");
+    add("phaseStagnationLimit", "objective", 2, 5000, 100, true, false, -1, "curriculum phase stagnation limit");
+    add("islandRoles", "objective", 0, 1, 1, true, false, 50, "specialized island roles on/off");
+    // Post-processing (read at finalization).
+    add("enablePruner", "post", 0, 1, 1, true, false, -1, "final pruner on/off");
+    add("enableRefiner", "post", 0, 1, 1, true, false, -1, "final one-step refiner on/off");
+    add("finalRefine", "post", 0, 1, 1, true, false, -1, "final refinement by simulation (P6) on/off");
+    add("postProcessGuard", "post", 0, 1, 1, true, false, -1,
+        "accept post-processing only if the reported validation does not worsen");
+    // Events.
+    add("advancePhase", "event", 1, 1, 1, true, false, 50, "one-shot: move the curriculum to the next phase now");
+    add("seedFromChampion", "event", 0.05, 0.5, 0.5, false, false, 25,
+        "one-shot: replace this fraction of every island (never the elite) by mutants of the champion");
+    add("pruneChampion", "event", 1, 1, 1, true, false, 50,
+        "one-shot: prune the champion (final pruner) and inject it as a migrant");
 }
 
 const ActionSpec* IdentificationPipeline::find_spec(const std::string& name) const {
@@ -524,7 +575,16 @@ double IdentificationPipeline::current_value_locked(const std::string& name) con
     if (name == "stabilityPenalty")   return cfg_.weights.eta;
     if (name == "exponentPenalty")    return cfg_.weights.delta;
     if (name == "alpha")              return cfg_.weights.alpha;
-    if (name == "triggerRestart")     return std::numeric_limits<double>::quiet_NaN();
+    if (name == "triggerRestart" || name == "advancePhase" || name == "seedFromChampion" ||
+        name == "pruneChampion")      return std::numeric_limits<double>::quiet_NaN();
+    if (name == "errorMode")            return cfg_.weights.error_mode;
+    if (name == "inputContributionMin") return cfg_.input_contribution_min;
+    if (name == "phaseStagnationLimit") return cfg_.phase_stagnation_limit;
+    if (name == "islandRoles")          return cfg_.island_roles ? 1.0 : 0.0;
+    if (name == "enablePruner")         return cfg_.enable_pruner ? 1.0 : 0.0;
+    if (name == "enableRefiner")        return cfg_.enable_refiner ? 1.0 : 0.0;
+    if (name == "finalRefine")          return cfg_.final_refine_simulation ? 1.0 : 0.0;
+    if (name == "postProcessGuard")     return cfg_.post_process_guard ? 1.0 : 0.0;
     if (de_) return de_->tuning_value(name);
     if (name == "mutationFactor")        return cfg_.de.mu_f;
     if (name == "crossoverRate")         return cfg_.de.mu_cr;
@@ -652,26 +712,34 @@ void IdentificationPipeline::update_phase(GenerationReport& rpt) {
             break;
     }
 
-    if (next != cur) {
-        // Complexity pressure for the new phase (annealed with run progress
-        // unless an agent has overridden it).
-        const double progress = std::clamp(
-            static_cast<double>(rpt.generation) / std::max(1, cfg_.de.max_generations), 0.0, 1.0);
-        annealed_gamma_ = cfg_.gamma_anneal_start +
-                          (cfg_.gamma_anneal_end - cfg_.gamma_anneal_start) * progress;
-        phase_.store(next);
-        if (next == 1) de_->update_search_space(cfg_.de.pmax, cfg_.de.max_delay);
-        if (next == 3) {
-            const double mf = std::max(0.1, de_->tuning_value("mutationFactor") * 0.5);
-            de_->apply_tuning("mutationFactor", mf);
-            log_reflex("mutationFactor", mf, "AEGIS reflex: LocalRefinement halves F", rpt.generation);
-        }
-        push_weights_locked();
-        log_reflex("phase", next, std::string("AEGIS reflex: ") + reason + " -> " +
-                   phase_name_int(next), rpt.generation);
-    }
+    if (next != cur) transition_phase_locked(next, std::string("AEGIS reflex: ") + reason, rpt.generation);
     rpt.phase = phase_.load();
     rpt.phase_name = phase_name_int(rpt.phase);
+}
+
+void IdentificationPipeline::transition_phase_locked(int next, const std::string& reason, int gen) {
+    // Complexity pressure for the new phase (annealed with run progress
+    // unless an agent has overridden it).
+    const double progress = std::clamp(
+        static_cast<double>(gen) / std::max(1, cfg_.de.max_generations), 0.0, 1.0);
+    annealed_gamma_ = cfg_.gamma_anneal_start +
+                      (cfg_.gamma_anneal_end - cfg_.gamma_anneal_start) * progress;
+    phase_.store(next);
+    if (next == 1) de_->update_search_space(search_pmax_, search_max_delay_);
+    if (next == 3) {
+        const double mf = std::max(0.1, de_->tuning_value("mutationFactor") * 0.5);
+        de_->apply_tuning("mutationFactor", mf);
+        log_reflex("mutationFactor", mf, "AEGIS reflex: LocalRefinement halves F", gen);
+    }
+    push_weights_locked();
+    log_reflex("phase", next, reason + " -> " + phase_name_int(next), gen);
+}
+
+void IdentificationPipeline::force_phase_advance_locked(const std::string& reason) {
+    if (!de_ || !cfg_.curriculum) return;
+    const int cur = phase_.load();
+    if (cur < 0 || cur >= 3) return;
+    transition_phase_locked(cur + 1, reason, generation_.load());
 }
 
 double IdentificationPipeline::current_gamma_value() const {
@@ -727,11 +795,20 @@ bool IdentificationPipeline::start() {
         elapsed_s_ = 0.0;
     }
 
+    // Regulators (doc 16): maxDelay is the launch ceiling (common scoring row);
+    // the search starts at maxDelayStart (= maxDelay unless configured).
+    search_pmax_ = cfg_.de.pmax;
+    search_max_delay_ = cfg_.max_delay_start;
+    for (auto& s : specs_) {
+        if (s.name == "maxDelay") s.max = cfg_.de.max_delay;
+        if (s.name == "maxRegressors") s.max = std::max(1, std::min(200, train_rows_ - cfg_.de.max_delay - 3));
+    }
     DEConfig initial_de = cfg_.de;
+    initial_de.max_delay = search_max_delay_;
     if (cfg_.curriculum) {
         initial_de.pmax = std::min(cfg_.de.pmax, cfg_.initial_pmax);
-        initial_de.max_delay = std::max(1, std::min(cfg_.de.max_delay,
-            std::max(5, static_cast<int>(std::lround(cfg_.de.max_delay * cfg_.initial_delay_fraction)))));
+        initial_de.max_delay = std::max(1, std::min(search_max_delay_,
+            std::max(5, static_cast<int>(std::lround(search_max_delay_ * cfg_.initial_delay_fraction)))));
     }
     const FitnessWeights initial_weights = phase_weights(phase_.load(), current_gamma_value());
 
@@ -1057,8 +1134,51 @@ void IdentificationPipeline::apply_action_locked(ActionRecord& a) {
     if (spec->kind == "de") {
         de_->apply_tuning(a.param, v);
         if (a.param == "stagnationLimit") cfg_.de.stagnation_limit = static_cast<int>(v);
+    } else if (spec->kind == "structure" || spec->kind == "search") {
+        de_->apply_structure(a.param, v);
+        // Keep the curriculum's post-phase-0 search space in step with the regulator.
+        if (a.param == "pmax")     search_pmax_ = de_->tuning_value("pmax");
+        if (a.param == "maxDelay") search_max_delay_ = static_cast<int>(de_->tuning_value("maxDelay"));
+    } else if (spec->kind == "objective") {
+        if (a.param == "errorMode")            cfg_.weights.error_mode = v >= 0.5 ? 1 : 0;
+        else if (a.param == "inputContributionMin") {
+            cfg_.input_contribution_min = v;
+            cfg_.weights.input_contribution_target = v;
+        }
+        else if (a.param == "phaseStagnationLimit") cfg_.phase_stagnation_limit = std::max(2, static_cast<int>(v));
+        else if (a.param == "islandRoles") {
+            static const IslandRole role_cycle[4] = {
+                IslandRole::Balanced, IslandRole::Parsimony, IslandRole::FreeRunFidelity, IslandRole::Stability
+            };
+            cfg_.island_roles = v >= 0.5;
+            for (int i = 0; i < static_cast<int>(island_roles_.size()); ++i) {
+                island_roles_[i] = cfg_.island_roles ? role_cycle[i % 4] : IslandRole::Balanced;
+                de_->set_island_role(i, island_role_name(island_roles_[i]));
+            }
+        }
+        push_weights_locked();
+    } else if (spec->kind == "post") {
+        const bool on = v >= 0.5;
+        if (a.param == "enablePruner")          cfg_.enable_pruner = on;
+        else if (a.param == "enableRefiner")    cfg_.enable_refiner = on;
+        else if (a.param == "finalRefine")      cfg_.final_refine_simulation = on;
+        else if (a.param == "postProcessGuard") cfg_.post_process_guard = on;
     } else if (spec->kind == "event") {
         if (a.param == "triggerRestart") de_->trigger_restart(v);
+        else if (a.param == "advancePhase") force_phase_advance_locked("agent: advancePhase");
+        else if (a.param == "seedFromChampion") de_->seed_from_champion(v);
+        else if (a.param == "pruneChampion") {
+            Chromosome champ = de_->best_chromosome();
+            if (champ.evaluated && champ.regressors.size() > 1) {
+                IndividualEvaluator ev(de_->current_weights());
+                AutomaticPruner pruner(cfg_.prune);
+                PruneResult pr = pruner.prune(champ, ev, train_data_.data(), train_rows_,
+                                              val_rows_ > 0 ? val_data_.data() : nullptr, val_rows_,
+                                              raw_cols_, cfg_.output_col);
+                if (pr.pruned_chromosome.evaluated && !pr.removed_indices.empty())
+                    de_->inject_migrant(pr.pruned_chromosome);
+            }
+        }
     } else {
         if      (a.param == "complexityPenalty")  gamma_override_ = v;
         else if (a.param == "noInputPenalty")     cfg_.weights.zeta = v;

@@ -518,6 +518,62 @@ Registro técnico detalhado (em inglês): `experiments/EXPERIMENT_LOG.md`.
 
 ---
 
+## 2026-11-27 — Reguladores completos: o controlador alcança toda a configuração
+
+- Pedidos do usuário:
+  - "isto é um erro o regulador tem que poder ter acesso a tudo o tipo de
+    configuração que a ferramenta dispõe … maxRegressors, maxDelay, pmax,
+    maxTermsPerReg, denominatorProbability, tamanho da população";
+  - "e todas as outras que tiver e se precisar criar mais também, quanto
+    mais melhor".
+- Desenho: `docs/architecture/16_REGULADORES_COMPLETOS.md`.
+- **O controlador passa de 16 para 45 reguladores.** São 29 novos:
+  - **capacidade:** `maxRegressors`, `maxTermsPerReg`, `maxDelay`, `pmax`,
+    `pmin`, `exponentStep` (só grade igual ou mais fina que 0,5),
+    `denominatorProbability`;
+  - **busca:** população, elite, mutação de variável, JADE c e p,
+    intervalo de imigrantes, hipermutação, estratégia, método de ajuste,
+    veto e top-k;
+  - **objetivo e currículo:** modo de erro, contribuição mínima da entrada,
+    limite de estagnação de fase, papéis das ilhas;
+  - **pós-processamento:** podador, refinador, P6, guard;
+  - **eventos:** avançar fase, semear a partir do campeão, podar o campeão.
+- [artigo] **Ficam fora, com motivo:**
+  - divisão dos dados, coluna de saída, normalização (vazamento ou
+    comparação inválida);
+  - semente, threads;
+  - orçamento;
+  - `exponentStep` acima de 0,5 e `powerMode` (removeriam os expoentes
+    reais).
+- [artigo] **O teto de 40 regressores era uma trava de sanidade do núcleo,
+  sem estrutura de dados dependente.** O teto de 39 do E3 estava encostado
+  nela, então modelos maiores nunca foram testados. A trava agora é 200.
+- O atraso máximo configurado passa a ser o teto de lançamento, porque fixa
+  a linha comum de pontuação. A nova chave `maxDelayStart` dá o valor
+  inicial do regulador.
+- **Evento descartado:** `refineChampion` (refino P6 durante a busca) não
+  funciona neste núcleo. Ao injetar o modelo refinado, o avaliador reajusta
+  os coeficientes por mínimos quadrados e desfaz o refino.
+- [limitação] **Defeito encontrado no lado Dart.** O registro de parâmetros
+  do serviço usa valores padrão próprios, que não refletem a configuração
+  real da execução (por exemplo, γ = 0,01 no registro contra 0 no pacote
+  A1).
+  - O CAC lê o valor atual primeiro desse registro.
+  - Nos T1–T6, isso só afetou braços de descida de γ (rejeitados pelo núcleo
+    como "sem mudança") e braços mascarados.
+  - Para os reguladores novos, o valor passará a vir do snapshot do núcleo.
+- Testes do núcleo no build novo (`cpp/build_cap`): core 96/96, API 92/92
+  (26 checagens novas dos reguladores), phase0 11/11.
+- **Bit-identidade sem ações contra o `build_dev`:** idêntico no CT
+  (3×10⁵ avaliações) e no WH (2×10⁴), pacote A1 com guard, semente 7
+  (ignorados só os campos de tempo).
+- Cuidado de protocolo:
+  - o T6 continua no `build_dev`, intacto;
+  - as mudanças em Dart esperam o T6 terminar, porque cada execução roda
+    `dart run` a partir do código-fonte.
+
+---
+
 ## Pendências e decisões do usuário (atualizado em 2026-11-27)
 
 - ~~Resultado do A1 e abertura dos testes do WH e do SB~~ feitos em 2026-11-26.

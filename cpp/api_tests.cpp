@@ -196,6 +196,72 @@ void test_actions() {
     aegis_destroy_pipeline(p);
 }
 
+// Regulators over the whole configuration (docs/architecture/16_REGULADORES_COMPLETOS.md).
+void test_regulators() {
+    std::puts("[regulators]");
+    auto d = make_data(500, 5);
+    void* p = make_pipeline(d, 500,
+        "{\"numIslands\":2,\"populationSize\":12,\"maxRegressors\":5,\"maxDelay\":8,\"maxDelayStart\":5,"
+        "\"maxGenerations\":60,\"randomSeed\":13,\"syncMode\":true,\"numThreads\":1,\"actionCooldown\":0}");
+    Value cfg = parse(take(aegis_get_config(p)));
+    expect(cfg.int_or("maxDelayStart", -1) == 5, "maxDelayStart recorded in the effective config");
+    aegis_start(p);
+    aegis_step(p, 2);
+    auto act = [&](const std::string& j) {
+        Value r = parse(take(aegis_apply_action(p, j.c_str())));
+        return r.get("results")->items()[0];
+    };
+    Value schema = parse(take(aegis_get_action_schema(p)));
+    int n_specs = 0; double md_max = -1;
+    for (const auto& s : schema.get("parameters")->items()) {
+        ++n_specs;
+        if (s.string_or("name", "") == "maxDelay") md_max = s.number_or("max", -1);
+    }
+    expect(n_specs >= 45, "schema lists the full regulator set (>= 45)");
+    expect(md_max == 8, "maxDelay regulator bounded by the launch ceiling");
+    Value snap0 = parse(take(aegis_get_snapshot(p)));
+    expect(snap0.get("parameters")->number_or("maxDelay", 0) <= 5, "search starts at maxDelayStart");
+    expect(act("{\"param\":\"maxDelay\",\"value\":9}").string_or("code", "") == "out_of_range", "maxDelay above the ceiling rejected");
+    expect(act("{\"param\":\"exponentStep\",\"value\":0.75}").string_or("code", "") == "out_of_range",
+           "coarser exponent grid rejected (real exponents kept)");
+    expect(act("{\"param\":\"maxDelay\",\"value\":8}").bool_or("accepted", false), "maxDelay raised to the ceiling");
+    expect(act("{\"param\":\"maxRegressors\",\"value\":12}").bool_or("accepted", false), "maxRegressors raised");
+    expect(act("{\"param\":\"populationSize\",\"value\":30}").bool_or("accepted", false), "populationSize raised");
+    expect(act("{\"param\":\"errorMode\",\"value\":1}").bool_or("accepted", false), "errorMode switched");
+    expect(act("{\"param\":\"postProcessGuard\",\"value\":1}").bool_or("accepted", false), "post-processing flag set");
+    expect(act("{\"param\":\"advancePhase\",\"value\":1}").bool_or("accepted", false), "advancePhase accepted");
+    const int phase0 = snap0.int_or("phase", -1);
+    aegis_step(p, 1);
+    Value s1 = parse(take(aegis_get_snapshot(p)));
+    const Value* pr = s1.get("parameters");
+    expect(pr->number_or("maxDelay", 0) == 8, "maxDelay applied");
+    expect(pr->number_or("maxRegressors", 0) == 12, "maxRegressors applied");
+    expect(pr->number_or("populationSize", 0) == 30, "populationSize applied");
+    expect(pr->number_or("errorMode", 0) == 1, "errorMode applied");
+    expect(pr->number_or("postProcessGuard", 0) == 1, "postProcessGuard applied");
+    bool pop30 = true;
+    for (const auto& is : s1.get("islands")->items()) pop30 &= is.int_or("population_size", 0) == 30;
+    expect(pop30, "every island resized to 30");
+    expect(s1.int_or("phase", -1) >= phase0 + 1, "advancePhase moved the curriculum");
+    // Tightening (after the regulator cooldowns, 25 and 50 generations): the population
+    // is repaired to the new ceiling.
+    aegis_step(p, 51);
+    expect(act("{\"param\":\"maxRegressors\",\"value\":2}").bool_or("accepted", false), "maxRegressors lowered");
+    expect(act("{\"param\":\"populationSize\",\"value\":8}").bool_or("accepted", false), "populationSize lowered");
+    expect(act("{\"param\":\"seedFromChampion\",\"value\":0.3}").bool_or("accepted", false), "seedFromChampion accepted");
+    expect(act("{\"param\":\"pruneChampion\",\"value\":1}").bool_or("accepted", false), "pruneChampion accepted");
+    aegis_step(p, 1);
+    Value s2 = parse(take(aegis_get_snapshot(p)));
+    expect(s2.number_or("mean_num_regressors", 99) <= 2.0 + 1e-12, "members repaired to maxRegressors = 2");
+    bool pop8 = true;
+    for (const auto& is : s2.get("islands")->items()) pop8 &= is.int_or("population_size", 0) == 8;
+    expect(pop8, "every island shrunk to 8");
+    while (aegis_step(p, 10) > 0) {}
+    Value fin = parse(take(aegis_get_final_report(p)));
+    expect(fin.get("metrics") != nullptr, "run with regulator changes finishes with a report");
+    aegis_destroy_pipeline(p);
+}
+
 void test_interruption() {
     std::puts("[interruption / recovery]");
     auto d = make_data(500, 4);
@@ -383,6 +449,7 @@ int main() {
     test_configuration();
     test_sync_run_and_reproducibility();
     test_actions();
+    test_regulators();
     test_interruption();
     test_async_and_destroy();
     test_websocket();
