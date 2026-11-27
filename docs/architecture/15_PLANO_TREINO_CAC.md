@@ -635,7 +635,7 @@ Script: `experiments/cac/run_t6b.sh <benchmark>`. Análise congelada:
 |---|---|---|
 | Sementes (novas) | 91–100 | 41–45 |
 | Orçamento | 3×10⁵ | 1,5×10⁵ |
-| Quando roda | agora, com 1 processo ao lado do T7 (limite de 6) | depois do T7 |
+| Quando roda | depois do T7, com 5 processos | depois do T7, com 5 processos |
 
 **Braços**, todos no pacote A1 com `postProcessGuard`:
 - `none_guard`;
@@ -655,3 +655,9 @@ secundário, porque está em convenções diferentes entre os braços.
    `none_guard_ctx`):
    - CT: mediana de d final < 0, com pelo menos 6 de 10 sementes melhores;
    - WH e SB: não-dano, como acima.
+
+**Desvio (antes de qualquer execução).** O plano era rodar o CT com 1
+processo ao lado do T7. A memória livre estava em 0,7 GB de 7,4 GB, e 6 VMs
+Dart já haviam estourado a memória antes. Por isso o T6b inteiro roda
+depois do T7, com 5 processos, encadeado automaticamente. O desenho e os
+critérios não mudaram.

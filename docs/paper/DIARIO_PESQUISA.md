@@ -660,6 +660,11 @@ Registro técnico detalhado (em inglês): `experiments/EXPERIMENT_LOG.md`.
   - braços `none_guard`, `none_guard_ctx` e `cac41_guard_ctx`;
   - medida principal: validação final reportada.
 
+- [limitação] **Desvio no T6b, antes de qualquer execução.** Com o T7
+  rodando, a memória livre era de 0,7 GB de 7,4 GB, e um sexto processo
+  Dart arriscaria derrubar o T7. O T6b passa a rodar depois do T7, com 5
+  processos, encadeado automaticamente. Desenho e critérios sem mudança.
+
 ## Pendências e decisões do usuário (atualizado em 2026-11-27)
 
 - ~~Resultado do A1 e abertura dos testes do WH e do SB~~ feitos em 2026-11-26.

@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # CAC T6b (docs/architecture/15_PLANO_TREINO_CAC.md §15): validationContext, the
 # search validation in the reported convention (T6 finding), with and without
-# CAC v4.1. Validation only. Resumable; PAR (default 1: runs next to T7) at once, BelowNormal.
+# CAC v4.1. Validation only. Resumable; PAR (default 5; after T7) at once, BelowNormal.
 #   experiments/cac/run_t6b.sh <cascaded_tanks|wiener_hammerstein|silverbox>
 set -uo pipefail
-ROOT="$(cd "$(dirname "$0")/../.." && pwd)"; B="$1"; PAR="${PAR:-1}"
+ROOT="$(cd "$(dirname "$0")/../.." && pwd)"; B="$1"; PAR="${PAR:-5}"
 O="$ROOT/experiments/results_cac/t6b/$B"; mkdir -p "$O"
 case "$B" in
   cascaded_tanks) TE=819; VE=1024; BUDGET=300000; SEEDS="91 92 93 94 95 96 97 98 99 100" ;;
