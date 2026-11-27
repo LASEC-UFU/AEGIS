@@ -490,6 +490,34 @@ Registro técnico detalhado (em inglês): `experiments/EXPERIMENT_LOG.md`.
 
 ---
 
+## 2026-11-27 — Hipótese do usuário: faltam reguladores ou o sinal está errado
+
+- Comentário do usuário: "ou estamos fornecendo os parâmetros errados para
+  fazer a análise ou falta reguladores para atuar mas pra mim é nítido que
+  uma inteligência ajudando na convergência é ponto positivo e precisamos
+  encontrar o que está faltando ou errado".
+- Diagnóstico só com dados existentes (T5, braço sem agente, validação):
+  - [artigo] **WH limitado pela capacidade.** O campeão atinge ou encosta no
+    teto de 39 regressores nas 5 sementes (máximo na história: 39, 39, 39,
+    39, 38; K final: 32–39), e o gap ≈ 0 indica que não há sobreajuste. No
+    SB, 4 de 5 sementes chegam a 39.
+  - Os 16 parâmetros que o controlador pode mudar são todos de dinâmica da
+    busca ou pesos de penalidade. Os de **capacidade e classe de modelo**
+    (`maxRegressors`, `maxDelay`, `pmax`, `maxTermsPerReg`,
+    `denominatorProbability`, `populationSize`) são fixos na configuração.
+  - Outros pontos fracos do sinal:
+    - cada execução começa com a tabela vazia, e com ≈ 20 decisões por
+      execução o controlador não tem como aprender dentro dela;
+    - a recompensa vem de uma única trajetória caótica;
+    - a validação da busca usa outra convenção de início que a reportada
+      (tema do A2).
+- Próximo passo proposto: medir a folga de capacidade com teto estático
+  maior no WH e no SB (só validação, sementes novas). Se houver ganho,
+  tornar a capacidade um regulador do controlador, acionado pelo portão
+  (gap ≈ 0 e K no teto → crescer; gap alto → podar).
+
+---
+
 ## Pendências e decisões do usuário (atualizado em 2026-11-27)
 
 - ~~Resultado do A1 e abertura dos testes do WH e do SB~~ feitos em 2026-11-26.
