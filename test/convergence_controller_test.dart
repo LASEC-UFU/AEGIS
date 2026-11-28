@@ -283,4 +283,66 @@ void main() {
       expect(c.candidateMoves(live(10)).keys, ['none']);
     });
   });
+
+  group('CAC v5 (measured map of the full set, T7)', () {
+    const sSchema = {
+      'schema': 'aegis.actions/1',
+      'allowBudgetActions': false,
+      'parameters': [
+        {'name': 'mutationFactor', 'kind': 'de', 'min': 0.05, 'max': 1.0, 'maxStep': 0.3, 'integer': false},
+        {'name': 'denominatorPenalty', 'kind': 'weight', 'min': 0.0, 'max': 2.0, 'maxStep': 0.5, 'integer': false},
+        {'name': 'alpha', 'kind': 'weight', 'min': 0.0, 'max': 2.0, 'maxStep': 0.5, 'integer': false},
+        {'name': 'populationSize', 'kind': 'search', 'min': 4, 'max': 1000, 'maxStep': 50, 'integer': true},
+        {'name': 'mutationStrategy', 'kind': 'search', 'min': 0, 'max': 1, 'maxStep': 1, 'integer': true},
+        {'name': 'pmax', 'kind': 'structure', 'min': 0.5, 'max': 10.0, 'maxStep': 1.0, 'integer': false},
+        {'name': 'elitismCount', 'kind': 'search', 'min': 0, 'max': 50, 'maxStep': 2, 'integer': true},
+        {'name': 'maxRegressors', 'kind': 'structure', 'min': 1, 'max': 200, 'maxStep': 10, 'integer': true},
+      ],
+    };
+    Map<String, double> live(double pop) => {'mutationFactor': 0.5, 'denominatorPenalty': 0.0, 'alpha': 0.0,
+      'populationSize': pop, 'mutationStrategy': 0.0, 'pmax': 3.0, 'elitismCount': 2.0, 'maxRegressors': 39.0};
+    GenerationSnapshot s(int g, double train, double val, {double pop = 50}) => GenerationSnapshot(
+          generation: g, elapsed: Duration.zero,
+          bestFitness: 1, worstFitness: 2, meanFitness: 1.5, medianFitness: 1.5, stdDevFitness: 0.1,
+          q1Fitness: 1.2, q3Fitness: 1.8,
+          improvementAbsolute: 0, improvementRelative: 0, improvementRate5: 0, improvementRate20: 0,
+          stagnationCounter: 0, uniqueStructures: 60, structureEntropy: 3, phenotypicDiversity: 0.1,
+          regressorFrequency: const {}, populationVariance: 0.01, successRate: 0.2, successRateHistory: const [],
+          bestModelComplexity: 39, bestModelMaxDegree: 2, bestModelMaxDelay: 5, bestModelERR: const [],
+          bestModelRMSE: train, bestModelValidationRMSE: val, bestModelR2: 0.95, islandSnapshots: const [],
+          phase: 2, freeRunRmseValidationFull: 0.1,
+          islandStatuses: const [IslandStatus(id: 0, populationSize: 50)],
+          parameters: live(pop), errorMode: 'simulation');
+    AdaptiveConvergenceController v5() => AdaptiveConvergenceController(
+        actionSchema: () => sSchema, currentParameters: () => const {}, version: 5, measuredOnly: true,
+        allRegulators: true);
+
+    test('gate confirmed closed (WH/SB-like), from generation 50: only population 50 → 25', () {
+      final c = v5();
+      expect(c.id, 'cac5');
+      for (var g = 1; g <= 60; g++) { c.processSnapshot(s(g, 0.05, 0.051)); }
+      expect(c.candidateMoves(s(61, 0.05, 0.051)), {'none': 0, 'populationSize:-': 25});
+    });
+
+    test('before generation 50 or before a full gap window, nothing', () {
+      final c = v5();
+      for (var g = 1; g <= 5; g++) { c.processSnapshot(s(g, 0.05, 0.051)); }
+      expect(c.candidateMoves(s(6, 0.05, 0.051)).keys, ['none'], reason: 'window not full');
+      final d = v5();
+      for (var g = 1; g <= 40; g++) { d.processSnapshot(s(g, 0.05, 0.051)); }
+      expect(d.candidateMoves(s(41, 0.05, 0.051)).keys, ['none'], reason: 'before generation 50');
+    });
+
+    test('only the measured dose: no second decrease below 25', () {
+      final c = v5();
+      for (var g = 1; g <= 60; g++) { c.processSnapshot(s(g, 0.05, 0.051, pop: 25)); }
+      expect(c.candidateMoves(s(61, 0.05, 0.051, pop: 25)).keys, ['none']);
+    });
+
+    test('gate open (CT-like): no population move; β↑ and α↑ as in v4.1; blocked and masked arms never offered', () {
+      final c = v5();
+      for (var g = 1; g <= 60; g++) { c.processSnapshot(s(g, 0.05, 0.075)); }
+      expect(c.candidateMoves(s(61, 0.05, 0.075)).keys.toSet(), {'none', 'denominatorPenalty:+', 'alpha:+'});
+    });
+  });
 }

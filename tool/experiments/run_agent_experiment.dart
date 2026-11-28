@@ -123,8 +123,9 @@ Future<void> main(List<String> args) async {
   } else if (agentSpec.startsWith('script:')) {
     agent = ScriptedAgent.parse(agentSpec.substring(7), actionSchema: service.getActionSchema,
         phaseStagnationLimit: (config['phaseStagnationLimit'] as num?)?.toInt() ?? 150);
-  } else if (RegExp(r'^cac(4|41)?(-all)?(:.*)?$').hasMatch(agentSpec)) {
+  } else if (RegExp(r'^cac(4|41|5)?(-all)?(:.*)?$').hasMatch(agentSpec)) {
     // cac | cac4 | cac41, optional "-all" (full regulator set, doc 16), optional ":<table.json>".
+    final v5 = agentSpec.startsWith('cac5'); // v5: measured map of the full set (T7), measured arms only
     final v4 = agentSpec.startsWith('cac4');
     final tablePath = agentSpec.contains(':') ? agentSpec.substring(agentSpec.indexOf(':') + 1) : null;
     final all = agentSpec.split(':').first.endsWith('-all');
@@ -133,9 +134,9 @@ Future<void> main(List<String> args) async {
       currentParameters: () => service.parameters.currentValues,
       phaseStagnationLimit: (config['phaseStagnationLimit'] as num?)?.toInt() ?? 150,
       seed: seed,
-      version: v4 ? 4 : 3,
-      measuredOnly: agentSpec.startsWith('cac41'),
-      allRegulators: all,
+      version: v5 ? 5 : v4 ? 4 : 3,
+      measuredOnly: v5 || agentSpec.startsWith('cac41'),
+      allRegulators: v5 || all,
       table: tablePath != null
           ? jsonDecode(File(tablePath).readAsStringSync()) as Map<String, dynamic>
           : null,

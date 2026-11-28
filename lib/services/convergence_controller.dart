@@ -79,7 +79,9 @@ class AdaptiveConvergenceController extends OptimizationAgent {
   }
 
   @override
-  String get id => (version >= 4 ? (measuredOnly ? 'cac41' : 'cac4') : 'cac') + (allRegulators ? '-all' : '');
+  String get id => version >= 5
+      ? 'cac5'
+      : (version >= 4 ? (measuredOnly ? 'cac41' : 'cac4') : 'cac') + (allRegulators ? '-all' : '');
 
   bool _hasGain(String arm) {
     final st = _global[arm];
@@ -116,8 +118,11 @@ class AdaptiveConvergenceController extends OptimizationAgent {
   /// overfits (T4: gapOS 0.23–0.76 on CT, −0.10–0.04 on WH and SB).
   bool get gateOpen => (overfitSignal() ?? double.negativeInfinity) >= overfitGate;
 
+  /// v5: the gate is known to be closed (a full window of gapOS below the threshold).
+  bool get gateClosedConfirmed => _gaps.length >= gapWindow && !gateOpen;
+
   CacImpact _impact(String name, String kind, String dir) {
-    for (final e in cacImpactMapV4) {
+    for (final e in version >= 5 ? cacImpactMapV5 : cacImpactMapV4) {
       if (e.arm == '$name:$dir' || e.arm == '$name:*' || (kind == 'de' && e.arm == 'de:*')) return e;
     }
     return CacImpact('$name:$dir', 'allow', -0.05, 0, 'não medido');
@@ -346,6 +351,10 @@ class AdaptiveConvergenceController extends OptimizationAgent {
           final imp = _impact(name, kind, dir > 0 ? '+' : '-');
           if (imp.rule == 'blocked') continue;
           if (imp.rule == 'gated' && !gateOpen) continue;
+          // v5: arms measured only on systems without overfitting, at the measured dose and time.
+          if (imp.rule == 'closedGate' && !gateClosedConfirmed) continue;
+          if (imp.limit != null && (dir < 0 ? v < imp.limit! : v > imp.limit!)) continue;
+          if (s.generation < imp.fromGeneration) continue;
           ip = imp.prior;
           // α↑ is neutral on WH/SB and helpful on CT: positive prior only with the gate.
           if (name == 'alpha' && dir > 0 && gateOpen) ip = 0.2;
@@ -459,11 +468,19 @@ class _Stats {
 /// generations before the action is judged (measured transient).
 class CacImpact {
   final String arm; // 'param:+' or 'param:-' or 'param:*'
-  final String rule; // 'allow' | 'gated' | 'blocked' | 'masked'
+  /// 'allow' | 'gated' (only with the overfitting gate open) | 'closedGate'
+  /// (v5: only once the gate is confirmed closed over a full window) | 'blocked' | 'masked'.
+  final String rule;
   final double prior;
   final int horizon;
   final String evidence;
-  const CacImpact(this.arm, this.rule, this.prior, this.horizon, this.evidence);
+  /// v5: the measured dose only. [limit] bounds the new value (lowest for a
+  /// decrease, highest for an increase); [fromGeneration] is the earliest
+  /// generation at which the effect was measured.
+  final double? limit;
+  final int fromGeneration;
+  const CacImpact(this.arm, this.rule, this.prior, this.horizon, this.evidence,
+      {this.limit, this.fromGeneration = 0});
 }
 
 const cacImpactMapV4 = <CacImpact>[
@@ -483,4 +500,18 @@ const cacImpactMapV4 = <CacImpact>[
   CacImpact('de:*', 'allow', -0.05, 0,
       'operadores do DE (F, CR, migração, imigrantes, mutação estrutural): dentro do ruído (T1)'),
   CacImpact('triggerRestart:*', 'allow', -0.05, 0, 'reinício parcial e cataclismo: dentro do ruído no CT (T1)'),
+];
+
+/// v5 (T7, doc 16 §8): measured map of the full regulator set, then v4.
+/// First match wins.
+const cacImpactMapV5 = <CacImpact>[
+  CacImpact('populationSize:-', 'closedGate', 0.3, 200,
+      'população 50 → 25 na geração 50: WH −0,188, 5/0 na métrica final; SB 4/1; CT neutro (T7)',
+      limit: 25, fromGeneration: 50),
+  CacImpact('populationSize:+', 'blocked', 0.0, 0, 'população +50: WH 0/5, SB 1/4 na métrica final (T7)'),
+  CacImpact('mutationStrategy:+', 'blocked', 0.0, 0, 'rand/1: WH 0/5, SB 1/4; CT métrica final pior (T7)'),
+  CacImpact('pmax:-', 'blocked', 0.0, 0, 'pmax −1: SB 0/5 na métrica final (T7)'),
+  CacImpact('elitismCount:*', 'masked', 0.0, 0, 'elitismo: d = 0 em todas as sementes (T7)'),
+  CacImpact('hypermutation:*', 'masked', 0.0, 0, 'hipermutação: d = 0 em todas as sementes (T7)'),
+  ...cacImpactMapV4,
 ];
