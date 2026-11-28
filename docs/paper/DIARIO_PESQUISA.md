@@ -728,6 +728,22 @@ Registro técnico detalhado (em inglês): `experiments/EXPERIMENT_LOG.md`.
   - Ordem: CT, WH, SB; 5 processos; `build_sig`.
   - Log: `experiments/results_cac/t8_run.log`.
 
+### 2026-11-28 — T8: critério do CAC v5 ATENDIDO; T9 registrado [artigo]
+
+- O T8 completou todas as execuções (CT 20; WH 30; SB 30), sem falhas. Conferi que o orçamento foi cumprido; o CT é rápido porque a série é curta.
+- **CAC v5 vs A1, validação final** (análise congelada, `experiments/cac/T8_RESULTS.md`):
+  - WH: −0,072 (8 melhores / 2 piores);
+  - SB: −0,141 (9 / 1);
+  - CT: −0,033 (6 / 4).
+- **O critério pré-registrado foi atendido.** É o primeiro critério de ganho do CAC atendido em sementes novas.
+- **Secundário, `STATIC_pop25` vs `none`:**
+  - WH: −0,214 (9 / 1);
+  - SB: −0,125 (6 / 4).
+  - A dose fixa tem efeito parecido. A decisão online não é claramente superior; o valor do controlador está em aplicar a dose só quando o portão confirma que não há sobreajuste.
+- [limitação] O mapa e o teste usaram o mesmo orçamento (6×10⁴), com n = 10. O conjunto de teste continua fechado.
+- Registrei o T9 antes de rodar (doc 16 §11): WH e SB com orçamento 1,5×10⁵ e sementes 81–90; critério igual ao do T8.
+- **Decisão do usuário (A2):** mudar a população ou o teto de regressores do pacote, porque isso altera o pacote A1.
+
 ## Pendências e decisões do usuário (atualizado em 2026-11-27)
 
 - ~~Resultado do A1 e abertura dos testes do WH e do SB~~ feitos em 2026-11-26.

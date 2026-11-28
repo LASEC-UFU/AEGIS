@@ -441,3 +441,8 @@ protocol below is run once; every result is reported.
   T6 harm (+0.604) disappears with the corrected signal, but no detectable
   gain. T8 runs with CTX=0 (pre-registered rule). Results:
   `experiments/cac/T6B_RESULTS.md`, doc 15 §16.
+- CAC T8 (2026-11-28, 80 runs, validation only, new seeds, CTX=0): CAC v5
+  vs A1, pre-registered criterion MET. Final reported validation: WH −0.072
+  (8/10 better), SB −0.141 (9/10), CT −0.033 (6/10; non-harm). Secondary
+  STATIC_pop25 vs none: WH −0.214 (9/10), SB −0.125 (6/10): the fixed dose
+  has a similar effect. Results: `experiments/cac/T8_RESULTS.md`, doc 16 §10.

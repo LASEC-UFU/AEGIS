@@ -341,3 +341,71 @@ decisão online ou só da dose.
 **Limitação declarada:** o mapa foi medido com orçamento de 6×10⁴ no WH e
 no SB. O T8 testa nesse mesmo orçamento; generalizar para outros orçamentos
 exige outro teste.
+
+## 10. Resultados do T8 (2026-11-28)
+
+**Execuções:** CTX=0, porque o critério 1 do T6b não foi atendido. Todas
+completas e sem falhas: CT 20, WH 30, SB 30. Cada execução usou o
+orçamento inteiro (por exemplo, CT 300 046 avaliações). O CT roda em
+minutos porque a série é curta. Análise congelada:
+`experiments/cac/T8_RESULTS.md`.
+
+| sistema | comparação | mediana d final | melhores / piores (final) | mediana d fim | ações aceitas (mediana) |
+|---|---|---|---|---|---|
+| CT | cac5 vs none | −0,033 | 6 / 4 | −0,118 | 4 |
+| WH | cac5 vs none | −0,072 | 8 / 2 | −0,027 | 1 |
+| WH | STATIC_pop25 vs none | −0,214 | 9 / 1 | −0,183 | 0 |
+| SB | cac5 vs none | −0,141 | 9 / 1 | −0,251 | 1 |
+| SB | STATIC_pop25 vs none | −0,125 | 6 / 4 | −0,226 | 0 |
+
+**Critério pré-registrado: ATENDIDO.**
+- WH: mediana −0,072, com 8 de 10 sementes melhores.
+- SB: mediana −0,141, com 9 de 10 sementes melhores.
+- CT: mediana −0,033, dentro do limite de não-dano (≤ +0,02).
+
+Pelo teste do sinal na métrica final, WH 8/2 dá p ≈ 0,11 e SB 9/1 dá
+p ≈ 0,02.
+
+**Leitura.**
+- [artigo] É o primeiro critério de ganho do CAC atendido em sementes novas
+  e registrado antes de rodar. O ganho vem de um único ajuste medido no T7,
+  reduzir a população de 50 para 25, disparado só quando o controlador
+  confirma que não há sobreajuste.
+- O desfecho secundário mostra que a dose aplicada desde o início
+  (`STATIC_pop25`) tem efeito parecido:
+  - no WH, maior (−0,214);
+  - no SB, um pouco menor e menos consistente (−0,125, 6 de 10).
+- Portanto, a decisão online não é claramente melhor que a dose fixa. O
+  valor do controlador está em decidir quando aplicá-la, com base no
+  portão: no CT, onde há sobreajuste, ele não reduz a população.
+
+**Limitações.**
+- [limitação] O mapa e o teste usaram o mesmo orçamento de 6×10⁴ no WH e
+  no SB, e n = 10.
+- [limitação] O conjunto de teste continua fechado. Tudo aqui é validação.
+
+## 11. Desenho do T9: generalização de orçamento (registrado antes de rodar; 2026-11-28)
+
+Script: `CTX=0 experiments/cac/run_t9.sh <wiener_hammerstein|silverbox>`.
+Análise congelada: o mesmo script do T8, apontado para outra pasta
+(`dart run tool/experiments/cac_t8_analysis.dart experiments/results_cac/t9`).
+
+**Pergunta:** o ganho do T8 se mantém com orçamento 2,5 vezes maior
+(1,5×10⁵, o do T6b)?
+
+| | WH e SB |
+|---|---|
+| Sementes (novas) | 81–90 |
+| Orçamento | 1,5×10⁵ |
+| Braços | `none`, `cac5`, `STATIC_pop25` |
+| Configuração | a mesma do T8, com CTX=0 |
+
+O CT fica de fora, porque o T8 já o testou com 3×10⁵.
+
+**Critério (cac5 vs none, validação final):** no WH e no SB, cada um,
+mediana de d < 0, com pelo menos 7 de 10 sementes melhores.
+
+**Desfecho secundário:** `STATIC_pop25` vs `none`.
+
+**Se falhar:** o ganho do v5 fica declarado como limitado ao orçamento
+medido.
