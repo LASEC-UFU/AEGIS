@@ -424,3 +424,13 @@ protocol below is run once; every result is reported.
   diagnosis: v4.1 (β↑, α↑) yields smaller champions (K 5–22 vs 24–34) that win
   under the search validation convention but lose under the reported one.
   Results: `experiments/cac/T6_RESULTS.md`, doc 15 §14.
+- CAC T7 (2026-11-27/28, 750 runs: CT 490, WH 130, SB 130; validation only):
+  impact map of the new regulators. WH/SB (narrow placebo band): a larger
+  regressor ceiling from the start helps (ceiling 79: WH −0.138, final 4/1
+  better; SB −0.423, final 4/1); population −25 helps (WH 5/0, SB 4/1 final)
+  and +50 hurts (WH 0/5, SB 1/4); rand/1 hurts (WH 0/5); pmax −1 hurts SB
+  (0/5). Raising maxRegressors online barely grows the model (initialization
+  draws up to the ceiling; growth online is one regressor per accepted
+  mutation). elitismCount and hypermutation inert. CT: wide placebo band,
+  nothing robust on the final metric. Results: `experiments/cac/T7_*.md`,
+  doc 16 §8.

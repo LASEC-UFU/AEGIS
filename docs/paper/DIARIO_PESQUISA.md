@@ -665,6 +665,28 @@ Registro técnico detalhado (em inglês): `experiments/EXPERIMENT_LOG.md`.
   Dart arriscaria derrubar o T7. O T6b passa a rodar depois do T7, com 5
   processos, encadeado automaticamente. Desenho e critérios sem mudança.
 
+### 2026-11-28 — Resultado do T7 (mapa de impacto dos reguladores novos)
+
+- **Execução.** T7 concluído sem falhas: CT 490, WH 130 e SB 130
+  execuções, só validação. Doc 16 §8; `experiments/cac/T7_*.md`.
+- [artigo] **Capacidade.** O teto de 39 regressores do A1 limita o WH e o
+  SB. Teto 79 desde o início, na validação final:
+  - WH: −0,215, 4/1 melhores;
+  - SB: −0,246, 4/1 melhores;
+  - CT: misto.
+- [artigo] **População, nos sistemas sem sobreajuste.**
+  - −25 melhora: WH 5/0 e SB 4/1 na validação final;
+  - +50 piora: WH 0/5 e SB 1/4.
+  - rand/1 piora o WH (0/5) e `pmax` −1 piora o SB (0/5).
+- [limitação] **Subir o teto durante a busca quase não aumenta o modelo.**
+  A inicialização sorteia até o teto, e o crescimento durante a busca é
+  lento. Conferido no código, não é defeito.
+- [limitação] **CT.** A faixa do placebo é larga (mediana |d| 0,20) e há
+  divergências na métrica reportada: nada robusto.
+- [limitação] **Inertes.** Elitismo e hipermutação ficaram inertes.
+- **Pendente com o usuário (A2).** Mudar o teto do pacote fica como
+  recomendação. O teste não foi aberto.
+
 ## Pendências e decisões do usuário (atualizado em 2026-11-27)
 
 - ~~Resultado do A1 e abertura dos testes do WH e do SB~~ feitos em 2026-11-26.

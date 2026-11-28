@@ -212,3 +212,64 @@ novos (7 + 11 + 4 + 4 + 3).
 - **Testes:** Flutter 48/48, com 3 testes novos (padrão desligado
   inalterado, conjunto completo com valores do núcleo, v4.1 continua
   oferecendo só braços medidos).
+
+## 8. Resultado do T7 (validação; 2026-11-28)
+
+Execução completa: CT 490, WH 130 e SB 130 execuções, sem arquivos vazios
+(`experiments/results_cac/t7_run.log`). Tabelas:
+`experiments/cac/T7_{cascaded_tanks,wiener_hammerstein,silverbox}.md`.
+
+**Faixa de ruído do placebo** (θ + 0,5, fim da busca):
+
+| | p5 | p95 | mediana \|d\| | n |
+|---|---|---|---|---|
+| WH | 0,000 | 0,096 | 0,010 | 5 |
+| SB | −0,124 | 0,229 | 0,012 | 5 |
+| CT | −0,651 | 0,358 | 0,203 | 20 |
+
+O CT é muito ruidoso: há valores finais de d de até +4, de modelos que
+divergem na convenção reportada. As conclusões no CT são fracas.
+
+**Efeitos claros** (fim da busca; entre parênteses, melhores / piores na
+validação final reportada):
+
+| braço | WH | SB | CT |
+|---|---|---|---|
+| teto 59 desde o início | −0,034, 5/5 (5/0) | −0,093 (3/2) | +0,060 (6/4) |
+| teto 79 desde o início | −0,138, 5/5 (4/1), final −0,215 | −0,423 (4/1), final −0,246 | +0,008 (6/4), final −0,280 |
+| população −25 (50 → 25) | −0,188, 5/5 (5/0) | −0,069 (4/1) | ≈ 0 (4/5 e 5/3) |
+| população +50 | +0,245, 0/5 (0/5) | +0,443 (1/4) | −0,183 @100 (6/4) |
+| rand/1 | +0,268, 0/5 (0/5) | +0,420 (1/4) | fim −0,145, final pior (3/6; @400 1/8) |
+| `pmax` −1 | ≈ 0 (2/3) | +0,482, 0/5 (0/5) | ≈ 0 |
+| modo de erro um passo | −0,032 (2/3) | +0,196 (2/3) | −0,273 @100, 9/10, p = 0,021 (6/4); @400 final pior (1/8) |
+
+**Sem efeito em nenhum sistema** (d = 0 em todas as sementes):
+`elitismCount` +2 e hipermutação desligada. Nesta configuração são inertes.
+
+**Os demais**, dentro do ruído ou mistos: `maxRegressors` ±10/+20 durante a
+busca, `maxTermsPerReg`, `maxDelay`, `denominatorProbability`, `jadeP`,
+mutação de variável, papéis das ilhas, semeadura, poda e avanço de fase.
+
+**Capacidade durante a busca contra desde o início.** Subir o teto durante
+a busca quase não aumenta o modelo (WH: ΔK de 0 a 1), mas o teto alto desde
+o início sim (+14 e +34).
+- **Causa** (conferida no código, não é defeito): na inicialização, cada
+  indivíduo sorteia de 1 até o teto regressores, então a população nasce
+  grande.
+- **Durante a busca**, o modelo só cresce por mutações que acrescentam um
+  regressor por vez e precisam ser aceitas.
+- **Consequência:** a folga de capacidade aproveitável vem da configuração
+  inicial, não do regulador. Uma alternativa futura, não medida, é combinar
+  o aumento do teto com reinício parcial.
+
+**Leitura:**
+1. **Capacidade.** O teto 39 do A1 limita o WH e o SB. Um teto maior desde
+   o início melhora os dois na validação final. No CT o efeito é misto.
+   Mudar o pacote é decisão do usuário (A2): fica como recomendação, sem
+   abrir o teste.
+2. **Controlador.** O regulador com ganho medido nos sistemas sem
+   sobreajuste (portão fechado) é a população: −25 melhora o WH (5/0) e o
+   SB (4/1); +50 piora os dois.
+   - Bloqueados: rand/1 e `pmax` −1.
+   - No CT nada é robusto na métrica final; a convenção de validação está
+     sendo testada no T6b.
