@@ -687,6 +687,24 @@ Registro técnico detalhado (em inglês): `experiments/EXPERIMENT_LOG.md`.
 - **Pendente com o usuário (A2).** Mudar o teto do pacote fica como
   recomendação. O teste não foi aberto.
 
+### 2026-11-28 — CAC v5 e desenho do T8 (registrado antes de rodar)
+
+- **CAC v5** (agente `cac5`): v4.1 mais o mapa medido do T7.
+  - Com o portão confirmado fechado (sistemas sem sobreajuste), a partir da
+    geração 50, oferece uma única redução de população, de 50 para 25: WH
+    5/0 e SB 4/1 no T7.
+  - Bloqueia população +, rand/1 e `pmax` −.
+  - Mascara elitismo e hipermutação.
+  - Testes: Flutter, 4 testes novos.
+  - Código feito em `.wt/v5`, porque o T6b usa o `lib/` principal. Entra no
+    diretório principal antes do T8.
+- **T8** (doc 16 §9):
+  - sementes novas: CT 101–110, WH e SB 71–80;
+  - braços `none` e `cac5`, mais `STATIC_pop25` no WH e no SB;
+  - `validationContext` ligado se e somente se o T6b atender o critério 1;
+  - critério: WH e SB com mediana < 0 e pelo menos 7/10 melhores; CT sem
+    dano.
+
 ## Pendências e decisões do usuário (atualizado em 2026-11-27)
 
 - ~~Resultado do A1 e abertura dos testes do WH e do SB~~ feitos em 2026-11-26.

@@ -273,3 +273,71 @@ o início sim (+14 e +34).
    - Bloqueados: rand/1 e `pmax` −1.
    - No CT nada é robusto na métrica final; a convenção de validação está
      sendo testada no T6b.
+
+## 9. CAC v5 e desenho do T8 (registrado antes de rodar; 2026-11-28)
+
+### 9.1 CAC v5 (agente `cac5`; `version: 5`, `measuredOnly`, `allRegulators`)
+
+Mesma regra do v4.1 (só braços com ganho medido), agora com o mapa do T7
+(`cacImpactMapV5`, que antecede o mapa v4):
+
+| braço | regra | evidência (T7) |
+|---|---|---|
+| `populationSize` − (50 → 25) | `closedGate`, prior 0,3, horizonte 200 | WH 5/0 e SB 4/1 na métrica final; CT neutro |
+| `populationSize` + | bloqueado | WH 0/5, SB 1/4 |
+| `mutationStrategy` = rand/1 | bloqueado | WH 0/5, SB 1/4; CT final pior |
+| `pmax` − | bloqueado | SB 0/5 |
+| `elitismCount`, `hypermutation` | mascarados | d = 0 em todas as sementes |
+| β↑, α↑ e demais | como no v4.1 | T1 a T5 |
+
+**Regra nova `closedGate`:** o braço só é oferecido depois de uma janela
+completa de gapOS (10 snapshots) abaixo do limiar 0,15, ou seja, com o
+portão confirmado fechado.
+
+**Só a dose medida:**
+- o braço da população só aparece a partir da geração 50, que é o momento
+  medido;
+- nunca leva a população abaixo de 25, então é um disparo único.
+
+**Testes:** Flutter, 4 testes novos:
+- portão fechado: só a população;
+- antes da geração 50 ou da janela completa: nada;
+- sem segunda redução;
+- portão aberto: só β↑ e α↑.
+
+O código foi feito numa cópia de trabalho separada (`.wt/v5`), porque o T6b
+roda o Dart a partir do código-fonte do diretório principal. Ele entra no
+diretório principal, num commit, depois que o T6b terminar e antes do T8.
+
+### 9.2 Desenho do T8
+
+Script: `CTX=<0|1> experiments/cac/run_t8.sh <benchmark>`. Análise
+congelada: `tool/experiments/cac_t8_analysis.dart`.
+
+**Configuração comum:** build `cpp/build_sig`, pacote A1 com
+`postProcessGuard`, só validação.
+
+**Regra pré-registrada para `validationContext`:** fica ligado em todos os
+braços (`CTX=1`) se e somente se o critério 1 do T6b (doc 15 §15.2) for
+atendido.
+
+| | CT | WH e SB |
+|---|---|---|
+| Sementes (novas) | 101–110 | 71–80 |
+| Orçamento | 3×10⁵ | 6×10⁴ (o do T7, onde o efeito foi medido) |
+| Braços | `none`, `cac5` | `none`, `cac5`, `STATIC_pop25` (referência: a dose do v5 desde o início) |
+
+**Medida principal:** validação final reportada.
+
+**Critério para o CAC v5** (`cac5` vs `none`, d = log da razão, pareado por
+semente):
+1. WH e SB, cada um: mediana de d < 0, com pelo menos 7 de 10 sementes
+   melhores;
+2. CT: não-dano, ou seja, mediana de d ≤ +0,02.
+
+**Desfecho secundário:** `STATIC_pop25` vs `none`. Mostra se o ganho vem da
+decisão online ou só da dose.
+
+**Limitação declarada:** o mapa foi medido com orçamento de 6×10⁴ no WH e
+no SB. O T8 testa nesse mesmo orçamento; generalizar para outros orçamentos
+exige outro teste.
