@@ -719,6 +719,15 @@ Registro técnico detalhado (em inglês): `experiments/EXPERIMENT_LOG.md`.
 - [limitação] O CT tem n = 10 e faixa placebo larga.
 - **Decisão pela regra registrada antes:** o T8 roda com CTX=0. `validationContext` fica como opção desligada por padrão.
 
+### 2026-11-28 — CAC v5 no diretório principal; T8 iniciado [artigo]
+
+- Apliquei no diretório principal o código do v5 que estava na cópia `.wt/v5`. Commit `3a648df`.
+  - flutter test: 52/52 passam. dart analyze: sem problemas.
+  - Removi a cópia `.wt/v5`.
+- Iniciei o T8 com CTX=0, conforme a regra pré-registrada, porque o critério 1 do T6b não foi atendido.
+  - Ordem: CT, WH, SB; 5 processos; `build_sig`.
+  - Log: `experiments/results_cac/t8_run.log`.
+
 ## Pendências e decisões do usuário (atualizado em 2026-11-27)
 
 - ~~Resultado do A1 e abertura dos testes do WH e do SB~~ feitos em 2026-11-26.
