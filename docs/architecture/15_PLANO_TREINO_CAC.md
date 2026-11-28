@@ -661,3 +661,38 @@ processo ao lado do T7. A memória livre estava em 0,7 GB de 7,4 GB, e 6 VMs
 Dart já haviam estourado a memória antes. Por isso o T6b inteiro roda
 depois do T7, com 5 processos, encadeado automaticamente. O desenho e os
 critérios não mudaram.
+
+## 16. Resultados do T6b (2026-11-28)
+
+Análise congelada: `experiments/cac/T6B_RESULTS.md`. Execuções completas:
+30 no CT e 15 em cada um, WH e SB, sem falhas.
+
+| sistema | comparação | mediana d final | melhores / piores |
+|---|---|---|---|
+| CT | ctx vs sem ctx | +0,039 | 4 / 6 |
+| CT | CAC v4.1 + ctx vs ctx | −0,004 | 5 / 5 |
+| WH | ctx vs sem ctx | −0,005 | 3 / 2 |
+| WH | CAC v4.1 + ctx vs ctx | 0 (0 ações) | 0 / 0 |
+| SB | ctx vs sem ctx | +0,008 | 2 / 3 |
+| SB | CAC v4.1 + ctx vs ctx | 0 (0 ações) | 0 / 0 |
+
+**Critério 1 (adotar `validationContext`): NÃO atendido.**
+- No CT, a mediana de d final é positiva.
+- No SB, 3 de 5 sementes pioraram; o limite era 2.
+
+**Critério 2 (CAC v4.1 com o sinal corrigido): NÃO atendido.**
+- No CT, a mediana é ligeiramente negativa, mas só 5 de 10 sementes
+  melhoraram; o mínimo era 6.
+- No WH e no SB, o controlador não agiu.
+
+**Leitura.**
+- Com o sinal corrigido, o CAC deixou de piorar o CT: no T6, o d final
+  mediano era +0,604; agora é −0,004. Isso confirma que o dano do T6 vinha
+  da convenção de validação.
+- Mas o CAC também não melhora o CT de forma detectável. Na mesma
+  convenção, o fim da busca fica em −0,082, com 6 de 10 sementes melhores,
+  dentro da faixa placebo do CT (mediana |d| ≈ 0,2).
+- A correção por si só não melhora a validação final. Ela fica disponível
+  como opção (padrão desligado) e não entra no pacote.
+
+**Consequência pré-registrada (doc 16 §9):** o T8 roda com `CTX=0`.

@@ -705,6 +705,20 @@ Registro técnico detalhado (em inglês): `experiments/EXPERIMENT_LOG.md`.
   - critério: WH e SB com mediana < 0 e pelo menos 7/10 melhores; CT sem
     dano.
 
+### 2026-11-28 — T6b concluído: correção de sinal não atende critérios [artigo]
+
+- O T6b completou todas as execuções (CT 30; WH 15; SB 15), sem falhas. Rodei a análise congelada; a saída está em `experiments/cac/T6B_RESULTS.md`.
+- **Critério 1 (`validationContext` no pacote): não atendido.**
+  - CT: d final mediano +0,039 (4 melhores / 6 piores).
+  - SB: 3 de 5 piores; o máximo permitido era 2.
+  - WH: −0,005 (3 / 2).
+- **Critério 2 (CAC v4.1 com contexto): não atendido.**
+  - CT: −0,004 (5 / 5), abaixo do mínimo de 6 sementes melhores.
+  - WH e SB: zero ações.
+- [artigo] Corrigir a convenção eliminou o dano do CAC no CT (T6: +0,604; T6b: −0,004). O dano do T6 vinha, portanto, do sinal de validação errado. Mas não há ganho detectável.
+- [limitação] O CT tem n = 10 e faixa placebo larga.
+- **Decisão pela regra registrada antes:** o T8 roda com CTX=0. `validationContext` fica como opção desligada por padrão.
+
 ## Pendências e decisões do usuário (atualizado em 2026-11-27)
 
 - ~~Resultado do A1 e abertura dos testes do WH e do SB~~ feitos em 2026-11-26.

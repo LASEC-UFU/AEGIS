@@ -434,3 +434,10 @@ protocol below is run once; every result is reported.
   mutation). elitismCount and hypermutation inert. CT: wide placebo band,
   nothing robust on the final metric. Results: `experiments/cac/T7_*.md`,
   doc 16 §8.
+- CAC T6b (2026-11-28, 60 runs, validation only, new seeds): validationContext
+  (search validation in the reported convention). Criterion 1 (adopt in
+  package) NOT met: CT final +0.039 (4/6), SB 2/3 worse. Criterion 2 (CAC
+  v4.1 + context) NOT met: CT final −0.004 (5/5); WH/SB 0 actions. The
+  T6 harm (+0.604) disappears with the corrected signal, but no detectable
+  gain. T8 runs with CTX=0 (pre-registered rule). Results:
+  `experiments/cac/T6B_RESULTS.md`, doc 15 §16.
